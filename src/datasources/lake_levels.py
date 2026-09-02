@@ -42,13 +42,14 @@ OUT_BLOB = f"{PROJECT_PREFIX}/processed/gwm/lake_levels.parquet"
 def parse_gwm(text: str, lake: str) -> pd.DataFrame:
     rows = []
     for line in text.splitlines():
-        if line.startswith("c") or line.startswith("Column") or not line.strip():
+        if line.startswith(("c", "Column")) or not line.strip():
             continue
         p = line.split()
         if len(p) < 15 or not (p[2].isdigit() and len(p[2]) == 8) or p[2] == "99999999":
             continue
         try:
-            h, err = float(p[14]), float(p[6])
+            h = float(p[14])
+            err = float(p[6])
         except ValueError:
             continue
         if h > 9000:

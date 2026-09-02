@@ -67,8 +67,8 @@ def fetch_raw(force: bool = False) -> bytes:
     if not force:
         try:
             return stratus.load_blob_data(RAW_BLOB, stage="dev")
-        except Exception:  # noqa: BLE001 — any miss/auth issue falls through to the live download
-            pass
+        except Exception as e:  # noqa: BLE001 — any miss/auth issue falls through to the live download
+            print(f"desinventar: blob mirror unavailable ({e}); downloading from desinventar.net")
     r = requests.get(URL, timeout=600)
     r.raise_for_status()
     stratus.upload_blob_data(r.content, RAW_BLOB, stage="dev")

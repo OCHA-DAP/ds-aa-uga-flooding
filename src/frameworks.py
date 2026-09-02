@@ -74,8 +74,10 @@ EXTERNAL: dict[str, ExternalFramework] = {
         source="WFP Uganda Annual Country Report 2025 (WFP-0000172882) p.22; ACR 2024; Anticipation Hub Uganda page",
         verified=True,
         notes=(
-            "WFP/FAO PRO-ACT in the 9 Karamoja districts + Kaberamaido, Katakwi is a DROUGHT AA plan "
-            "(activated May 2026) with multi-hazard bulletins — no flood trigger; not drawn on the flood map.",
+            (
+                "WFP/FAO PRO-ACT in the 9 Karamoja districts + Kaberamaido, Katakwi is a DROUGHT AA plan "
+                "(activated May 2026) with multi-hazard bulletins — no flood trigger; not drawn on the flood map."
+            ),
         ),
     ),
     "fao_2023": ExternalFramework(
