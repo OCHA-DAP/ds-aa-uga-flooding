@@ -81,7 +81,9 @@ def _submit_and_download_all(jobs: dict, log_prefix: str = "") -> dict:
 
 
 def download_reanalysis_box(years=None, version: str = "version_4_0") -> dict:
-    raw_dir = DATA_DIR / "raw" / f"reanalysis_uga_{version.replace('version_', 'v').replace('_0', '')}"
+    raw_dir = (
+        DATA_DIR / "raw" / f"reanalysis_uga_{version.replace('version_', 'v').replace('_0', '')}"
+    )
     jobs = {}
     for year in years or REANALYSIS_YEARS:
         query = {
@@ -101,8 +103,14 @@ def download_reanalysis_box(years=None, version: str = "version_4_0") -> dict:
     return _submit_and_download_all(jobs, log_prefix=f"[reanalysis/{version}] ")
 
 
-def download_reforecast_point(station_key: str, lat: float, lon: float, years=range(2003, 2024),
-                              months=range(1, 13), buffer: float = 0.1) -> dict:
+def download_reforecast_point(
+    station_key: str,
+    lat: float,
+    lon: float,
+    years=range(2003, 2024),
+    months=range(1, 13),
+    buffer: float = 0.1,
+) -> dict:
     """Reforecast (11-member, twice weekly, 2003-2023) in a small box around one point."""
     raw_dir = DATA_DIR / "raw" / f"reforecast_{station_key}"
     area = [lat + buffer, lon - buffer, lat - buffer, lon + buffer]
@@ -122,7 +130,11 @@ def download_reforecast_point(station_key: str, lat: float, lon: float, years=ra
                 "download_format": "unarchived",
                 "area": area,
             }
-            jobs[f"{year}-{month:02d}"] = ("cems-glofas-reforecast", query, raw_dir / f"{year}-{month:02d}.nc")
+            jobs[f"{year}-{month:02d}"] = (
+                "cems-glofas-reforecast",
+                query,
+                raw_dir / f"{year}-{month:02d}.nc",
+            )
     return _submit_and_download_all(jobs, log_prefix=f"[reforecast/{station_key}] ")
 
 
@@ -138,7 +150,9 @@ def _unwrap(path: Path) -> list[Path]:
 
 def load_reanalysis_point(lat: float, lon: float, version: str = "version_4_0") -> pd.Series:
     """Daily discharge series at the GloFAS cell nearest (lat, lon) from the box files."""
-    raw_dir = DATA_DIR / "raw" / f"reanalysis_uga_{version.replace('version_', 'v').replace('_0', '')}"
+    raw_dir = (
+        DATA_DIR / "raw" / f"reanalysis_uga_{version.replace('version_', 'v').replace('_0', '')}"
+    )
     files = [f for p in sorted(raw_dir.glob("*.nc")) for f in _unwrap(p) if f.suffix == ".nc"]
     ds = xr.open_mfdataset(files, combine="by_coords")
     var = next(v for v in ds.data_vars if "dis" in v)

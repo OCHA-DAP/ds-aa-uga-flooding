@@ -37,7 +37,7 @@ def read_windowed(blob_name: str, band: int = 1, attempts: int = 3):
                 if nodata is not None:
                     arr[arr == nodata] = np.nan
                 return arr, window_bounds(w, ds.transform), ds.crs.to_wkt()
-        except Exception:  # noqa: BLE001 — transient blob/network errors; re-raised on the last try
+        except Exception:
             if i == attempts - 1:
                 raise
     raise RuntimeError("unreachable")
@@ -48,6 +48,8 @@ def zonal_stats(
 ) -> pd.DataFrame:
     """Area-weighted mean and max of `arr` per polygon."""
     xmin, ymin, xmax, ymax = bounds
-    src = NumPyRasterSource(arr, xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, srs_wkt=wkt, nodata=np.nan)
+    src = NumPyRasterSource(
+        arr, xmin=xmin, ymin=ymin, xmax=xmax, ymax=ymax, srs_wkt=wkt, nodata=np.nan
+    )
     df = exact_extract(src, polys, ["mean", "max"], include_cols=[id_col], output="pandas")
     return df.rename(columns={id_col: "pcode"})

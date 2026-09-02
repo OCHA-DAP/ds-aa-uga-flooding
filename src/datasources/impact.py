@@ -30,9 +30,17 @@ def _district_lookup() -> dict[str, str]:
     """lowercase name -> ADM2_EN, with a few spelling aliases seen in EM-DAT text."""
     names = load_adm2().ADM2_EN.tolist()
     lk = {n.lower(): n for n in names}
-    lk.update({"madi-okollo": "Madi Okollo", "madi okollo": "Madi Okollo", "ntokoro": "Ntoroko",
-               "bundinbugyo": "Bundibugyo", "butalega": "Butaleja", "kabaale": "Kabale",
-               "sembabule": "Ssembabule"})
+    lk.update(
+        {
+            "madi-okollo": "Madi Okollo",
+            "madi okollo": "Madi Okollo",
+            "ntokoro": "Ntoroko",
+            "bundinbugyo": "Bundibugyo",
+            "butalega": "Butaleja",
+            "kabaale": "Kabale",
+            "sembabule": "Ssembabule",
+        }
+    )
     return lk
 
 
@@ -75,14 +83,25 @@ def load_emdat_events() -> pd.DataFrame:
         for loc, au in zip(em["Location"], em["Admin Units"], strict=True)
     ]
     em["start"] = pd.to_datetime(
-        dict(year=em["Start Year"], month=em["Start Month"].fillna(1), day=em["Start Day"].fillna(1))
+        dict(
+            year=em["Start Year"], month=em["Start Month"].fillna(1), day=em["Start Day"].fillna(1)
+        )
     )
     em["end"] = pd.to_datetime(
-        dict(year=em["End Year"].fillna(em["Start Year"]), month=em["End Month"].fillna(em["Start Month"]).fillna(12),
-             day=em["End Day"].fillna(28))
+        dict(
+            year=em["End Year"].fillna(em["Start Year"]),
+            month=em["End Month"].fillna(em["Start Month"]).fillna(12),
+            day=em["End Day"].fillna(28),
+        )
     )
-    return em.rename(columns={"DisNo.": "event_id", "Disaster Subtype": "subtype",
-                              "Total Deaths": "deaths", "Total Affected": "affected"})[
+    return em.rename(
+        columns={
+            "DisNo.": "event_id",
+            "Disaster Subtype": "subtype",
+            "Total Deaths": "deaths",
+            "Total Affected": "affected",
+        }
+    )[
         ["event_id", "subtype", "start", "end", "deaths", "affected", "Location", "districts"]
     ].assign(source="EM-DAT")
 
@@ -98,7 +117,11 @@ def events_by_district(include_curated: bool = True) -> pd.DataFrame:
     frames = [load_emdat_events()]
     if include_curated and CURATED.exists():
         frames.append(load_curated_events())
-    ev = pd.concat(frames, ignore_index=True).explode("districts").rename(columns={"districts": "district"})
+    ev = (
+        pd.concat(frames, ignore_index=True)
+        .explode("districts")
+        .rename(columns={"districts": "district"})
+    )
     ev = ev.dropna(subset=["district"])
     zone_of = {d: (z.key, "core") for z in ZONES.values() for d in z.core}
     zone_of.update({d: (z.key, "candidate") for z in ZONES.values() for d in z.candidate})

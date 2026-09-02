@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.datasources import glofas  # noqa: E402
+from src.datasources import glofas
 
 if __name__ == "__main__":
     what = sys.argv[1]

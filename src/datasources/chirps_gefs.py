@@ -36,12 +36,20 @@ def url_daily(issue: date, valid: date) -> str:
 
 def read_windowed_url(url: str, attempts: int = 3):
     """(array, bounds, crs_wkt) for one CHC GeoTIFF clipped to UGA_BOX via /vsicurl/."""
-    env = dict(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR", CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif",
-               GDAL_HTTP_MAX_RETRY="3", GDAL_HTTP_RETRY_DELAY="2")
+    env = dict(
+        GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+        CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif",
+        GDAL_HTTP_MAX_RETRY="3",
+        GDAL_HTTP_RETRY_DELAY="2",
+    )
     for i in range(attempts):
         try:
             with rasterio.Env(**env), rasterio.open(f"/vsicurl/{url}") as ds:
-                w = from_bounds(*UGA_BOX, ds.transform).round_offsets(op="floor").round_lengths(op="ceil")
+                w = (
+                    from_bounds(*UGA_BOX, ds.transform)
+                    .round_offsets(op="floor")
+                    .round_lengths(op="ceil")
+                )
                 arr = ds.read(1, window=w).astype("float32")
                 if ds.nodata is not None:
                     arr[arr == ds.nodata] = np.nan

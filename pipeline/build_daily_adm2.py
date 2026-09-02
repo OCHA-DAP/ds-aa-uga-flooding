@@ -27,9 +27,9 @@ import pandas as pd
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.constants import PROJECT_PREFIX  # noqa: E402
-from src.zonal import read_windowed, zonal_stats  # noqa: E402
-from src.zones import load_adm2  # noqa: E402
+from src.constants import PROJECT_PREFIX
+from src.zonal import read_windowed, zonal_stats
+from src.zones import load_adm2
 
 SOURCES = {
     "floodscan": dict(
@@ -74,7 +74,9 @@ def main(source: str) -> None:
             if out.exists() and year < pd.Timestamp.today().year:
                 continue
             jobs = [(n, d, polys) for n, d in sorted(by_year[year], key=lambda t: t[1])]
-            parts = list(tqdm(pool.map(_one, jobs), total=len(jobs), desc=f"{source} {year}", leave=False))
+            parts = list(
+                tqdm(pool.map(_one, jobs), total=len(jobs), desc=f"{source} {year}", leave=False)
+            )
             pd.concat(parts, ignore_index=True).to_parquet(out, index=False)
 
     df = pd.concat([pd.read_parquet(p) for p in sorted(ckdir.glob("*.parquet"))], ignore_index=True)

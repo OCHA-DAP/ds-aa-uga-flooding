@@ -23,10 +23,10 @@ import rasterio
 from tqdm import tqdm
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.constants import PROJECT_PREFIX  # noqa: E402
-from src.datasources.chirps_gefs import read_windowed_url, url_5day  # noqa: E402
-from src.zonal import zonal_stats  # noqa: E402
-from src.zones import load_adm2  # noqa: E402
+from src.constants import PROJECT_PREFIX
+from src.datasources.chirps_gefs import read_windowed_url, url_5day
+from src.zonal import zonal_stats
+from src.zones import load_adm2
 
 CKDIR = Path(__file__).resolve().parent / ".checkpoint_chirps_gefs"
 ARCHIVE_END = date(2026, 7, 4)
@@ -54,12 +54,20 @@ def main(start_year: int = 2000, end_year: int = ARCHIVE_END.year) -> None:
                 continue
             d0, d1 = date(year, 1, 1), min(date(year, 12, 31), ARCHIVE_END)
             days = [d0 + timedelta(days=i) for i in range((d1 - d0).days + 1)]
-            parts = list(tqdm(pool.map(_one, [(d, polys) for d in days]), total=len(days),
-                              desc=f"chirps-gefs {year}", leave=False))
+            parts = list(
+                tqdm(
+                    pool.map(_one, [(d, polys) for d in days]),
+                    total=len(days),
+                    desc=f"chirps-gefs {year}",
+                    leave=False,
+                )
+            )
             missing = sum(p is None for p in parts)
             if missing:
                 tqdm.write(f"{year}: {missing} issue days missing from the archive")
-            pd.concat([p for p in parts if p is not None], ignore_index=True).to_parquet(out, index=False)
+            pd.concat([p for p in parts if p is not None], ignore_index=True).to_parquet(
+                out, index=False
+            )
 
     df = pd.concat([pd.read_parquet(p) for p in sorted(CKDIR.glob("*.parquet"))], ignore_index=True)
     blob = f"{PROJECT_PREFIX}/processed/chirps_gefs/chirps_gefs_5day_adm2.parquet"
