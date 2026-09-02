@@ -15,12 +15,23 @@ BLOB_STAGE = "dev"
 ISO3 = "UGA"
 UGA_BOX = (29.0, -2.0, 35.5, 4.7)  # W, S, E, N — windowing box for country rasters
 
-# GloFAS reporting point for the riverine zone. ID and name as given by the
-# country team (2026-09-02); coordinates/upstream area are filled by
-# pipeline/glofas_points.py from the reporting-point layer and verified in
-# analysis — do not trust the placeholder below until that has run.
+# GloFAS reporting point for the riverine zone — verified 2026-09-02 against the
+# public GloFAS OWS HydrologicalModelPerformance layer (src/data/glofas_calibration_stations_uga_bbox.csv):
+#   G5196 "Akokorio At Uganda Gauge", river Akokoro; station 1.80N 33.90E; LISFLOOD v4
+#   pixel centre 33.875E 1.775N; calibrated, 22.5-yr record; KGE 0.11, corr 0.65, bias 1.68.
+#   Model RP thresholds (Qsim): 2-yr 33, 5-yr 62, 20-yr 100 m3/s.
+#   CAUTION: provider upstream area 1,410 km2 but the model pixel drains 13,218 km2 — the
+#   point represents the whole Karamoja-fed Akokoro/Awoja catchment above the Awoja
+#   confluence, not the local gauge; check before reading discharge as "the Akokoro".
+# A second, unnamed fixed reporting point sits ~44 km upstream at ~33.805E 2.17N (Kapelebyong).
+# There are NO GloFAS points of any kind on the Albert Nile (Pakwach to Laropi).
 GLOFAS_STATION_ID = "G5196"
-GLOFAS_STATION_NAME = "Akokoro at Uganda gauge"
+GLOFAS_STATION_NAME = "Akokorio at Uganda gauge (Akokoro river)"
+GLOFAS_STATION_LATLON = (1.80, 33.90)  # gauge
+GLOFAS_PIXEL_LONLAT = (33.875, 1.775)  # LISFLOOD v4 cell centre used for reanalysis/reforecast
+GLOFAS_UPSTREAM_KM2_MODEL = 13_218
+GLOFAS_MODEL_RP_THRESHOLDS = {2: 33.0, 5: 62.0, 20: 100.0}
+GLOFAS_KAPELEBYONG_LONLAT = (33.805, 2.17)  # unnamed fixed point, pixel-derived (+/-0.01 deg)
 
 
 @dataclass(frozen=True)

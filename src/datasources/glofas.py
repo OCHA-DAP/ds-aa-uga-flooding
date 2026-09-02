@@ -31,6 +31,7 @@ ALL_MONTHS = [f"{m:02d}" for m in range(1, 13)]
 ALL_DAYS = [f"{d:02d}" for d in range(1, 32)]
 LEADTIME_DAYS = [1, 3, 5, 7, 10, 14, 21, 30]  # ~8 fits the EWDS cost limit
 POLL_INTERVAL_SECONDS = 60
+MAX_IN_FLIGHT = 10  # EWDS queues per user; more in flight buys nothing and risks rejections
 
 
 def snap(v: float) -> float:
@@ -54,17 +55,20 @@ def _client(wait_until_complete: bool = True) -> cdsapi.Client:
 def _submit_and_download_all(jobs: dict, log_prefix: str = "") -> dict:
     """jobs: key -> (collection, request, out_path). Submits all, polls, downloads."""
     client = _client(wait_until_complete=False)
-    remotes = {}
-    for key, (collection, request, out_path) in jobs.items():
+    todo = []
+    for key, (_collection, _request, out_path) in jobs.items():
         out_path.parent.mkdir(parents=True, exist_ok=True)
         if out_path.exists():
             print(f"{log_prefix}{key}: exists, skipping")
-            continue
-        remotes[key] = client.retrieve(collection, request)
-        print(f"{log_prefix}{key}: submitted")
+        else:
+            todo.append(key)
     done = {k: jobs[k][2] for k in jobs if jobs[k][2].exists()}
-    pending = dict(remotes)
-    while pending:
+    pending: dict = {}
+    while pending or todo:
+        while todo and len(pending) < MAX_IN_FLIGHT:
+            key = todo.pop(0)
+            pending[key] = client.retrieve(jobs[key][0], jobs[key][1])
+            print(f"{log_prefix}{key}: submitted")
         for key, remote in list(pending.items()):
             remote.update()
             if remote.status == "successful":

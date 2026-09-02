@@ -1,0 +1,66 @@
+layer,approx_lon,approx_lat,matched_ObsID,matched_name,dist_deg
+reportingPoints,32.885,3.29,,,0.442
+reportingPoints,32.55,3.0,G5164,Aswa Ii 86202,0.035
+reportingPoints,33.805,2.17,,,0.382
+reportingPoints,33.87,1.76,G5196,Akokorio At Uganda Gauge,0.016
+reportingPoints,32.12,1.745,G5223,Kyoga Nile At Masindi Port 83203,0.021
+reportingPoints,34.01,1.615,,,0.209
+reportingPoints,34.78,1.25,G5171,Suam 2B05,0.03
+reportingPoints,30.93,1.12,G5227,Nkusi 85212,0.007
+reportingPoints,34.08,0.915,G5220,Manafwa At Butaleja 82212,0.011
+reportingPoints,30.72,0.9,G5189,Muzizi 85211,0.025
+reportingPoints,29.88,0.84,,,0.846
+reportingPoints,33.79,0.77,,,0.324
+reportingPoints,35.06,0.77,,,0.533
+reportingPoints,32.185,0.695,G5160,Mayanja 83218,0.022
+reportingPoints,34.08,0.345,G5230,Sio River 1Ah01,0.021
+reportingPoints,34.08,0.14,G5195,Nzoia At Ruambwa Ferry 1Ef01,0.016
+reportingPoints,34.3,-0.005,G5179,Yala 1Fg02,0.032
+reportingPoints,34.84,-0.355,G5161,Miriu Sondu 1Jg04,0.025
+reportingPoints,34.65,-0.42,G5198,Awach Kabuon 1Hd04,0.017
+reportingPoints,30.655,-0.63,G5145,Rwizi At Mbarara Water Works 81224,0.014
+reportingPoints,29.81,-0.69,G5317,Mitano 84267,0.012
+reportingPoints,34.155,-0.91,G5216,Gucha Migori 1Kb05,0.025
+reportingPoints,30.435,-1.055,,,0.488
+reportingPoints,29.75,-1.405,G5461,Rusumo,0.032
+RPG_U,32.82,3.29,,,0.399
+RPG_U,32.94,3.29,,,0.482
+RPG_U,32.54,3.01,G5164,Aswa Ii 86202,0.049
+RPG_U,32.65,3.01,,,0.083
+RPG_U,32.54,2.9,G5164,Aswa Ii 86202,0.066
+RPG_U,32.65,2.9,,,0.083
+RPG_U,33.8,2.17,,,0.383
+RPG_U,33.87,1.82,G5196,Akokorio At Uganda Gauge,0.036
+RPG_U,32.12,1.75,G5223,Kyoga Nile At Masindi Port 83203,0.025
+RPG_U,33.87,1.705,G5196,Akokorio At Uganda Gauge,0.07
+RPG_U,34.01,1.68,,,0.163
+RPG_U,34.01,1.56,,,0.254
+RPG_U,34.78,1.26,G5171,Suam 2B05,0.039
+RPG_U,34.78,1.15,G5171,Suam 2B05,0.071
+RPG_U,30.93,1.12,G5227,Nkusi 85212,0.007
+RPG_U,34.08,0.98,G5220,Manafwa At Butaleja 82212,0.055
+RPG_U,30.72,0.91,G5189,Muzizi 85211,0.035
+RPG_U,34.08,0.86,G5220,Manafwa At Butaleja 82212,0.065
+RPG_U,29.88,0.84,,,0.846
+RPG_U,30.72,0.8,G5189,Muzizi 85211,0.072
+RPG_U,33.73,0.77,,,0.378
+RPG_U,33.845,0.77,,,0.277
+RPG_U,35.06,0.77,,,0.533
+RPG_U,32.12,0.7,G5160,Mayanja 83218,0.055
+RPG_U,32.24,0.7,G5160,Mayanja 83218,0.07
+RPG_U,34.08,0.35,G5230,Sio River 1Ah01,0.025
+RPG_U,34.08,0.14,G5195,Nzoia At Ruambwa Ferry 1Ef01,0.016
+RPG_U,34.29,0.0,G5179,Yala 1Fg02,0.043
+RPG_U,34.4,0.0,G5179,Yala 1Fg02,0.079
+RPG_U,34.78,-0.35,G5161,Miriu Sondu 1Jg04,0.026
+RPG_U,34.895,-0.35,G5161,Miriu Sondu 1Jg04,0.074
+RPG_U,34.64,-0.42,G5198,Awach Kabuon 1Hd04,0.023
+RPG_U,34.75,-0.48,,,0.093
+RPG_U,29.81,-0.63,G5317,Mitano 84267,0.047
+RPG_U,30.65,-0.63,G5145,Rwizi At Mbarara Water Works 81224,0.013
+RPG_U,29.81,-0.745,G5317,Mitano 84267,0.062
+RPG_U,34.15,-0.91,G5216,Gucha Migori 1Kb05,0.029
+RPG_U,30.37,-1.05,,,0.516
+RPG_U,30.49,-1.05,,,0.462
+RPG_U,29.74,-1.4,G5461,Rusumo,0.043
+RPG_U,29.85,-1.4,G5461,Rusumo,0.025
