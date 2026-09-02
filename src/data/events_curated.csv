@@ -7,4 +7,9 @@ DTM-2024-09,Flood (General),2024-09-01,2024-10-31,,13560,Otuke,Otuke,IOM DTM EET
 DTM-2024-11,Riverine flood,2024-11-01,2024-12-31,,200000,Kasese (Nyamwamba),Kasese,IOM DTM EET compilation (country team xlsx Aug 2026)
 DTM-2025-09a,Riverine flood,2025-09-01,2025-10-31,,49000,Pallisa,Pallisa,IOM DTM EET compilation (country team xlsx Aug 2026)
 DTM-2025-09b,Riverine flood,2025-09-01,2025-10-31,,29735,Katakwi,Katakwi,IOM DTM EET compilation (country team xlsx Aug 2026)
-OPM-2025-08,Landslide (wet),2025-08-01,2025-08-31,20,15000,"Mt Elgon, Aug 2025 (20 deaths, 113 missing)",Bulambuli;Bududa;Sironko,El Nino Impact in Uganda 2023-2025 retrospective (OPM, Jun 2026)
+OPM-2025-08,Landslide (wet),2025-08-01,2025-08-31,20,15000,"Mt Elgon, Aug 2025 (20 deaths, 113 missing)",Bulambuli;Bududa;Sironko,"El Nino Impact in Uganda 2023-2025 retrospective (OPM, Jun 2026)"
+WN-2019-12,Riverine flood,2019-12-04,2019-12-06,2,,"Pakwach bridge: Albert Nile burst banks, West Nile cut off",Pakwach,ReliefWeb/Daily Monitor 'West Nile cut off by River Nile floods' Dec 2019
+WN-2020-04,Riverine flood,2020-04-15,2020-09-30,,100000,"Pakwach, 9 of 10 sub-counties: Lake Albert / Albert Nile rise (Dei, Panyimur; ferry stopped)",Pakwach,"Daily Monitor 21 Sep 2020 'Floods displace 100,000 people in Pakwach'; ReliefWeb May 2020 (150 families Dei)"
+WN-2020-06,Riverine flood,2020-06-01,2020-11-30,,23000,"Obongi town and landing site; Adjumani Dzaipi/Pakele/Okusijoni/Arinyapi (Nile rising since June, 'worst since 1964'; Tete river)",Obongi;Adjumani,"Daily Monitor 16 Nov 2020 'Floods displace 23,000 in West Nile'"
+WN-2023-09,Flash flood,2023-09-20,2023-09-27,,4000,"Adjumani refugee settlement blocks C/D/G/F, torrential local rain",Adjumani,"Daily Monitor 27 Sep 2023 'Over 4,000 refugees hit by floods in Adjumani'"
+WN-2024-10,Riverine flood,2024-10-15,2024-11-30,,4000,"Palorinya sub-county, Obongi: Nile + Ato stream burst banks, >800 homesteads, Ibakwe HC II closed",Obongi,Daily Monitor 4 Nov 2024; IOM DTM PDNA Jan 2025 (Obongi displacement Nov-Dec 2024)
