@@ -139,7 +139,7 @@ def main() -> None:
         ax.annotate(
             "GloFAS G5196\nAkokoro",
             GLOFAS_POINT,
-            xytext=(22, -34),
+            xytext=(-78, -46),
             textcoords="offset points",
             fontsize=8,
             arrowprops={"arrowstyle": "-", "color": "black", "lw": 0.6},
@@ -210,9 +210,10 @@ def main() -> None:
         title_fontsize=8,
         framealpha=1.0,
     )
+    leg1.set_zorder(20)
     ax.add_artist(leg1)
     if ext_handles:
-        ax.legend(
+        leg2 = ax.legend(
             handles=ext_handles,
             loc="lower right",
             fontsize=7.5,
@@ -220,6 +221,7 @@ def main() -> None:
             title_fontsize=8,
             framealpha=1.0,
         )
+        leg2.set_zorder(20)
 
     ax.set_xlim(29.4, 35.2)
     ax.set_ylim(-1.6, 4.4)
