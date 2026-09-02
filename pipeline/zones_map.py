@@ -139,9 +139,11 @@ def main() -> None:
         ax.annotate(
             "GloFAS G5196\nAkokoro",
             GLOFAS_POINT,
-            xytext=(6, 6),
+            xytext=(22, -34),
             textcoords="offset points",
             fontsize=8,
+            arrowprops={"arrowstyle": "-", "color": "black", "lw": 0.6},
+            bbox={"boxstyle": "round,pad=0.2", "fc": "white", "ec": "none", "alpha": 0.9},
         )
 
     # labels
@@ -206,7 +208,7 @@ def main() -> None:
         fontsize=7.5,
         title="OCHA/CERF trigger zones",
         title_fontsize=8,
-        framealpha=0.9,
+        framealpha=1.0,
     )
     ax.add_artist(leg1)
     if ext_handles:
@@ -216,7 +218,7 @@ def main() -> None:
             fontsize=7.5,
             title="Other organisations' flood AA",
             title_fontsize=8,
-            framealpha=0.9,
+            framealpha=1.0,
         )
 
     ax.set_xlim(29.4, 35.2)
