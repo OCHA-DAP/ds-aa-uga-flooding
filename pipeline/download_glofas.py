@@ -17,6 +17,9 @@ if __name__ == "__main__":
         glofas.download_reanalysis_box()
     elif what == "reforecast":
         key, lat, lon = sys.argv[2], float(sys.argv[3]), float(sys.argv[4])
-        glofas.download_reforecast_point(key, lat, lon)
+        glofas.download_reforecast_point(key, lat, lon, leadtime_days=(1, 2, 3, 4, 5, 6, 7))
+        glofas.download_reforecast_point(
+            key, lat, lon, leadtime_days=(8, 9, 10, 11, 12, 13, 14, 15), dir_suffix="_lead8_15"
+        )
     else:
         raise SystemExit(__doc__)

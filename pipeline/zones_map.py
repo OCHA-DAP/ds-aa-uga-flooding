@@ -38,7 +38,7 @@ ZONE_COL = {
     "adjumani": "#5e3c99",
 }
 HATCH = ["///", "\\\\\\", "xxx", "..."]
-from src.constants import GLOFAS_PIXEL_LONLAT
+from src.constants import GLOFAS_KAPELEBYONG_LONLAT, GLOFAS_PIXEL_LONLAT
 
 GLOFAS_POINT = GLOFAS_PIXEL_LONLAT
 
@@ -126,7 +126,16 @@ def main() -> None:
         )
 
     if GLOFAS_POINT:
-        ax.plot(*GLOFAS_POINT, marker="^", color="black", markersize=11, zorder=8)
+        ax.plot(*GLOFAS_POINT, marker="^", color="black", linestyle="", markersize=11, zorder=8)
+        ax.plot(
+            *GLOFAS_KAPELEBYONG_LONLAT,
+            marker="^",
+            color="black",
+            markerfacecolor="white",
+            linestyle="",
+            markersize=9,
+            zorder=8,
+        )
         ax.annotate(
             "GloFAS G5196\nAkokoro",
             GLOFAS_POINT,
@@ -175,7 +184,20 @@ def main() -> None:
                 color="black",
                 linestyle="",
                 markersize=9,
-                label="GloFAS reporting point G5196",
+                label="GloFAS reporting point G5196 (calibrated)",
+            )
+        )
+    if GLOFAS_POINT:
+        zone_handles.append(
+            Line2D(
+                [],
+                [],
+                marker="^",
+                color="black",
+                markerfacecolor="white",
+                linestyle="",
+                markersize=8,
+                label="other GloFAS fixed reporting point (Kapelebyong, unnamed)",
             )
         )
     leg1 = ax.legend(
