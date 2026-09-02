@@ -58,4 +58,45 @@ EXTERNAL: dict[str, ExternalFramework] = {
             "Nov 2023 lessons: multiple false alarms in the 2023 El Nino season; episodic floods not captured by the portal.",
         ),
     ),
+    "wfp_sw": ExternalFramework(
+        key="wfp_sw",
+        org="WFP",
+        label="district flood AA plans, South-West (Kasese, Kisoro, Ntoroko)",
+        districts=("Kasese", "Kisoro", "Ntoroko"),
+        trigger=(
+            "Flood triggers 'finalised' by MWE/DWRM in 2025 (Semliki river trigger in the Ntoroko contingency plan); "
+            "indicator, threshold and lead time not published"
+        ),
+        status=(
+            "2024: MAM flood forecast -> desilting; 2025: anticipatory cash to 2,135 people (mainly Ntoroko). "
+            "Anticipation Hub lists the WFP flood framework as 'under development'."
+        ),
+        source="WFP Uganda Annual Country Report 2025 (WFP-0000172882) p.22; ACR 2024; Anticipation Hub Uganda page",
+        verified=True,
+        notes=(
+            "WFP/FAO PRO-ACT in the 9 Karamoja districts + Kaberamaido, Katakwi is a DROUGHT AA plan "
+            "(activated May 2026) with multi-hazard bulletins — no flood trigger; not drawn on the flood map.",
+        ),
+    ),
+    "fao_2023": ExternalFramework(
+        key="fao_2023",
+        org="FAO",
+        label="OND-2023 El Nino flood AA (one-off, closed)",
+        districts=(
+            "Mbale",
+            "Butaleja",
+            "Sironko",
+            "Bulambuli",
+            "Manafwa",
+            "Namisindwa",
+            "Bundibugyo",
+            "Ntoroko",
+            "Kasese",
+            "Katakwi",
+        ),
+        trigger="Seasonal outlook (OND 2023, 40-45% above-normal) — one-off, no standing threshold",
+        status="11 Aug - 31 Dec 2023 only (OSRO/UGA/070/BEL, USD 1M, 78,375 people). FAO's standing AA in Uganda is Karamoja drought/livestock.",
+        source="FAO project report https://openknowledge.fao.org/server/api/core/bitstreams/22e1fbf6-6ae8-436c-9118-12d9d94482f6/content pp.1-2, 7",
+        verified=True,
+    ),
 }
