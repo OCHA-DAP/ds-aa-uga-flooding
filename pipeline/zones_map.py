@@ -52,6 +52,17 @@ def main() -> None:
             rec = ds.read(1)
             b = ds.bounds
         rec = np.where(rec > 0.02, rec, np.nan)
+        # clip to Uganda so neighbouring countries' wetlands don't distract
+        from rasterio.features import geometry_mask
+
+        with rasterio.open(io.BytesIO(data)) as ds:
+            inside = ~geometry_mask(
+                [adm2.dissolve().geometry.iloc[0]],
+                out_shape=rec.shape,
+                transform=ds.transform,
+                invert=False,
+            )
+        rec = np.where(inside, rec, np.nan)
         im = ax.imshow(
             rec,
             extent=(b.left, b.right, b.bottom, b.top),
@@ -76,7 +87,7 @@ def main() -> None:
     adm2.boundary.plot(ax=ax, aspect=None, color="#bbbbbb", linewidth=0.3, zorder=2)
 
     # zones
-    for key, zone in ZONES.items():
+    for key in ZONES:
         g = zone_districts(key)
         col = ZONE_COL[key]
         g[g.membership == "candidate"].plot(
