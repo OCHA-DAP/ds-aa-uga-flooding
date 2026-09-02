@@ -38,7 +38,7 @@ ZONE_COL = {
     "adjumani": "#5e3c99",
 }
 HATCH = ["///", "\\\\\\", "xxx", "..."]
-from src.constants import GLOFAS_KAPELEBYONG_LONLAT, GLOFAS_PIXEL_LONLAT  # noqa: E402
+from src.constants import GLOFAS_PIXEL_LONLAT
 
 GLOFAS_POINT = GLOFAS_PIXEL_LONLAT
 

@@ -79,9 +79,9 @@ def parse_datacards(zip_bytes: bytes) -> pd.DataFrame:
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as z:
         xml_name = next(n for n in z.namelist() if n.endswith(".xml"))
         text = z.read(xml_name).decode("utf-8", errors="replace")
-    block = re.search(r"<fichas>(.*?)</fichas>", text, re.S).group(1)
+    block = re.search(r"<fichas>(.*?)</fichas>", text, re.DOTALL).group(1)
     rows = []
-    for tr in re.findall(r"<TR>(.*?)</TR>", block, re.S):
+    for tr in re.findall(r"<TR>(.*?)</TR>", block, re.DOTALL):
         rec = dict(re.findall(r"<(\w+)>([^<]*)</\1>", tr))
         rows.append({new: rec.get(old, "") for old, new in FIELDS.items()})
     df = pd.DataFrame(rows)

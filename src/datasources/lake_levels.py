@@ -19,7 +19,6 @@ Alternatives with longer Albert coverage (Envisat/Jason from 2002): DAHITI id 85
 2016+ Sentinel-3 record proves too short for return periods.
 """
 
-import io
 import tarfile
 from pathlib import Path
 
