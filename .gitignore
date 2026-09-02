@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+.claude/
+__marimo__/
+
+# local data cache — folder tracked, contents not
+data/*
+!data/.gitkeep
+
+# generated figures live in outputs/ (committed selectively) and docs/
+outputs/*
+!outputs/.gitkeep
+!outputs/*.png
+
+pipeline/.checkpoint_*/

@@ -1,0 +1,63 @@
+# ds-aa-uga-flooding
+
+Trigger design for **anticipatory action (AA) for flooding in Uganda** — a
+multi-zone mechanism for the OCHA/CERF framework under development (Sep 2026).
+
+Builds on the exploratory work in
+[`ds-seas5-skill`](https://github.com/OCHA-DAP/ds-seas5-skill) (Uganda drought & flood
+analysis, OND 2026 flood-trigger design options, FloodScan recurrence layers, GloFAS
+skill verification) — that repo keeps the country-team readouts; this one holds the
+trigger analysis proper.
+
+## The four zones
+
+| zone | regime | indicator under design | validation chain |
+|---|---|---|---|
+| **Teso / Lake Kyoga** — Akokoro river | riverine | GloFAS reporting point **G5196** (Akokoro at Uganda gauge) reforecast/reanalysis | discharge → FloodScan extent per district → impact; first task: which districts the point covers |
+| **Mount Elgon** | flash floods + landslides | rainfall forecast (CHIRPS-GEFS, then ECMWF) over the massif, antecedent-wetness qualifier | forecast rain → observed rain (IMERG) → observed flooding/landslide impact |
+| **Karamoja** | flash floods | rainfall forecast, likely sub-zoned by basin | same chain as Elgon |
+| **Adjumani / Albert Nile** | riverine / lake-backwater | undecided: GloFAS Albert Nile points, Lake Albert level (altimetry), or rainfall | history of what actually flooded there comes first |
+
+Plus an **observational backstop** in every zone (FloodScan flood extent, report-based
+where the satellite is blind) so a forecast miss still activates.
+
+Zone membership (core vs candidate districts) is in `src/constants.py`; the coverage map
+is `outputs/zones_coverage_map.png` (`pipeline/zones_map.py`), which also shows other
+organisations' flood AA coverage (`src/frameworks.py`).
+
+## Layout
+
+- `src/constants.py` — blob prefix, zones, GloFAS point, seasons
+- `src/zones.py` — CODAB resolution of zones; `src/zonal.py` — windowed COG reads + exactextract
+- `src/datasources/` — `glofas.py` (EWDS reanalysis/reforecast), `chirps_gefs.py` (CHC rainfall
+  forecasts), `impact.py` (EM-DAT + curated events → districts)
+- `src/data/events_curated.csv` — hand-curated impact events (DTM, OPM, URCS) with sources
+- `pipeline/` — batch builders, each writes to the dev blob under `ds-aa-uga-flooding/`:
+  - `build_daily_adm2.py {floodscan|imerg}` — daily per-district mean/max, 1998–present
+  - `build_chirps_gefs_adm2.py` — daily-issued 5-day rainfall forecast per district, 2000–2026
+  - `download_glofas.py` — GloFAS v4 reanalysis (Uganda box) and per-point reforecast
+  - `zones_map.py` — the coverage map
+- `analysis/` — marimo notebooks, one per zone plus the skill-chain notebooks
+- `data/` — local caches (gitignored); `outputs/` — figures
+
+## Data (dev blob, container `projects`)
+
+```
+ds-aa-uga-flooding/processed/floodscan/floodscan_adm2_daily.parquet     date, pcode, mean, max (SFED)
+ds-aa-uga-flooding/processed/imerg/imerg_adm2_daily.parquet             date, pcode, mean, max (mm/day)
+ds-aa-uga-flooding/processed/chirps_gefs/chirps_gefs_5day_adm2.parquet  issue_date, valid_end, pcode, mean, max (mm/5 days)
+ds-aa-uga-flooding/raw/glofas/...                                       reanalysis box + point reforecasts (netcdf)
+```
+
+Uganda is capped at ADM1 in the team rasterstats DB, so district series are computed
+here from the processed COGs on the prod raster blob.
+
+## Setup
+
+```bash
+uv sync
+uv run python pipeline/zones_map.py
+```
+
+Blob/DB access via `ocha-stratus` (env vars per its README). GloFAS needs an EWDS/CDS key
+(`~/.cdsapirc` or `CDSAPI_KEY`).
