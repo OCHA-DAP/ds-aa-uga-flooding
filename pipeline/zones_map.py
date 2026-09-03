@@ -163,16 +163,26 @@ def main() -> None:
                 ax=ax,
                 aspect=None,
                 color=col,
-                alpha=0.22,
+                alpha=0.14,
                 edgecolor="white",
                 linewidth=0.5,
                 zorder=6,
             )
+            t2.plot(
+                ax=ax,
+                aspect=None,
+                facecolor="none",
+                edgecolor=col,
+                hatch="..",
+                linewidth=0,
+                alpha=0.75,
+                zorder=6,
+            )
             t2.dissolve().boundary.plot(
-                ax=ax, aspect=None, color=col, linewidth=1.3, linestyle=(0, (3, 2)), zorder=7
+                ax=ax, aspect=None, color=col, linewidth=1.7, linestyle=(0, (2.5, 1.5)), zorder=7
             )
         g[g.membership == "core"].plot(
-            ax=ax, aspect=None, color=col, alpha=0.45, edgecolor="white", linewidth=0.5, zorder=6
+            ax=ax, aspect=None, color=col, alpha=0.5, edgecolor="white", linewidth=0.5, zorder=6
         )
         g.dissolve().boundary.plot(ax=ax, aspect=None, color=col, linewidth=2.0, zorder=7)
 
@@ -241,6 +251,20 @@ def main() -> None:
             zorder=12,
             **halo(11.5, ZONE_COL[key], "bold"),
         )
+    for key, z in ZONES.items():
+        if not z.tier2:
+            continue
+        t2 = zone_districts(key)
+        c = t2[t2.membership == "tier2"].dissolve().geometry.iloc[0].representative_point()
+        dx, dy = {"teso_kyoga": (-0.7, -0.35), "elgon": (-0.15, -0.5), "adjumani": (0.0, -0.6)}[key]
+        ax.annotate(
+            f"tier 2 · {z.tier2_label.split(' (')[0]}",
+            (c.x + dx, c.y + dy),
+            ha="center",
+            zorder=12,
+            style="italic",
+            **halo(8, ZONE_COL[key], "bold"),
+        )
     for name, (dx, dy) in KEY_DISTRICTS.items():
         row = adm2[name == adm2.ADM2_EN]
         if len(row):
@@ -291,7 +315,7 @@ def main() -> None:
     fig.text(
         0.02,
         0.952,
-        "Four OCHA/CERF zones under design (solid = core districts, dashed = second tier), the GloFAS reporting point, "
+        "Four OCHA/CERF zones under design — tier 1 solid, tier 2 dotted with a dashed outline (same driver, different flood regime) — the GloFAS point, "
         "and the districts where other organisations already run flood anticipatory action (hatched; detail below).",
         fontsize=9.5,
         color=INK2,
@@ -301,24 +325,30 @@ def main() -> None:
     )
 
     # legend + colorbar inside the main axes, top-left (over South Sudan / empty)
-    handles = [
-        Patch(
-            facecolor=ZONE_COL[k],
-            alpha=0.42,
-            edgecolor=ZONE_COL[k],
-            linewidth=1.5,
-            label=z.label.split(" (")[0],
+    handles = []
+    for k, z in ZONES.items():
+        handles.append(
+            Patch(
+                facecolor=ZONE_COL[k],
+                alpha=0.5,
+                edgecolor=ZONE_COL[k],
+                linewidth=1.5,
+                label=f"{z.label.split(' (')[0]} — tier 1",
+            )
         )
-        for k, z in ZONES.items()
-    ]
+        if z.tier2:
+            handles.append(
+                Patch(
+                    facecolor=ZONE_COL[k],
+                    alpha=0.14,
+                    edgecolor=ZONE_COL[k],
+                    hatch="..",
+                    linewidth=1.2,
+                    linestyle=(0, (2.5, 1.5)),
+                    label=f"   tier 2 — {z.tier2_label.split(' (')[0]}",
+                )
+            )
     handles += [
-        Patch(
-            facecolor="#cccccc",
-            alpha=0.35,
-            edgecolor="#666666",
-            linestyle=(0, (3, 2)),
-            label="tier 2 — same driver, different flood regime",
-        ),
         Patch(
             facecolor="none",
             edgecolor=INK2,

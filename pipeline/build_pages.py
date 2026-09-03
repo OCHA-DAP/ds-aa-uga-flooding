@@ -244,7 +244,7 @@ def results_page() -> str:
         "as circles, the 14 largest cumulative caseloads labelled, and the zones outlined.</p>",
         '<figure><img src="impact_summary.png" alt="Uganda districts coloured by number of years with recorded impact"></figure>',
         "<p>Then one map per year. Districts are coloured by people affected that year (log scale; pale pink = a record without a count), "
-        "circles mark five or more deaths. The 2007 Teso floods, the 2010 to 2013 run, 2018, 2020 and the 2024 to 2025 El Niño years stand out; "
+        "circles mark five or more deaths. Panels are framed for the two CERF rapid-response allocations (gold: USD 4.8 M in Oct 2007, USD 4.0 M in Jan 2020 for the Nov–Dec 2019 floods) and for El Niño Oct–Dec seasons (orange, ONI ≥ 0.5), with a tag for positive-IOD seasons. The 2007 Teso floods, the 2010 to 2013 run, 2018, 2020 and the 2024 to 2025 El Niño years stand out; "
         "2019 and 2022 are under-recorded because DesInventar has no 2019 cards and stops in 2021.</p>",
         '<figure><img src="impact_by_year.png" alt="Grid of 28 yearly maps of Uganda districts coloured by recorded impact"></figure>',
         "<p class='fn'>Two corrections to the raw sources: a few DesInventar datacards carry national totals against one district (Agago "

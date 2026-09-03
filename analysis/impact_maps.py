@@ -41,6 +41,15 @@ REDS = LinearSegmentedColormap.from_list(
     "imp", ["#fde5d9", "#f4a582", "#d6604d", "#b2182b", "#67001f"]
 )
 INK, INK2, MUTED = "#0b0b0b", "#52514e", "#8a8984"
+# CERF rapid-response allocations for floods/landslides in Uganda (CERF Allocations dataset, HDX),
+# keyed on the year of the flood event they responded to: USD 4.8 M in Oct 2007 (Teso/northern
+# floods) and USD 3.95 M in Jan 2020 (Nov-Dec 2019 Rwenzori/Elgon floods and landslides).
+CERF_YEARS = {2007: "CERF $4.8M Oct 2007", 2019: "CERF $4.0M Jan 2020"}
+ONI_ELNINO, DMI_POSITIVE = (
+    0.5,
+    0.4,
+)  # OND-mean thresholds on the NOAA ONI / DMI (ds-seas5-skill index table)
+ENSO_COL, IOD_COL, CERF_COL = "#d95926", "#1baf7a", "#8a6d00"
 IMPLAUSIBLE_AFFECTED = 100_000  # per district-card; above this it is a national total mis-filed
 
 
@@ -77,9 +86,20 @@ def district_year_table() -> pd.DataFrame:
     return t.reset_index()
 
 
+def climate_years() -> tuple[set[int], set[int]]:
+    """Years whose Oct-Dec season was under El Nino (ONI >= 0.5) and positive IOD (DMI >= 0.4)."""
+    import ocha_stratus as stratus
+
+    idx = stratus.load_parquet_from_blob(
+        "ds-seas5-skill/raw/climate_indices/ond_indices.parquet", stage="dev"
+    )
+    return set(idx[idx.oni_ond >= ONI_ELNINO].year), set(idx[idx.dmi_ond >= DMI_POSITIVE].year)
+
+
 def main() -> None:
     adm = load_adm2()
     t = district_year_table()
+    elnino, piod = climate_years()
     t = t[t.year.isin(YEARS)]
     t.to_csv(OUT / "impact_district_year.csv", index=False)
     uganda = adm.dissolve().geometry.iloc[0]
@@ -131,7 +151,37 @@ def main() -> None:
                 ax.plot(*p.exterior.xy, color=ZONE_COL[k], linewidth=0.7, alpha=0.9)
                 for p in shp.geoms
             ]
+        tags = []
+        if year in elnino:
+            tags.append(("El Niño", ENSO_COL))
+        if year in piod:
+            tags.append(("+IOD", IOD_COL))
+        if year in CERF_YEARS:
+            tags.append((CERF_YEARS[year], CERF_COL))
         ax.set_title(str(year), fontsize=10, fontweight="bold", color=INK, pad=2)
+        for j, (txt, col) in enumerate(tags):
+            ax.text(
+                0.98,
+                0.96 - 0.09 * j,
+                txt,
+                transform=ax.transAxes,
+                ha="right",
+                va="top",
+                fontsize=6.5,
+                color="white",
+                fontweight="bold",
+                bbox={"boxstyle": "round,pad=0.25", "fc": col, "ec": "none"},
+            )
+        if year in CERF_YEARS:
+            for sp in ax.spines.values():
+                sp.set_visible(True)
+                sp.set_edgecolor(CERF_COL)
+                sp.set_linewidth(2.2)
+        elif year in elnino:
+            for sp in ax.spines.values():
+                sp.set_visible(True)
+                sp.set_edgecolor(ENSO_COL)
+                sp.set_linewidth(1.2)
         ax.text(
             0.02,
             0.02,
@@ -143,7 +193,17 @@ def main() -> None:
         ax.set_xlim(29.4, 35.15)
         ax.set_ylim(-1.55, 4.35)
         ax.set_aspect("equal")
-        ax.set_axis_off()
+        ax.set_xticks([])
+        ax.set_yticks([])
+        if year in CERF_YEARS or year in elnino:
+            ax.set_facecolor("#fff8f0" if year in elnino else "white")
+            for sp in ax.spines.values():
+                sp.set_visible(True)
+                sp.set_edgecolor(CERF_COL if year in CERF_YEARS else ENSO_COL)
+                sp.set_linewidth(2.4 if year in CERF_YEARS else 1.4)
+        else:
+            for sp in ax.spines.values():
+                sp.set_visible(False)
     for ax in axes.flat[len(YEARS) :]:
         ax.set_axis_off()
     sm = plt.cm.ScalarMappable(norm=norm, cmap=REDS)
@@ -166,6 +226,21 @@ def main() -> None:
     handles += [
         Line2D([], [], color=ZONE_COL[k], lw=1.2, label=z.label.split(" (")[0])
         for k, z in ZONES.items()
+    ]
+    handles += [
+        Patch(
+            facecolor="white",
+            edgecolor=CERF_COL,
+            linewidth=2.4,
+            label="CERF rapid-response allocation for that flood",
+        ),
+        Patch(
+            facecolor="#fff8f0",
+            edgecolor=ENSO_COL,
+            linewidth=1.4,
+            label="El Niño Oct–Dec season (ONI ≥ 0.5)",
+        ),
+        Patch(facecolor=IOD_COL, edgecolor="none", label="positive IOD Oct–Dec (DMI ≥ 0.4)"),
     ]
     fig.legend(
         handles=handles,
