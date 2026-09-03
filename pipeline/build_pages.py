@@ -112,7 +112,12 @@ def coverage_page() -> str:
 
 
 def results_page() -> str:
-    for f in ("teso_glofas_coverage.png", "adjumani_lake_levels.png", "flash_rain_vs_events.png"):
+    for f in (
+        "teso_glofas_coverage.png",
+        "adjumani_lake_levels.png",
+        "flash_rain_vs_events.png",
+        "flash_antecedent.png",
+    ):
         shutil.copy(OUT / f, PAGES / "results" / f)
     cov = pd.read_csv(OUT / "teso_glofas_coverage.csv")
     cov_show = cov[
@@ -174,6 +179,22 @@ def results_page() -> str:
         "activate on non-events. The trigger needs a lower rainfall bar combined with antecedent wetness (the landslide literature's "
         "'prolonged low-intensity rain'), finer spatial resolution (district or slope-unit rather than zone mean), and an explicit statement "
         "of the false-alarm ratio that comes with it. The forecast leg (CHIRPS-GEFS vs IMERG) follows when its table lands.</p>",
+        "<h2>Does antecedent wetness help?</h2>",
+        "<p>Soil moisture is the missing variable in the previous result: landslides and flash floods follow moderate rain on saturated "
+        "ground. Until the ERA5-Land soil-moisture download lands, an antecedent precipitation index from IMERG stands in for it "
+        "(API<sub>t</sub> = 0.9·API<sub>t−1</sub> + P<sub>t</sub>, an e-folding time of about ten days, lagged so it describes the ground "
+        "before the 3-day rain window). Grey: all days since 1998; points: event days; circles: events with five or more deaths.</p>",
+        '<figure><img src="flash_antecedent.png" alt="Rain percentile vs antecedent index percentile for all days and event days"></figure>',
+        "<p><strong>Reading:</strong> events cluster in the wet–wet corner, and the deadly ones more so (median antecedent percentile "
+        "78 on Elgon, 89 in Karamoja). A trigger grid over rain and antecedent thresholds (tables <code>outputs/flash_trigger_grid_*.csv</code>, "
+        "zone-level and any-district variants) shows what that buys: at a fixed rain threshold, requiring the antecedent index above its "
+        "85th percentile roughly doubles the share of activations that have a recorded event within two days (for example on Elgon, "
+        "any-district 3-day rain ≥ 95th percentile: 8 % → 14 %), while keeping about half of the deadly events. But no combination gets "
+        "precision above about 15 %, and catching most deadly events costs 10–25 activations a year. Two things follow. First, a daily "
+        "rainfall trigger at zone scale is a readiness-tier signal at best, not an action trigger; the action decision needs something "
+        "sharper — slope-unit susceptibility, a landslide-model layer, community gauges, or the forecast's own probability. Second, the "
+        "impact record is incomplete (DesInventar stops in 2021 and misses minor events), so true precision is somewhat higher than "
+        "measured — but not by the factor needed. ERA5-Land soil moisture will replace the proxy and be re-tested here.</p>",
         "<h2>Impact record assembled</h2><ul>"
         "<li><strong>EM-DAT</strong> — 47 flood and wet mass-movement events 2001–2024, exploded to districts.</li>"
         "<li><strong>DesInventar Uganda</strong> — about 1,500 flood, 370 landslide and 130 rainstorm datacards, day-dated and district-matched, 1933–2021 (no 2019 records; ends 2021).</li>"
