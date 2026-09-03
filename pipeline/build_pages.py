@@ -154,7 +154,7 @@ def floodscan_impact_table() -> str:
     ev["zone"] = ev.zone.replace({"outside": "outside the zones"})
     ok = d[(d.n_impact_years >= 3) & ~d.blind]
     rows = []
-    for z in list(ZONES) + ["outside the zones"]:
+    for z in [*ZONES, "outside the zones"]:
         dz, ez = d[d.zone == z], ev[ev.zone == z]
         rows.append(
             {
