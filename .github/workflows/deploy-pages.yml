@@ -1,0 +1,41 @@
+name: Deploy pages site to GitHub Pages
+
+# Publishes pages/ as-is: landing page at /, products under /coverage/ and /results/.
+# Product pages are generated locally by pipeline/build_pages.py and committed, so the
+# deploy needs no Python, secrets or data access. Template: OCHA-DAP/ds-seas5-skill.
+
+on:
+  push:
+    branches: [main]
+    paths: ["pages/**", ".github/workflows/deploy-pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check the site is complete
+        run: |
+          test -f pages/index.html && test -f pages/coverage/index.html && test -f pages/results/index.html
+          test -f pages/coverage/zones_coverage_map.png && test -f pages/results/teso_glofas_coverage.png
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+      - id: deployment
+        uses: actions/deploy-pages@v4

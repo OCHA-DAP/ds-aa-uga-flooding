@@ -112,11 +112,15 @@ def load_curated_events() -> pd.DataFrame:
     return df
 
 
-def events_by_district(include_curated: bool = True) -> pd.DataFrame:
+def events_by_district(include_curated: bool = True, include_dtm: bool = True) -> pd.DataFrame:
     """Long table: one row per (event, district), tagged with zone and membership."""
     frames = [load_emdat_events()]
     if include_curated and CURATED.exists():
         frames.append(load_curated_events())
+    if include_dtm:
+        from src.datasources.dtm import load_dtm_events
+
+        frames.append(load_dtm_events())
     ev = (
         pd.concat(frames, ignore_index=True)
         .explode("districts")

@@ -1,12 +1,4 @@
 event_id,subtype,start,end,deaths,affected,Location,districts,source
-DTM-2023-10,Riverine flood,2023-10-01,2023-11-30,,21091,"Moyo (Albert Nile, OND 2023 El Nino rains)",Moyo,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2023-11,Riverine flood,2023-10-01,2023-11-30,,13776,Ntoroko,Ntoroko,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2024-04,Flood (General),2024-04-01,2024-04-30,,9098,Butaleja,Butaleja,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2024-08,Riverine flood,2024-08-01,2024-08-31,,30224,Ntoroko (Semliki),Ntoroko,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2024-09,Flood (General),2024-09-01,2024-10-31,,13560,Otuke,Otuke,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2024-11,Riverine flood,2024-11-01,2024-12-31,,200000,Kasese (Nyamwamba),Kasese,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2025-09a,Riverine flood,2025-09-01,2025-10-31,,49000,Pallisa,Pallisa,IOM DTM EET compilation (country team xlsx Aug 2026)
-DTM-2025-09b,Riverine flood,2025-09-01,2025-10-31,,29735,Katakwi,Katakwi,IOM DTM EET compilation (country team xlsx Aug 2026)
 OPM-2025-08,Flood (General),2025-08-17,2025-08-19,5,15000,"Bulambuli, Sironko, Mbale floods; Namisindwa landslides (17-19 Aug 2025; 5,000 displaced, ~2,000 homes)",Bulambuli;Sironko;Mbale;Namisindwa,"ACAPS Uganda; East News 22 Aug 2025 (police toll). NB the OPM retrospective quotes 20 dead/113 missing for this event, which are the Nov 2024 Bulambuli figures"
 WN-2019-12,Riverine flood,2019-12-04,2019-12-06,2,,"Pakwach bridge: Albert Nile burst banks, West Nile cut off",Pakwach,ReliefWeb/Daily Monitor 'West Nile cut off by River Nile floods' Dec 2019
 WN-2020-04,Riverine flood,2020-04-15,2020-09-30,,100000,"Pakwach, 9 of 10 sub-counties: Lake Albert / Albert Nile rise (Dei, Panyimur; ferry stopped)",Pakwach,"Daily Monitor 21 Sep 2020 'Floods displace 100,000 people in Pakwach'; ReliefWeb May 2020 (150 families Dei)"

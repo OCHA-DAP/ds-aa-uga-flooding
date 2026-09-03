@@ -9,11 +9,18 @@ documents are referenced, not reproduced.
 | org | programme | districts | trigger | status |
 |---|---|---|---|---|
 | IFRC / URCS | Flood EAP **EAP2021UG01** (DREF CHF 348,761) | **14 high-risk**: Kasese, Ntoroko, Katakwi, Amuria, Kumi, Ngora, Nabilatuk, Butaleja, Sironko, Bududa, Manafwa, Bulambuli, Moyo, Kampala | GloFAS via the 510 IBF portal: ≥70 % (operationally 60 %) probability of a 5-yr RP flood (10-yr in lower-priority districts), >1,000 hh, 5-day lead, FAR ≤0.5 | Approved 27 May 2021; 5-yr term nominally expired mid-2026 (GO appeal MDRUG048 open to 2026-11-30); **no second-generation EAP found**. One activation, 15 Nov 2023 (Ntoroko, Butaleja, Kikuube; flood materialised only in Butaleja). Lessons: multiple false alarms in the 2023 El Niño season; episodic floods not captured |
-| WFP | District flood AA plans, South-West | Kasese, Kisoro, Ntoroko | MWE/DWRM "finalised" flood triggers 2025 (Semliki trigger in Ntoroko plan); indicator/threshold/lead **not published** | 2024 MAM desilting; 2025 anticipatory cash to 2,135 people (mainly Ntoroko). Hub lists WFP flood framework "under development" |
+| WFP | **Southwest Flood AAP** (plan dated 28 Aug 2026, valid Aug 2026–Dec 2028) | Kasese, Ntoroko, Kisoro, Bundibugyo | Three tiers. *General readiness*: monthly SPI-1 forecast over per-district 3-yr / 5-yr RP thresholds (MAM, SOND), 15 d–1 month lead. *Readiness*: 7-day "exceptional rainfall" forecast at the 90/95/99th pctl OR daily totals over per-district mm thresholds (Kasese 14/39/47, Kisoro 17/24/28, Bundibugyo 18/27/34, Ntoroko 16/27/35 mm, SOND). *Activation*: same on 2 consecutive forecast days, 5-day lead | Tier-1 beneficiaries 74,815–103,550, budget USD 2.47–3.42 M by scenario. Earlier: 2024 MAM desilting, 2025 anticipatory cash (mainly Ntoroko). Forecast product not named in the summary |
+| CRS / Caritas Tororo | **AA Protocol for floods & landslides, Butaleja + Bududa** (validated V5, 7 Jul 2026) | Butaleja (TC, Butaleja SC, Himutu, Mazimasa); Bududa (Buwali, Bundesi, Busiriwa, Bubita, Bufuma, Bushiyi, Bukibokolo) | W1 (1-month lead): DMS/UNMA seasonal forecast "likely/very likely" above normal. W2 (7-day lead): DMS ≥70 % probability of a 5-yr RP flood via the DMS emergency dashboard and/or VDMC community indicators (3 days above-average rain, W→E wind, animal movement, brown river) | Pilot, USD 218,520 (200,000 CRS internal HRD pre-arranged). Successor to the ECHO consortium (Oxfam Novib, CRS, Caritas Tororo, URCS) in Bududa, Butaleja, Mbale, Namisindwa, Sironko, whose AA was triggered by the UNMA OND-2023 outlook |
+| DRC | **Karamoja AAP 2026** (drought, resource conflict, flash flood; cross-border with Kenya) | Moroto, Napak, Amudat | Flash-flood ladder: Kospir River at 80–85 % and rising; ~150 mm forecast in 24–48 h; livestock moving to high ground. Drought: SPI ≤ −1.5, Kobebe dam <50 %, body condition <3.0 | **Activated 27 Jul 2026** on drought + conflict (not flood). Napak floodplains flagged highest flash-flood risk; DRC's OND-2026 central scenario: 48,000 flood-displaced in Uganda |
 | WFP / FAO / OPM | PRO-ACT multi-hazard EWS + Karamoja **drought** AAP | 9 Karamoja districts + Kaberamaido, Katakwi | drought (SPI); **no flood trigger** | drought AAP activated May 2026 |
 | FAO | OSRO/UGA/070/BEL El Niño flood AA | Mbale, Butaleja, Sironko, Bulambuli, Manafwa, Namisindwa, Bundibugyo, Ntoroko, Kasese, Katakwi | seasonal outlook, one-off | 11 Aug–31 Dec 2023 only |
 | GoU / OPM | AA Roadmap 2026–2031 + U-MHIEWS | national | none specified yet | launched 3 Jul 2026 |
 | NBI / NELSAP | NB-FFEWS flash-flood EWS (48 h) | basin-wide emails to NMHSs | thresholds not public | operational testing 2026 |
+
+The WFP, CRS and DRC rows come from documents shared by the country team on 2 Sep 2026
+(dev blob `ds-aa-uga-flooding/raw/external_frameworks/`), which supersede the web-only
+picture: WFP covers four districts (not three) with published thresholds; the Elgon corridor
+has a validated protocol at sub-county resolution; Karamoja is not uncovered after all.
 
 Sources: EAP summary <https://adore.ifrc.org/Download.aspx?FileId=438600> (p.3 list);
 MDRUG048 activation/final reports (ReliefWeb); WFP ACR 2025 (WFP-0000172882) p.22 and
@@ -24,8 +31,9 @@ district→priority-tier assignment; the GloFAS points the EAP uses (only "12 st
 assessed, 8 used"); any WFP flood threshold; any Start Network / UNICEF / SCI flood trigger.
 
 **Coverage vs our zones**: Teso — IFRC (Katakwi, Amuria, Kumi, Ngora) + FAO 2023 (Katakwi).
-Elgon — IFRC (5 districts) + FAO 2023. Karamoja — only Nabilatuk (IFRC). Adjumani/Albert
-Nile — **nothing** except Moyo in the IFRC list.
+Elgon — IFRC (5 districts), CRS protocol (Butaleja, Bududa), FAO 2023. Karamoja — DRC (Moroto,
+Napak, Amudat) + Nabilatuk (IFRC). Adjumani/Albert Nile — **nothing** except Moyo in the IFRC
+list. Rwenzori (Kasese, Ntoroko, Kisoro, Bundibugyo) — WFP, outside our zones.
 
 ## 2. GloFAS reporting points (public OWS layers, 2 Sep 2026)
 

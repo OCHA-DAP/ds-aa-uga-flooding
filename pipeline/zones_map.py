@@ -37,7 +37,7 @@ ZONE_COL = {
     "karamoja": "#e08214",
     "adjumani": "#5e3c99",
 }
-HATCH = ["///", "\\\\\\", "xxx", "..."]
+HATCH = ["///", "\\\\\\", "xx", "..", "++", "oo"]
 from src.constants import GLOFAS_KAPELEBYONG_LONLAT, GLOFAS_PIXEL_LONLAT
 
 GLOFAS_POINT = GLOFAS_PIXEL_LONLAT
@@ -204,7 +204,7 @@ def main() -> None:
         )
     leg1 = ax.legend(
         handles=zone_handles,
-        loc="lower left",
+        loc="upper left",
         fontsize=7.5,
         title="OCHA/CERF trigger zones",
         title_fontsize=8,
