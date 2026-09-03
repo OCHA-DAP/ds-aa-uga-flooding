@@ -1,0 +1,91 @@
+# Research notes — 2 Sep 2026
+
+Web research compiled at project start (five parallel searches). Facts carry their
+source; anything marked *not found* was looked for and not located. Internal country
+documents are referenced, not reproduced.
+
+## 1. Other organisations' flood AA in Uganda
+
+| org | programme | districts | trigger | status |
+|---|---|---|---|---|
+| IFRC / URCS | Flood EAP **EAP2021UG01** (DREF CHF 348,761) | **14 high-risk**: Kasese, Ntoroko, Katakwi, Amuria, Kumi, Ngora, Nabilatuk, Butaleja, Sironko, Bududa, Manafwa, Bulambuli, Moyo, Kampala | GloFAS via the 510 IBF portal: ≥70 % (operationally 60 %) probability of a 5-yr RP flood (10-yr in lower-priority districts), >1,000 hh, 5-day lead, FAR ≤0.5 | Approved 27 May 2021; 5-yr term nominally expired mid-2026 (GO appeal MDRUG048 open to 2026-11-30); **no second-generation EAP found**. One activation, 15 Nov 2023 (Ntoroko, Butaleja, Kikuube; flood materialised only in Butaleja). Lessons: multiple false alarms in the 2023 El Niño season; episodic floods not captured |
+| WFP | District flood AA plans, South-West | Kasese, Kisoro, Ntoroko | MWE/DWRM "finalised" flood triggers 2025 (Semliki trigger in Ntoroko plan); indicator/threshold/lead **not published** | 2024 MAM desilting; 2025 anticipatory cash to 2,135 people (mainly Ntoroko). Hub lists WFP flood framework "under development" |
+| WFP / FAO / OPM | PRO-ACT multi-hazard EWS + Karamoja **drought** AAP | 9 Karamoja districts + Kaberamaido, Katakwi | drought (SPI); **no flood trigger** | drought AAP activated May 2026 |
+| FAO | OSRO/UGA/070/BEL El Niño flood AA | Mbale, Butaleja, Sironko, Bulambuli, Manafwa, Namisindwa, Bundibugyo, Ntoroko, Kasese, Katakwi | seasonal outlook, one-off | 11 Aug–31 Dec 2023 only |
+| GoU / OPM | AA Roadmap 2026–2031 + U-MHIEWS | national | none specified yet | launched 3 Jul 2026 |
+| NBI / NELSAP | NB-FFEWS flash-flood EWS (48 h) | basin-wide emails to NMHSs | thresholds not public | operational testing 2026 |
+
+Sources: EAP summary <https://adore.ifrc.org/Download.aspx?FileId=438600> (p.3 list);
+MDRUG048 activation/final reports (ReliefWeb); WFP ACR 2025 (WFP-0000172882) p.22 and
+ACR 2024; FAO project report
+<https://openknowledge.fao.org/server/api/core/bitstreams/22e1fbf6-6ae8-436c-9118-12d9d94482f6/content>;
+Anticipation Hub Uganda page; Roadmap PDF on ReliefWeb. *Not found*: the EAP's
+district→priority-tier assignment; the GloFAS points the EAP uses (only "12 stations
+assessed, 8 used"); any WFP flood threshold; any Start Network / UNICEF / SCI flood trigger.
+
+**Coverage vs our zones**: Teso — IFRC (Katakwi, Amuria, Kumi, Ngora) + FAO 2023 (Katakwi).
+Elgon — IFRC (5 districts) + FAO 2023. Karamoja — only Nabilatuk (IFRC). Adjumani/Albert
+Nile — **nothing** except Moyo in the IFRC list.
+
+## 2. GloFAS reporting points (public OWS layers, 2 Sep 2026)
+
+`src/data/glofas_calibration_stations_uga_bbox.csv` — 17 calibration stations in the
+Uganda bbox with KGE etc. **G5196 "Akokorio At Uganda Gauge", river Akokoro**: station
+1.80 N 33.90 E, LISFLOOD v4 pixel 33.875 E 1.775 N, calibrated (22.5-yr record), KGE 0.11,
+corr 0.65, bias 1.68; model RP thresholds 2-yr 33, 5-yr 62, 20-yr 100 m³/s. The layer's
+LDD upstream area says 13,218 km² vs 1,410 km² from the provider — but the v4 reanalysis
+mean discharge at the pixel is ~3.8 m³/s (a small river), while the E–W Awoja main stem one
+row south (lat 1.675) runs ~140 m³/s. So the pixel is the local Akokoro, not the whole
+Karamoja-fed system. Second, unnamed fixed reporting point ~44 km upstream at
+~33.805 E 2.17 N (Kapelebyong). **No GloFAS points of any kind on the Albert Nile.**
+Other Uganda points: Kyoga Nile at Masindi Port (G5223, KGE −0.83), Manafwa at Butaleja
+(G5220, uncalibrated, KGE −10.6), Semliki and Mpologoma unnamed fixed points.
+No bulk download exists (JRC catalogue points to a protected WMS-T).
+
+## 3. Adjumani / Albert Nile — what floods and why
+
+Two regimes (see `analysis/adjumani_lake_levels.py`, `outputs/adjumani_lake_levels.png`):
+
+- **Lake-driven backwater** — Lake Victoria → Kyoga → Albert with mean lags 4.2 + 3.4 months
+  (EGUsphere 2025-5009); Albert peaks Oct–Jan. 2020 (Pakwach ~100,000 affected Apr–Sep;
+  Obongi >23,000 displaced Jun–Nov, "worst since 1964"), 2021 and Oct–Nov 2024 (Palorinya,
+  Obongi) all sit at the >90th percentile of Kyoga/Albert levels. Lead time here is months.
+- **Local rain / tributary** — most DesInventar cards (Moyo Itula/Lefori/Difule 2008, 2011,
+  2014, 2017; Nebbi Wadelai/Pakwach/Panyimur 2007, 2009, 2011, 2013, 2014; Adjumani
+  settlements Sep 2023 with >4,000 refugees) occurred at ordinary lake levels — rivers
+  Tete, Ato, Tongue, Ora, Enyau. These belong with the rainfall trigger.
+
+Data: NASA GWM altimetry (`src/datasources/lake_levels.py`; Victoria & Kyoga 10-day since
+1992, Albert 27-day Sentinel-3 since 2016); DAHITI id 85 / Hydroweb `L_albert` reach back
+to ~2002 (registration). No public DWRM gauge series for Pakwach/Laropi/Butiaba. NBI
+seasonal hydrological outlooks (PDF) and the May 2024 rapid assessment correctly
+anticipated the Nov–Dec 2024 Albert peak.
+
+## 4. Mount Elgon and Karamoja — dated impact record
+
+Dated events are in `src/data/events_curated.csv` (EL-* and KJ-* rows, each with source),
+alongside DesInventar (1,499 flood + 370 landslide + 131 rainstorm datacards nationally,
+day-dated, district-matched, 1933–2021) and EM-DAT. Elgon: 1 Mar 2010 Nametsi; 30 Aug 2011
+Bulambuli; 24–25 Jun 2012 Bududa; 11 Oct 2018 Bududa (3 days rain); 4–5 Jun 2019; 28 Aug
+2019; Oct–Nov 2019; 3–4 Dec 2019 Bududa/Sironko; 30 Apr–9 May 2020 Kween; 6–7 May 2021
+Butaleja; 17–19 Sep 2021; 30–31 Jul 2022 Mbale (rain 20:00–07:00); Apr–Oct 2024 (DTM);
+27 Nov 2024 Bulambuli (28–30 dead, 113 missing, 3 days rain); 17–19 Aug 2025; 30 Oct–1 Nov
+2025 Bukwo/Kween/Kapchorwa (~1 week rain). Karamoja: Jul–Sep 2007; Nov 2008; Aug 2011;
+May 2013; Mar–Jun 2018; May 2020; May 2021; Oct 2021; Aug 2025. *Correction*: the OPM
+retrospective's "Aug 2025: 20 deaths, 113 missing" are the Nov 2024 Bulambuli figures.
+
+Also available: IOM DTM EET on HDX
+(<https://data.humdata.org/dataset/uganda-displacement-data-multi-hazard-response-drr-platform-iom-dtm>,
+20 xlsx, 2022–Oct 2025, event rows by district/sub-county/hazard) — loader still to write.
+Landslide inventories: Broeckx et al. 2019 (653 Elgon landslides, mostly undated; ESM
+paywalled), NASA GLC/COOLR. **No published intensity–duration or antecedent-rainfall
+threshold exists for Mt Elgon** — Kitutu 2011 / Knapen 2006 are qualitative (prolonged
+low-intensity rain, Aug–Nov peak). Transferable: Monsieurs et al. 2019 (NHESS 19:775)
+antecedent-rainfall thresholds for the western East African Rift.
+
+## 5. National disaster-loss data
+
+DesInventar Uganda (<https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=uga>):
+export mirrored to blob and parsed (`src/datasources/desinventar.py`); coverage ends 2021,
+2019 has no records. OPM/NECOC publishes annual State of Disaster reports (sectoral, not
+event-level) and monthly U-NIEWS bulletins to Jul 2024.

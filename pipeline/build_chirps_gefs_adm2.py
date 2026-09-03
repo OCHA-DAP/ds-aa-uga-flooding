@@ -47,7 +47,7 @@ def _one(args):
 def main(start_year: int = 2000, end_year: int = ARCHIVE_END.year) -> None:
     CKDIR.mkdir(exist_ok=True)
     polys = load_adm2()[["ADM2_PCODE", "geometry"]]
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=4) as pool:
         for year in range(start_year, end_year + 1):
             out = CKDIR / f"{year}.parquet"
             if out.exists() and year < ARCHIVE_END.year:
