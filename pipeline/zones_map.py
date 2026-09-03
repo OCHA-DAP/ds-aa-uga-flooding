@@ -315,8 +315,9 @@ def main() -> None:
         Patch(
             facecolor="#cccccc",
             alpha=0.35,
-            edgecolor="none",
-            label="candidate districts (to be ruled in/out)",
+            edgecolor="#666666",
+            linestyle=(0, (3, 2)),
+            label="tier 2 — same driver, different flood regime",
         ),
         Patch(
             facecolor="none",

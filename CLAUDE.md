@@ -22,7 +22,12 @@ report per-trigger and combined return periods.
 ## Conventions
 
 - Zones are district-name lists in `src/constants.py`; resolve to geometry via
-  `src/zones.py`. Core = what the zone is for; candidate = to be ruled in/out by analysis.
+  `src/zones.py`. Core = what the zone is for; tier 2 = same driver, different flood regime
+  and therefore a different indicator (Elgon lowlands, Teso downstream wetlands, Lake Albert
+  shore); candidate = to be ruled in/out by analysis. Teso was settled by
+  `analysis/teso_glofas_coverage.py` (3 core + 3 tier 2, 13 ruled out in `TESO_EXCLUDED`).
+- `analysis/impact_coverage.py` is the accounting of recorded impact by coverage class
+  (zone core / tier 2 / partner-only / uncovered) — rerun it after any zone change.
 - Blob paths use `PROJECT_PREFIX`; everything derived goes to `processed/<source>/`.
 - Pipelines checkpoint per year in `pipeline/.checkpoint_*` (gitignored) and are re-runnable.
 - CHIRPS-GEFS v12 archive on CHC stops 2026-07-04 — fine for hindcast skill, not for live
