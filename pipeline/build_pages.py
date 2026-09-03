@@ -24,8 +24,8 @@ from pathlib import Path
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.constants import GLOFAS_PIXEL_LONLAT, ZONES  # noqa: E402
-from src.frameworks import EXTERNAL  # noqa: E402
+from src.constants import GLOFAS_PIXEL_LONLAT, ZONES
+from src.frameworks import EXTERNAL
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
