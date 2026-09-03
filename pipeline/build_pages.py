@@ -112,7 +112,7 @@ def coverage_page() -> str:
 
 
 def results_page() -> str:
-    for f in ("teso_glofas_coverage.png", "adjumani_lake_levels.png"):
+    for f in ("teso_glofas_coverage.png", "adjumani_lake_levels.png", "flash_rain_vs_events.png"):
         shutil.copy(OUT / f, PAGES / "results" / f)
     cov = pd.read_csv(OUT / "teso_glofas_coverage.csv")
     cov_show = cov[
@@ -162,6 +162,18 @@ def results_page() -> str:
         "sit above the 90th percentile of Kyoga and Albert levels, with the Victoria → Kyoga → Albert chain giving months of lead. Most smaller DesInventar "
         "records (Moyo 2008, 2011, 2014; Nebbi 2007–2014) occurred at ordinary lake levels and are local-rain / tributary events. The zone therefore needs "
         "a lake-level leg and a rainfall leg.</p>",
+        "<h2>Mount Elgon and Karamoja — how much rain falls before the recorded events?</h2>",
+        "<p>Link 2 of the flash-flood chain (observed rain → impact), on IMERG daily rainfall averaged over each zone's core districts, "
+        "1998–2026: for every day-dated impact record in the zone (DesInventar datacards, EM-DAT, curated events) the 3-day rainfall in "
+        "the three days before the event, as a percentile of all days.</p>",
+        '<figure><img src="flash_rain_vs_events.png" alt="Histograms of pre-event rainfall percentile for Elgon and Karamoja"></figure>',
+        "<p><strong>Reading:</strong> events do happen on wet days — the median pre-event 3-day rainfall sits at the 86th percentile on Elgon and the "
+        "83rd in Karamoja, and the deadly events (≥5 deaths) at the 88th — but almost never on <em>extreme</em> days: only 2 % of events follow "
+        "3-day zone-mean rainfall above its 2-year level, and of the 17 zone-wide episodes above that level since 1998 only one coincided with a "
+        "recorded event. A zone-mean rainfall return-period threshold of the usual kind would therefore miss nearly everything and mostly "
+        "activate on non-events. The trigger needs a lower rainfall bar combined with antecedent wetness (the landslide literature's "
+        "'prolonged low-intensity rain'), finer spatial resolution (district or slope-unit rather than zone mean), and an explicit statement "
+        "of the false-alarm ratio that comes with it. The forecast leg (CHIRPS-GEFS vs IMERG) follows when its table lands.</p>",
         "<h2>Impact record assembled</h2><ul>"
         "<li><strong>EM-DAT</strong> — 47 flood and wet mass-movement events 2001–2024, exploded to districts.</li>"
         "<li><strong>DesInventar Uganda</strong> — about 1,500 flood, 370 landslide and 130 rainstorm datacards, day-dated and district-matched, 1933–2021 (no 2019 records; ends 2021).</li>"
