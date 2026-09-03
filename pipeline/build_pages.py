@@ -205,18 +205,6 @@ def results_page() -> str:
         "sharper — slope-unit susceptibility, a landslide-model layer, community gauges, or the forecast's own probability. Second, the "
         "impact record is incomplete (DesInventar stops in 2021 and misses minor events), so true precision is somewhat higher than "
         "measured — but not by the factor needed. ERA5-Land soil moisture will replace the proxy and be re-tested here.</p>",
-        "<h2>Where and when impact has been recorded</h2>",
-        "<p>All impact sources merged to district-years: EM-DAT (events exploded to the districts named), DesInventar datacards (to 2021), IOM DTM "
-        "rounds (2023–25) and the curated events. Event totals are split evenly across the districts an event names; a few DesInventar cards that "
-        "carry national totals against one district (Agago 3,000,000 in Jul 2007; Bududa 300,000 in Mar 2010) keep the record but drop the count.</p>",
-        '<figure><img src="impact_summary.png" alt="Choropleth of years with recorded flood or landslide impact per district, with deaths bubbles"></figure>',
-        "<p><strong>Reading:</strong> the Elgon corridor (Bududa, Sironko, Mbale, Bulambuli, Butaleja) and Kasese are where impact is recorded most years, "
-        "and where the deaths are; Katakwi and Amuria carry the large riverine caseloads; Karamoja is recorded often but with small counts; the Albert "
-        "Nile districts have fewer records, concentrated in the lake-driven years. DesInventar has no 2019 records and nothing after 2021, so 2019 and "
-        "2022 are under-recorded relative to their neighbours.</p>",
-        '<figure><img src="impact_by_year.png" alt="Small maps of Uganda, one per year 1998-2025, districts coloured by people affected"></figure>',
-        "<p>The per-year grid is the target list a trigger has to be judged against: 2007 (Teso and the north), 2010 and 2011 (Elgon, Teso, Karamoja), "
-        "2013, 2018, 2020 (Albert Nile), 2024 and 2025 stand out; per-district-year values are in <code>outputs/impact_district_year.csv</code>.</p>",
         "<h2>Where impact has been recorded</h2>",
         "<p>All four impact sources merged to district-years (EM-DAT, DesInventar to 2021, IOM DTM 2023–25, curated events). "
         "First the whole record on one map: how many years each district has a recorded flood or landslide impact, cumulative deaths "
