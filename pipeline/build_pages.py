@@ -148,21 +148,39 @@ def impact_coverage_table() -> str:
 
 
 def floodscan_impact_table() -> str:
+    """One row per zone tier (and one for outside the zones): FloodScan visibility of the impact record."""
     d = pd.read_csv(OUT / "floodscan_vs_impact_district.csv")
     ev = pd.read_csv(OUT / "floodscan_vs_impact_events.csv")
-    d["zone"] = d.zone.fillna("outside the zones")
-    ev["zone"] = ev.zone.replace({"outside": "outside the zones"})
+    tier_of = {dd: "tier 1" for z in ZONES.values() for dd in z.core} | {
+        dd: "tier 2" for z in ZONES.values() for dd in z.tier2
+    }
+    d["tier"] = d.district.map(tier_of)
+    ev["tier"] = ev.district.map(tier_of)
     ok = d[(d.n_impact_years >= 3) & ~d.blind]
     rows = []
-    for z in [*ZONES, "outside the zones"]:
-        dz, ez = d[d.zone == z], ev[ev.zone == z]
+    groups = [
+        (z, t) for z in ZONES for t in ("tier 1", "tier 2") if t == "tier 1" or ZONES[z].tier2
+    ] + [("outside", None)]
+    for z, t in groups:
+        if z == "outside":
+            dz, ez, okz = d[d.zone.isna()], ev[ev.zone == "outside"], ok[ok.zone.isna()]
+            name = "outside the zones"
+        else:
+            dz, ez, okz = (
+                d[(d.zone == z) & (d.tier == t)],
+                ev[(ev.zone == z) & (ev.tier == t)],
+                ok[(ok.zone == z) & (ok.tier == t)],
+            )
+            name = f"{ZONES[z].label.split(' (')[0]} — {t}" + (
+                f" ({ZONES[z].tier2_label.split(' (')[0]})" if t == "tier 2" else ""
+            )
         rows.append(
             {
-                "area": ZONES[z].label.split(" (")[0] if z in ZONES else z,
+                "area": name,
                 "districts": len(dz),
                 "FloodScan-blind": int(dz.blind.sum()),
-                "median AUC (non-blind, ≥3 impact years)": round(ok[ok.zone == z].auc.median(), 2)
-                if (ok.zone == z).any()
+                "median AUC (non-blind, ≥3 impact years)": round(okz.auc.median(), 2)
+                if len(okz)
                 else float("nan"),
                 "dated events": len(ez),
                 "median FloodScan percentile in the event window": round(ez.sfed_pctl.median())
@@ -187,6 +205,7 @@ def results_page() -> str:
         "impact_by_year.png",
         "impact_summary.png",
         "floodscan_vs_impact.png",
+        "cems_pass.png",
     ):
         shutil.copy(OUT / f, PAGES / "results" / f)
     cov = pd.read_csv(OUT / "teso_glofas_coverage.csv")
@@ -294,10 +313,28 @@ def results_page() -> str:
         "<p><strong>Reading:</strong> FloodScan is a good witness exactly where the riverine and wetland zones are — Butaleja, Bulambuli, "
         "Amuria, Katakwi and Soroti have AUCs of 0.7 to 0.86, and Teso events sit at the 94th percentile of the district record — and it is "
         "blind across most of the rest of the country: 60 of the 100 districts with three or more impact years never reach 1 percent "
-        "extent, including the Elgon slopes (Bududa, Sironko, Kapchorwa, Bukwo, Namisindwa), the Karamoja north (Kaabong, Karenga, Amudat) "
-        "and, notably, Adjumani, Moyo and Nebbi, where the Albert Nile floods are narrow riverbank events a 9-km product does not resolve. "
-        "So the satellite backstop is sound for the Teso zone and the Elgon and Teso lowland tiers, partial for Karamoja, and cannot "
-        "serve the Elgon slopes or the Albert Nile bank, where the backstop has to be report-based (DTM, OPM) or gauge-based.</p>",
+        "extent. The tiers split cleanly on this. Elgon tier 1 (the slopes) is blind in five of nine districts, its events sit at the "
+        "37th percentile and only 13 percent register at all; Elgon tier 2 (the lowlands) has no blind district, an AUC of 0.65, events "
+        "at the 91st percentile and 72 percent registering. Both Teso tiers are fully visible. Both Adjumani tiers are invisible: none "
+        "of the 75 Albert Nile and Lake Albert events registered, because they are narrow riverbank and lakeshore floods a 9-km product "
+        "does not resolve. So the satellite backstop is sound for the Teso zone and the two lowland tiers, partial for Karamoja, and "
+        "cannot serve the Elgon slopes or the Adjumani zone, where the backstop has to be report-based (DTM, OPM), gauge-based, or the "
+        "lake level itself.</p>",
+        "<h2>A second witness: Copernicus EMS rapid mapping</h2>",
+        "<p>The team's CEMS flood archive holds every Copernicus EMS rapid-mapping flood activation since 2012 as harmonised polygons "
+        "with acquisition dates. Uganda has three: EMSR438 (May 2020, the East Africa rains; three areas of interest with observed "
+        "flooding, six acquisition dates), EMSR446 (June to September 2020, the Ministry of Water's request on rising lake levels; "
+        "eleven dates) and EMSR662 (May 2023, the Katonga river at Nkozi). Each district-day of CEMS flooding is compared with the "
+        "FloodScan district-mean extent on the same day.</p>",
+        '<figure><img src="cems_pass.png" alt="Three maps of Uganda with CEMS flood polygons and the trigger zones"></figure>',
+        "<p><strong>Reading:</strong> all three activations mapped ground outside the zones — the Lake Kyoga south shore (Nakasongola, "
+        "Buyende, Kayunga), Kampala and the Katonga — so they cannot validate the zones directly. What they do test is FloodScan on "
+        "lake-driven flooding, and the answer is blunt: across 75 district-days with at least 5 km² of CEMS-mapped water, FloodScan "
+        "showed essentially nothing on 93 percent of them and was above its 90th percentile on 11 percent; the rank correlation between "
+        "the two is zero. The 2020 lake-rise flooding of Kyoga's shore, the same mechanism as the Albert Nile and Lake Albert shore floods "
+        "in the Adjumani zone, is invisible to the 9-km product. That is consistent with the Adjumani result above and settles that the "
+        "observational leg for lake-driven floods has to be lake level or gauges, not satellite extent. Global Flood Monitoring "
+        "(Sentinel-1) has no Uganda coverage in the team's store and was not pulled for this pass.</p>",
         "<h2>How much of the recorded impact do the zones cover?</h2>",
         "<p>Every district classified as zone core, zone tier 2, partner-only (in a standing flood AA of IFRC, WFP, CRS/Caritas or DRC "
         "but not in our zones) or uncovered, with the 1998–2025 record summed per class.</p>",
