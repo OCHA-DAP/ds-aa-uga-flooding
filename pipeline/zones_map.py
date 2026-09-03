@@ -30,9 +30,9 @@ from matplotlib.patches import Patch
 from rasterio.features import geometry_mask
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.constants import GLOFAS_KAPELEBYONG_LONLAT, GLOFAS_PIXEL_LONLAT, ZONES  # noqa: E402
-from src.frameworks import EXTERNAL  # noqa: E402
-from src.zones import load_adm2, zone_districts  # noqa: E402
+from src.constants import GLOFAS_KAPELEBYONG_LONLAT, GLOFAS_PIXEL_LONLAT, ZONES
+from src.frameworks import EXTERNAL
+from src.zones import load_adm2, zone_districts
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "zones_coverage_map.png"
@@ -228,7 +228,7 @@ def main() -> None:
             **halo(11.5, ZONE_COL[key], "bold"),
         )
     for name, (dx, dy) in KEY_DISTRICTS.items():
-        row = adm2[adm2.ADM2_EN == name]
+        row = adm2[name == adm2.ADM2_EN]
         if len(row):
             c = row.geometry.iloc[0].representative_point()
             ax.annotate(
