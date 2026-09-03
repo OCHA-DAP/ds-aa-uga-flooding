@@ -120,6 +120,8 @@ def results_page() -> str:
         "adjumani_lake_levels.png",
         "flash_rain_vs_events.png",
         "flash_antecedent.png",
+        "impact_by_year.png",
+        "impact_summary.png",
     ):
         shutil.copy(OUT / f, PAGES / "results" / f)
     cov = pd.read_csv(OUT / "teso_glofas_coverage.csv")
