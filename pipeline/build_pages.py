@@ -31,12 +31,14 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
+ASSET_VERSION = "3"  # bump when assets/*.css change so browsers refetch
+
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{title} — Uganda flood AA</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@700&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="../assets/site.css"><link rel="stylesheet" href="../assets/page.css">
+<link rel="stylesheet" href="../assets/site.css?v={v}"><link rel="stylesheet" href="../assets/page.css?v={v}">
 </head><body><div class="wrap page">
 <a class="home" href="../">&larr; Uganda flood anticipatory action</a>
 <h1>{title}</h1><p class="sub">{sub}</p>
@@ -211,6 +213,19 @@ def results_page() -> str:
         '<figure><img src="impact_by_year.png" alt="Small maps of Uganda, one per year 1998-2025, districts coloured by people affected"></figure>',
         "<p>The per-year grid is the target list a trigger has to be judged against: 2007 (Teso and the north), 2010 and 2011 (Elgon, Teso, Karamoja), "
         "2013, 2018, 2020 (Albert Nile), 2024 and 2025 stand out; per-district-year values are in <code>outputs/impact_district_year.csv</code>.</p>",
+        "<h2>Where impact has been recorded</h2>",
+        "<p>All four impact sources merged to district-years (EM-DAT, DesInventar to 2021, IOM DTM 2023–25, curated events). "
+        "First the whole record on one map: how many years each district has a recorded flood or landslide impact, cumulative deaths "
+        "as circles, the 14 largest cumulative caseloads labelled, and the zones outlined.</p>",
+        '<figure><img src="impact_summary.png" alt="Uganda districts coloured by number of years with recorded impact"></figure>',
+        "<p>Then one map per year. Districts are coloured by people affected that year (log scale; pale pink = a record without a count), "
+        "circles mark five or more deaths. The 2007 Teso floods, the 2010 to 2013 run, 2018, 2020 and the 2024 to 2025 El Niño years stand out; "
+        "2019 and 2022 are under-recorded because DesInventar has no 2019 cards and stops in 2021.</p>",
+        '<figure><img src="impact_by_year.png" alt="Grid of 28 yearly maps of Uganda districts coloured by recorded impact"></figure>',
+        "<p class='fn'>Two corrections to the raw sources: a few DesInventar datacards carry national totals against one district (Agago "
+        "3,000,000 in July 2007; Bududa 300,000 in March 2010 against EM-DAT's 12,795), so counts of 100,000 or more per card are dropped "
+        "while the record is kept; and DesInventar double-counts deaths across cards, so EM-DAT or curated death tolls take precedence where "
+        "they exist. Table: <code>outputs/impact_district_year.csv</code>.</p>",
         "<h2>Impact record assembled</h2><ul>"
         "<li><strong>EM-DAT</strong> — 47 flood and wet mass-movement events 2001–2024, exploded to districts.</li>"
         "<li><strong>DesInventar Uganda</strong> — about 1,500 flood, 370 landslide and 130 rainstorm datacards, day-dated and district-matched, 1933–2021 (no 2019 records; ends 2021).</li>"
