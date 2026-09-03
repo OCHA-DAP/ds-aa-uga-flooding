@@ -108,9 +108,9 @@ def main() -> None:
     }
 
     # ---- per-year grid --------------------------------------------------------------
-    ncol = 7
+    ncol = 6
     nrow = int(np.ceil(len(YEARS) / ncol))
-    fig, axes = plt.subplots(nrow, ncol, figsize=(16, 2.6 * nrow + 1.2), facecolor="white")
+    fig, axes = plt.subplots(nrow, ncol, figsize=(18, 3.3 * nrow + 1.4), facecolor="white")
     norm = LogNorm(vmin=100, vmax=200_000)
     for ax, year in zip(axes.flat, YEARS, strict=False):
         ty = t[t.year == year]
