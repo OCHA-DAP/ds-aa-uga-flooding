@@ -18,6 +18,12 @@ report per-trigger and combined return periods.
 - Country documents shared Aug 2026 (UHF severity note, DTM xlsx, URCS/FAO hotspot maps,
   OPM El Niño retrospective) are internal — reference them, never commit them.
 - Severity 3+ scope decision on Teso/Kyoga districts is the working group's, not ours.
+- Design notes from the user (3 Sep 2026), for when trigger design starts: (1) the Teso
+  GloFAS trigger should align as far as possible with the IFRC/URCS EAP formulation
+  (ensemble probability of exceeding a return-period flow at a reporting point, 5-day lead),
+  calibrated on our own G5196 reforecast; (2) for Elgon, still test GloFAS points (Manafwa
+  at Butaleja and any upstream cells) against the impact record even though the skill
+  layers look bad — cheap to check, settles it.
 
 ## Conventions
 
