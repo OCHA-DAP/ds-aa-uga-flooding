@@ -24,11 +24,11 @@ import ocha_stratus as stratus
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.constants import PROJECT_PREFIX, ZONES  # noqa: E402
-from src.datasources import desinventar as di  # noqa: E402
-from src.datasources import impact  # noqa: E402
-from src.skill_chain import annual_max, rolling_sum, weibull_threshold  # noqa: E402
-from src.zones import load_adm2  # noqa: E402
+from src.constants import PROJECT_PREFIX, ZONES
+from src.datasources import desinventar as di
+from src.datasources import impact
+from src.skill_chain import annual_max, rolling_sum, weibull_threshold
+from src.zones import load_adm2
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs"

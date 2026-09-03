@@ -26,10 +26,10 @@ import ocha_stratus as stratus
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from analysis.flash_flood_rain_vs_events import ZONE_KEYS, zone_events, zone_rain  # noqa: E402
-from src.constants import PROJECT_PREFIX, ZONES  # noqa: E402
-from src.skill_chain import rolling_sum  # noqa: E402
-from src.zones import load_adm2  # noqa: E402
+from analysis.flash_flood_rain_vs_events import ZONE_KEYS, zone_events, zone_rain
+from src.constants import PROJECT_PREFIX, ZONES
+from src.skill_chain import rolling_sum
+from src.zones import load_adm2
 
 OUT = Path(__file__).resolve().parent.parent / "outputs"
 K = 0.9
