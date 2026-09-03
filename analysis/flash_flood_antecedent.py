@@ -70,10 +70,6 @@ def trigger_grid(
             starts = act & ~act.shift(1, fill_value=False)
             n_act = int(starts.sum())
             hits = int((starts & ev_ahead).sum())
-            # recall: events preceded by an activation within MATCH_DAYS before
-            act_before = (
-                act[::-1].rolling(MATCH_DAYS + 1, min_periods=1).max()[::-1].astype(bool).shift(-0)
-            )
             act_window = act.rolling(MATCH_DAYS + 1, min_periods=1).max().astype(bool)
             caught = int(((ev == 1) & act_window).sum())
             rows.append(
