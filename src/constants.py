@@ -20,9 +20,10 @@ UGA_BOX = (29.0, -2.0, 35.5, 4.7)  # W, S, E, N — windowing box for country ra
 #   G5196 "Akokorio At Uganda Gauge", river Akokoro; station 1.80N 33.90E; LISFLOOD v4
 #   pixel centre 33.875E 1.775N; calibrated, 22.5-yr record; KGE 0.11, corr 0.65, bias 1.68.
 #   Model RP thresholds (Qsim): 2-yr 33, 5-yr 62, 20-yr 100 m3/s.
-#   CAUTION: provider upstream area 1,410 km2 but the model pixel drains 13,218 km2 — the
-#   point represents the whole Karamoja-fed Akokoro/Awoja catchment above the Awoja
-#   confluence, not the local gauge; check before reading discharge as "the Akokoro".
+#   The OWS layer quotes 13,218 km2 (LDD) vs 1,410 km2 (provider) upstream; the v4
+#   reanalysis mean at the pixel is ~7 m3/s (annual maxima 4-97 m3/s) while the E-W Awoja
+#   main stem one row south (lat 1.675) runs ~140 m3/s, so the pixel IS the local Akokoro
+#   above the Awoja confluence, not the Karamoja-fed main stem.
 # A second, unnamed fixed reporting point sits ~44 km upstream at ~33.805E 2.17N (Kapelebyong).
 # There are NO GloFAS points of any kind on the Albert Nile (Pakwach to Laropi).
 GLOFAS_STATION_ID = "G5196"

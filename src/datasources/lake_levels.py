@@ -60,7 +60,7 @@ def parse_gwm(text: str, lake: str) -> pd.DataFrame:
                 "date": pd.to_datetime(p[2], format="%Y%m%d"),
                 "mission": p[0],
                 "height_m": h,
-                "error_m": float(p[6]),
+                "error_m": err,
             }
         )
     return pd.DataFrame(rows)
