@@ -150,15 +150,29 @@ def main() -> None:
     basemap(ax, adm2, lakes, rivers, countries, uganda)
     im = recurrence_layer(ax, uganda)
 
-    # zones: candidates light, core solid, one outline round the whole zone
+    # zones: candidates faint, tier 2 medium with a dashed outline, core solid, one outline round the whole zone
     for key in ZONES:
         g = zone_districts(key)
         col = ZONE_COL[key]
         g[g.membership == "candidate"].plot(
-            ax=ax, aspect=None, color=col, alpha=0.16, edgecolor="white", linewidth=0.5, zorder=6
+            ax=ax, aspect=None, color=col, alpha=0.12, edgecolor="white", linewidth=0.5, zorder=6
         )
+        t2 = g[g.membership == "tier2"]
+        if len(t2):
+            t2.plot(
+                ax=ax,
+                aspect=None,
+                color=col,
+                alpha=0.22,
+                edgecolor="white",
+                linewidth=0.5,
+                zorder=6,
+            )
+            t2.dissolve().boundary.plot(
+                ax=ax, aspect=None, color=col, linewidth=1.3, linestyle=(0, (3, 2)), zorder=7
+            )
         g[g.membership == "core"].plot(
-            ax=ax, aspect=None, color=col, alpha=0.42, edgecolor="white", linewidth=0.5, zorder=6
+            ax=ax, aspect=None, color=col, alpha=0.45, edgecolor="white", linewidth=0.5, zorder=6
         )
         g.dissolve().boundary.plot(ax=ax, aspect=None, color=col, linewidth=2.0, zorder=7)
 
@@ -277,7 +291,7 @@ def main() -> None:
     fig.text(
         0.02,
         0.952,
-        "Four OCHA/CERF zones under design (solid = core districts, pale = candidates), the GloFAS reporting point, "
+        "Four OCHA/CERF zones under design (solid = core districts, dashed = second tier), the GloFAS reporting point, "
         "and the districts where other organisations already run flood anticipatory action (hatched; detail below).",
         fontsize=9.5,
         color=INK2,

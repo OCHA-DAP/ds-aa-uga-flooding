@@ -41,12 +41,17 @@ class Zone:
     label: str
     regime: str  # riverine | flash-landslide | flash | riverine-lake
     core: tuple[str, ...]
+    # Second tier: same driver, different flood regime and therefore a different
+    # indicator (e.g. the lowlands below a massif, the wetlands downstream of a gauge).
+    tier2: tuple[str, ...] = field(default_factory=tuple)
+    tier2_label: str = ""
+    tier2_regime: str = ""
     candidate: tuple[str, ...] = field(default_factory=tuple)
     note: str = ""
 
     @property
     def all_districts(self) -> tuple[str, ...]:
-        return self.core + self.candidate
+        return self.core + self.tier2 + self.candidate
 
 
 ZONES: dict[str, Zone] = {
@@ -60,9 +65,14 @@ ZONES: dict[str, Zone] = {
         # wetlands (corr ~0.5 at 19-30 d lag, P(Q>2yr | max extent>2yr) 0.6). Kapelebyong holds the
         # point and its catchment: extent there is too small for FloodScan (corr 0.36)
         # but when it does flood the discharge is high (P 0.73), so it stays in.
-        core=("Katakwi", "Amuria", "Kapelebyong", "Soroti", "Ngora", "Serere"),
-        # Serere passes on the max-pixel extent (P 0.60) with a long (30-day) lag: the far end
-        # of the wetland fill. No candidates left — the check ruled the rest out (TESO_EXCLUDED).
+        core=("Katakwi", "Amuria", "Kapelebyong"),
+        # Tier 2: the Awoja / Lake Bisina wetlands the Akokoro drains into — extent tracks the
+        # point with a 19-30 day lag (Serere passes only on the max-pixel extent), so the trigger
+        # there is the same discharge signal read later, or the observed extent itself.
+        # No candidates left — the check ruled the rest out (TESO_EXCLUDED).
+        tier2=("Soroti", "Ngora", "Serere"),
+        tier2_label="downstream wetlands (Awoja / Bisina)",
+        tier2_regime="wetland fill, 3-4 weeks behind the gauge",
         candidate=(),
         note=(
             "Ruled OUT by the coverage check (corr < 0.45 or P < 0.25): Kumi, Bukedea, Pallisa, "
@@ -85,7 +95,17 @@ ZONES: dict[str, Zone] = {
             "Kween",
             "Bukwo",
         ),
-        note="Rainfall-forecast trigger; FloodScan cannot see the hazard, impact record must be report-based.",
+        # Tier 2: the Manafwa / Mpologoma / Awoja lowlands at the foot of the massif. Same
+        # rain, different regime — slow riverine and wetland flooding a few days later,
+        # which FloodScan does see (Butaleja 24 %, Pallisa 32 %, Kumi 30 % of OND seasons).
+        # Every impact year in these districts is also an Elgon-slope impact year.
+        tier2=("Butaleja", "Budaka", "Kibuku", "Pallisa", "Bukedea", "Kumi"),
+        tier2_label="lowlands below the massif (Manafwa / Mpologoma / Awoja)",
+        tier2_regime="riverine + wetland, lagged behind the slope rainfall",
+        note=(
+            "Slopes: rainfall-forecast trigger; FloodScan cannot see the hazard, impact record must "
+            "be report-based. Lowlands: observed extent, river level, or Elgon rainfall with a lag."
+        ),
     ),
     "karamoja": Zone(
         key="karamoja",
@@ -109,8 +129,15 @@ ZONES: dict[str, Zone] = {
         label="Adjumani / Albert Nile",
         regime="riverine-lake",
         core=("Adjumani", "Moyo", "Obongi"),
-        candidate=("Madi Okollo", "Pakwach", "Nebbi"),
-        note="Indicator undecided: GloFAS Albert Nile points, Lake Albert level, or rainfall.",
+        # Tier 2: the Lake Albert shore and the Nile bank just below the lake, where the
+        # lake-level regime dominates outright (Pakwach ~100,000 affected in 2020).
+        tier2=("Pakwach", "Nebbi", "Madi Okollo"),
+        tier2_label="Lake Albert shore and upper Albert Nile",
+        tier2_regime="lake backwater (months of lead from Lake Victoria)",
+        note=(
+            "Two regimes in the record: lake backwater (2020, 2021, 2024 at >90th pctl Kyoga/Albert level) "
+            "and local tributary flash floods at ordinary lake levels. Needs a lake-level leg and a rainfall leg."
+        ),
     ),
 }
 

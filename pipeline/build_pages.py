@@ -72,7 +72,7 @@ def coverage_page() -> str:
         ),
         '<figure><img src="zones_coverage_map.png" alt="Map of Uganda with the four trigger zones and other organisations\' flood AA coverage">'
         "<figcaption>Backdrop: share of Oct–Dec seasons 1998–2025 with FloodScan flooding (SFED ≥ 0.05), clipped to Uganda. "
-        "Zones: solid = core districts, lighter = candidates to be ruled in or out by the analysis. Hatched: other organisations' "
+        "Zones: solid = core districts, dashed = second tier (same driver, different flood regime, different indicator). Hatched: other organisations' "
         "flood AA districts. Triangles: GloFAS reporting points (filled = G5196, calibrated).</figcaption></figure>",
         "<h2>The zones</h2>",
     ]
@@ -112,6 +112,39 @@ def coverage_page() -> str:
     )
     parts.append(FOOT.format(today=TODAY))
     return "".join(parts)
+
+
+def impact_coverage_table() -> str:
+    cov = pd.read_csv(OUT / "impact_coverage.csv").rename(columns={"cls": "class"})
+    cov = cov[
+        [
+            "class",
+            "districts",
+            "affected",
+            "pct_affected",
+            "deaths",
+            "pct_deaths",
+            "years",
+            "pct_years",
+        ]
+    ].rename(
+        columns={
+            "affected": "people affected",
+            "pct_affected": "% affected",
+            "deaths": "deaths",
+            "pct_deaths": "% deaths",
+            "years": "district-years with a record",
+            "pct_years": "% district-years",
+        }
+    )
+    return table(
+        cov,
+        {
+            "people affected": lambda v: f"{v:,.0f}",
+            "deaths": lambda v: f"{v:,.0f}",
+            "district-years with a record": lambda v: f"{v:,.0f}",
+        },
+    )
 
 
 def results_page() -> str:
@@ -218,6 +251,15 @@ def results_page() -> str:
         "3,000,000 in July 2007; Bududa 300,000 in March 2010 against EM-DAT's 12,795), so counts of 100,000 or more per card are dropped "
         "while the record is kept; and DesInventar double-counts deaths across cards, so EM-DAT or curated death tolls take precedence where "
         "they exist. Table: <code>outputs/impact_district_year.csv</code>.</p>",
+        "<h2>How much of the recorded impact do the zones cover?</h2>",
+        "<p>Every district classified as zone core, zone tier 2, partner-only (in a standing flood AA of IFRC, WFP, CRS/Caritas or DRC "
+        "but not in our zones) or uncovered, with the 1998–2025 record summed per class.</p>",
+        impact_coverage_table(),
+        "<p><strong>Reading:</strong> the four zones with their second tiers hold just over half of all recorded people affected and "
+        "about two thirds of recorded deaths; the partner-only districts (Kasese, Kisoro, Ntoroko, Bundibugyo under WFP; Kampala under "
+        "the IFRC EAP) add another sixth of affected. The uncovered remainder is spread thinly over about ninety districts with no single "
+        "large gap: the biggest are Masaka, Amuru, Kabale, Otuke and Zombo, each under 100,000 cumulative affected and mostly single-source "
+        "DesInventar records.</p>",
         "<h2>Impact record assembled</h2><ul>"
         "<li><strong>EM-DAT</strong> — 47 flood and wet mass-movement events 2001–2024, exploded to districts.</li>"
         "<li><strong>DesInventar Uganda</strong> — about 1,500 flood, 370 landslide and 130 rainstorm datacards, day-dated and district-matched, 1933–2021 (no 2019 records; ends 2021).</li>"

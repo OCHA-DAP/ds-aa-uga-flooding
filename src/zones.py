@@ -24,7 +24,9 @@ def zone_districts(zone_key: str, include_candidates: bool = True) -> gpd.GeoDat
         raise KeyError(f"zone {zone_key}: districts not in CODAB: {sorted(missing)}")
     out = adm2[adm2.ADM2_EN.isin(names)].copy()
     out["zone"] = zone_key
-    out["membership"] = out.ADM2_EN.map(lambda n: "core" if n in zone.core else "candidate")
+    out["membership"] = out.ADM2_EN.map(
+        lambda n: "core" if n in zone.core else ("tier2" if n in zone.tier2 else "candidate")
+    )
     return out
 
 
