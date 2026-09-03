@@ -147,6 +147,37 @@ def impact_coverage_table() -> str:
     )
 
 
+def floodscan_impact_table() -> str:
+    d = pd.read_csv(OUT / "floodscan_vs_impact_district.csv")
+    ev = pd.read_csv(OUT / "floodscan_vs_impact_events.csv")
+    d["zone"] = d.zone.fillna("outside the zones")
+    ev["zone"] = ev.zone.replace({"outside": "outside the zones"})
+    ok = d[(d.n_impact_years >= 3) & ~d.blind]
+    rows = []
+    for z in list(ZONES) + ["outside the zones"]:
+        dz, ez = d[d.zone == z], ev[ev.zone == z]
+        rows.append(
+            {
+                "area": ZONES[z].label.split(" (")[0] if z in ZONES else z,
+                "districts": len(dz),
+                "FloodScan-blind": int(dz.blind.sum()),
+                "median AUC (non-blind, ≥3 impact years)": round(ok[ok.zone == z].auc.median(), 2)
+                if (ok.zone == z).any()
+                else float("nan"),
+                "dated events": len(ez),
+                "median FloodScan percentile in the event window": round(ez.sfed_pctl.median())
+                if len(ez)
+                else float("nan"),
+                "share of events with any FloodScan flooding": round(
+                    (ez.sfed_max >= 0.01).mean(), 2
+                )
+                if len(ez)
+                else float("nan"),
+            }
+        )
+    return table(pd.DataFrame(rows))
+
+
 def results_page() -> str:
     for f in (
         "teso_glofas_coverage.png",
@@ -155,6 +186,7 @@ def results_page() -> str:
         "flash_antecedent.png",
         "impact_by_year.png",
         "impact_summary.png",
+        "floodscan_vs_impact.png",
     ):
         shutil.copy(OUT / f, PAGES / "results" / f)
     cov = pd.read_csv(OUT / "teso_glofas_coverage.csv")
@@ -251,6 +283,21 @@ def results_page() -> str:
         "3,000,000 in July 2007; Bududa 300,000 in March 2010 against EM-DAT's 12,795), so counts of 100,000 or more per card are dropped "
         "while the record is kept; and DesInventar double-counts deaths across cards, so EM-DAT or curated death tolls take precedence where "
         "they exist. Table: <code>outputs/impact_district_year.csv</code>.</p>",
+        "<h2>Does FloodScan see the recorded impact?</h2>",
+        "<p>The observational backstop leans on FloodScan, so this asks, district by district, whether the satellite registers the "
+        "floods people actually reported. Two tests: at year level, the AUC — the probability that a random impact year has a higher "
+        "FloodScan annual maximum than a random non-impact year (0.5 = no relation); and at event level, where each dated event's "
+        "window (3 days before to 7 days after) sits in the district's own FloodScan distribution. A district is called blind when "
+        "its 2-year annual-maximum extent is below 1 percent — FloodScan essentially never registers flooding there.</p>",
+        '<figure><img src="floodscan_vs_impact.png" alt="Map of AUC per district and a histogram of event percentiles by zone"></figure>',
+        floodscan_impact_table(),
+        "<p><strong>Reading:</strong> FloodScan is a good witness exactly where the riverine and wetland zones are — Butaleja, Bulambuli, "
+        "Amuria, Katakwi and Soroti have AUCs of 0.7 to 0.86, and Teso events sit at the 94th percentile of the district record — and it is "
+        "blind across most of the rest of the country: 60 of the 100 districts with three or more impact years never reach 1 percent "
+        "extent, including the Elgon slopes (Bududa, Sironko, Kapchorwa, Bukwo, Namisindwa), the Karamoja north (Kaabong, Karenga, Amudat) "
+        "and, notably, Adjumani, Moyo and Nebbi, where the Albert Nile floods are narrow riverbank events a 9-km product does not resolve. "
+        "So the satellite backstop is sound for the Teso zone and the Elgon and Teso lowland tiers, partial for Karamoja, and cannot "
+        "serve the Elgon slopes or the Albert Nile bank, where the backstop has to be report-based (DTM, OPM) or gauge-based.</p>",
         "<h2>How much of the recorded impact do the zones cover?</h2>",
         "<p>Every district classified as zone core, zone tier 2, partner-only (in a standing flood AA of IFRC, WFP, CRS/Caritas or DRC "
         "but not in our zones) or uncovered, with the 1998–2025 record summed per class.</p>",
