@@ -1,5 +1,6 @@
 /* Product-page layout on top of the shared HDX-v2 tokens in site.css */
-.page { padding: 24px 0 48px; }
+.page { padding: 24px 44px 48px; box-sizing: border-box; }
+@media (max-width: 640px) { .page { padding: 18px 22px 36px; } }
 .page .home { display: inline-block; margin: 8px 0 18px; font: 500 14px/1.4 Roboto, sans-serif; color: #007ce0; text-decoration: none; }
 .page .home:hover { text-decoration: underline; }
 .page h1 { font: 700 30px/1.2 Merriweather, serif; margin: 0 0 8px; }

@@ -77,23 +77,28 @@ def threshold_agreement(dis: pd.Series, sfed: pd.Series, rp_years: float = 2.0) 
     )
 
 
-def coverage_table(dis: pd.Series, sfed_by_district: dict[str, pd.Series]) -> pd.DataFrame:
+def coverage_table(
+    dis: pd.Series,
+    sfed_by_district: dict[str, pd.Series],
+    sfed_max_by_district: dict[str, pd.Series] | None = None,
+) -> pd.DataFrame:
+    """One row per district: anomaly correlation (best lag) and 2-yr threshold agreement on the
+    district mean extent and, if given, on the district max-pixel extent (small wetlands)."""
     rows = []
     for name, s in sfed_by_district.items():
         lc = lagged_corr(dis, s)
-        pa = peak_agreement(dis, s)
         ta = threshold_agreement(dis, s)
-        rows.append(
-            dict(
-                district=name,
-                best_lag=int(lc.idxmax()),
-                best_corr=float(lc.max()),
-                corr_lag0=float(lc.iloc[0]),
-                peak_agree_share=float(pa.agree.mean()) if len(pa) else np.nan,
-                n_years=len(pa),
-                median_gap_days=float(pa.gap_days.median()) if len(pa) else np.nan,
-                p_dis_given_sfed=ta["p_dis_given_sfed"],
-                p_sfed_given_dis=ta["p_sfed_given_dis"],
-            )
-        )
+        row = {
+            "district": name,
+            "best_lag": int(lc.idxmax()),
+            "best_corr": float(lc.max()),
+            "corr_lag0": float(lc.iloc[0]),
+            "p_dis_given_sfed": ta["p_dis_given_sfed"],
+            "p_sfed_given_dis": ta["p_sfed_given_dis"],
+        }
+        if sfed_max_by_district is not None:
+            row["p_dis_given_sfedmax"] = threshold_agreement(dis, sfed_max_by_district[name])[
+                "p_dis_given_sfed"
+            ]
+        rows.append(row)
     return pd.DataFrame(rows).sort_values("best_corr", ascending=False).reset_index(drop=True)

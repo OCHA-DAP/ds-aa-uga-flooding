@@ -18,12 +18,13 @@ import glob
 import sys
 from pathlib import Path
 
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import ocha_stratus as stratus
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from src.constants import GLOFAS_PIXEL_LONLAT, PROJECT_PREFIX
+from src.constants import GLOFAS_PIXEL_LONLAT, PROJECT_PREFIX, TESO_EXCLUDED
 from src.datasources import glofas
 from src.glofas_coverage import coverage_table
 from src.zones import load_adm2, zone_districts
@@ -31,7 +32,10 @@ from src.zones import load_adm2, zone_districts
 ROOT = Path(__file__).resolve().parent.parent
 OUT_CSV = ROOT / "outputs" / "teso_glofas_coverage.csv"
 OUT_PNG = ROOT / "outputs" / "teso_glofas_coverage.png"
-COVERED = {"corr": 0.5, "p_dis_given_sfed": 0.4}
+COVERED = {
+    "corr": 0.45,
+    "p_dis_given_sfed": 0.5,
+}  # anomaly corr (best lag <= 30 d); P on mean or max extent
 
 
 def load_floodscan_adm2() -> pd.DataFrame:
@@ -56,12 +60,22 @@ def main() -> None:
     fs = fs[fs.date <= dis.index.max()]
     adm = load_adm2().set_index("ADM2_PCODE").ADM2_EN
     z = zone_districts("teso_kyoga")
-    sfed = {adm[p]: fs[fs.pcode == p].set_index("date")["mean"].sort_index() for p in z.ADM2_PCODE}
-    tab = coverage_table(dis, sfed)
-    tab["membership"] = tab.district.map(dict(zip(z.ADM2_EN, z.membership, strict=True)))
-    tab["covered"] = (tab.best_corr >= COVERED["corr"]) & (
-        tab.p_dis_given_sfed >= COVERED["p_dis_given_sfed"]
+    excl = load_adm2()[load_adm2().ADM2_EN.isin(TESO_EXCLUDED)].assign(
+        zone="teso_kyoga", membership="excluded"
     )
+    z = pd.concat([z, excl], ignore_index=True)
+    z = gpd.GeoDataFrame(z, crs=load_adm2().crs)
+    sfed = {adm[p]: fs[fs.pcode == p].set_index("date")["mean"].sort_index() for p in z.ADM2_PCODE}
+    sfed_max = {
+        adm[p]: fs[fs.pcode == p].set_index("date")["max"].sort_index() for p in z.ADM2_PCODE
+    }
+    tab = coverage_table(dis, sfed, sfed_max)
+    tab["membership"] = tab.district.map(dict(zip(z.ADM2_EN, z.membership, strict=True)))
+    p_best = tab[["p_dis_given_sfed", "p_dis_given_sfedmax"]].max(axis=1)
+    tab["covered"] = (tab.best_corr >= COVERED["corr"]) & (p_best >= COVERED["p_dis_given_sfed"])
+    # the district holding the point and its headwaters: FloodScan sees too little extent for a
+    # correlation, but its rare floods coincide with high discharge — flag separately
+    tab["catchment"] = tab.district.eq("Kapelebyong") & (p_best >= 0.7)
     tab["record"] = f"{dis.index.min():%Y}-{dis.index.max():%Y}"
     tab.to_csv(OUT_CSV, index=False)
     pd.set_option("display.width", 200)
@@ -93,13 +107,14 @@ def main() -> None:
     )
     for ax in axes:
         g[g.covered].boundary.plot(ax=ax, color="red", linewidth=1.5)
+        g[g.catchment].boundary.plot(ax=ax, color="red", linewidth=1.5, linestyle="--")
         ax.plot(lon, lat, marker="^", color="black", markersize=10)
         for _, r in g.iterrows():
             c = r.geometry.representative_point()
             ax.annotate(r.district, (c.x, c.y), ha="center", fontsize=7)
         ax.set_axis_off()
     fig.suptitle(
-        f"What G5196 covers — GloFAS v4 reanalysis vs FloodScan district extent, {tab.record.iloc[0]} (red = covered)"
+        f"What G5196 covers — GloFAS v4 reanalysis vs FloodScan district extent, {tab.record.iloc[0]} (red = covered; dashed = point catchment)"
     )
     fig.tight_layout()
     fig.savefig(OUT_PNG, dpi=150)

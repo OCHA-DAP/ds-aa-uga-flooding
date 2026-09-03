@@ -145,8 +145,9 @@ def results_page() -> str:
         ),
         "<h2>Teso / Kyoga — what does GloFAS G5196 cover?</h2>",
         f"<p>GloFAS v4 reanalysis discharge at the G5196 pixel against each candidate district's FloodScan flood-extent daily mean, {e(cov.record.iloc[0])}: "
-        "best lagged correlation in the Aug–Dec flood season, and the conditional probability that discharge is over its 2-year level when the district's "
-        "extent is over its own 2-year level. Red outline = covered (corr ≥ 0.5 and P ≥ 0.4).</p>",
+        "best lagged correlation of daily anomalies in the Aug–Dec flood season (the shared seasonal cycle removed), and the conditional probability "
+        "that discharge is over its 2-year level when the district's extent (mean, or wettest pixel for small wetlands) is over its own 2-year level. "
+        "Covered = anomaly correlation ≥ 0.45 and P ≥ 0.5 (red outline); dashed = the point's own catchment.</p>",
         '<figure><img src="teso_glofas_coverage.png" alt="Two maps of Teso districts coloured by correlation and conditional probability"></figure>',
         table(
             cov_show,
@@ -156,9 +157,12 @@ def results_page() -> str:
                 "P(extent>2yr | Q>2yr)": lambda v: f"{v:.2f}",
             },
         ),
-        "<p><strong>Reading:</strong> the point speaks for Amuria and Katakwi (lag 0–7 days), weakly for the Soroti–Ngora–Serere wetlands downstream "
-        "(long lags, the wetland fill), and not at all for Pallisa, Butaleja or the Kyoga north shore. Kapelebyong, upstream, is barely visible to FloodScan. "
-        "Reforecast-based thresholds and the backtest follow once the EWDS download completes.</p>",
+        "<p><strong>Reading, and what it changed:</strong> the point speaks for Amuria and Katakwi at 0–7 days, and for Soroti, Ngora and Serere with a "
+        "19–30 day lag as the Awoja–Bisina wetlands fill; Kapelebyong holds the point and its headwaters (too little extent for a correlation, but "
+        "its rare floods coincide with high discharge, P 0.73). Nothing further out passes: Kumi, Bukedea, Pallisa, Butaleja and the Mpologoma "
+        "districts, and the whole Kyoga north shore (Kaberamaido, Kalaki, Amolatar, Dokolo, Otuke, Alebtong) have correlations below 0.45 and no "
+        "threshold agreement. The zone was redrawn accordingly: six core districts, no candidates. Reforecast-based thresholds and the backtest follow "
+        "once the EWDS download completes.</p>",
         "<h2>Adjumani / Albert Nile — are the floods lake-level events?</h2>",
         "<p>Monthly altimetry levels of Lakes Victoria, Kyoga and Albert (NASA Global Water Monitor) against every dated flood record we hold for Adjumani, "
         "Moyo, Obongi, Nebbi and Pakwach (DesInventar datacards 1992–2021, EM-DAT, and curated 2019–2024 events).</p>",
@@ -195,6 +199,18 @@ def results_page() -> str:
         "sharper — slope-unit susceptibility, a landslide-model layer, community gauges, or the forecast's own probability. Second, the "
         "impact record is incomplete (DesInventar stops in 2021 and misses minor events), so true precision is somewhat higher than "
         "measured — but not by the factor needed. ERA5-Land soil moisture will replace the proxy and be re-tested here.</p>",
+        "<h2>Where and when impact has been recorded</h2>",
+        "<p>All impact sources merged to district-years: EM-DAT (events exploded to the districts named), DesInventar datacards (to 2021), IOM DTM "
+        "rounds (2023–25) and the curated events. Event totals are split evenly across the districts an event names; a few DesInventar cards that "
+        "carry national totals against one district (Agago 3,000,000 in Jul 2007; Bududa 300,000 in Mar 2010) keep the record but drop the count.</p>",
+        '<figure><img src="impact_summary.png" alt="Choropleth of years with recorded flood or landslide impact per district, with deaths bubbles"></figure>',
+        "<p><strong>Reading:</strong> the Elgon corridor (Bududa, Sironko, Mbale, Bulambuli, Butaleja) and Kasese are where impact is recorded most years, "
+        "and where the deaths are; Katakwi and Amuria carry the large riverine caseloads; Karamoja is recorded often but with small counts; the Albert "
+        "Nile districts have fewer records, concentrated in the lake-driven years. DesInventar has no 2019 records and nothing after 2021, so 2019 and "
+        "2022 are under-recorded relative to their neighbours.</p>",
+        '<figure><img src="impact_by_year.png" alt="Small maps of Uganda, one per year 1998-2025, districts coloured by people affected"></figure>',
+        "<p>The per-year grid is the target list a trigger has to be judged against: 2007 (Teso and the north), 2010 and 2011 (Elgon, Teso, Karamoja), "
+        "2013, 2018, 2020 (Albert Nile), 2024 and 2025 stand out; per-district-year values are in <code>outputs/impact_district_year.csv</code>.</p>",
         "<h2>Impact record assembled</h2><ul>"
         "<li><strong>EM-DAT</strong> — 47 flood and wet mass-movement events 2001–2024, exploded to districts.</li>"
         "<li><strong>DesInventar Uganda</strong> — about 1,500 flood, 370 landslide and 130 rainstorm datacards, day-dated and district-matched, 1933–2021 (no 2019 records; ends 2021).</li>"

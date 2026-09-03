@@ -54,29 +54,21 @@ ZONES: dict[str, Zone] = {
         key="teso_kyoga",
         label="Teso / Lake Kyoga (Akokoro river, GloFAS G5196)",
         regime="riverine",
-        core=("Katakwi", "Amuria", "Kapelebyong"),
-        candidate=(
-            # rest of Teso sub-region
-            "Soroti",
-            "Serere",
-            "Ngora",
-            "Kumi",
-            "Bukedea",
-            "Kaberamaido",
-            "Kalaki",
-            # Lango shore of Lake Kyoga
-            "Amolatar",
-            "Dokolo",
-            "Otuke",
-            "Alebtong",
-            # Bukedi / Mpologoma wetlands
-            "Pallisa",
-            "Butaleja",
-            "Kibuku",
-            "Budaka",
-            "Butebo",
+        # Core = districts whose FloodScan flood extent co-varies with G5196 discharge
+        # (analysis/teso_glofas_coverage.py, 1999-2019): Amuria and Katakwi directly
+        # (anomaly corr 0.6, lag 0-7 d), Soroti, Ngora and Serere as the downstream Awoja/Bisina
+        # wetlands (corr ~0.5 at 19-30 d lag, P(Q>2yr | max extent>2yr) 0.6). Kapelebyong holds the
+        # point and its catchment: extent there is too small for FloodScan (corr 0.36)
+        # but when it does flood the discharge is high (P 0.73), so it stays in.
+        core=("Katakwi", "Amuria", "Kapelebyong", "Soroti", "Ngora", "Serere"),
+        # Serere passes on the max-pixel extent (P 0.60) with a long (30-day) lag: the far end
+        # of the wetland fill. No candidates left — the check ruled the rest out (TESO_EXCLUDED).
+        candidate=(),
+        note=(
+            "Ruled OUT by the coverage check (corr < 0.45 or P < 0.25): Kumi, Bukedea, Pallisa, "
+            "Butaleja, Kibuku, Budaka, Butebo (Mpologoma system), Kaberamaido, Kalaki, Amolatar, "
+            "Dokolo, Otuke, Alebtong (Kyoga north shore). Their flooding is not what G5196 sees."
         ),
-        note="Which candidates the G5196 point actually covers is the first analysis task.",
     ),
     "elgon": Zone(
         key="elgon",
@@ -121,6 +113,24 @@ ZONES: dict[str, Zone] = {
         note="Indicator undecided: GloFAS Albert Nile points, Lake Albert level, or rainfall.",
     ),
 }
+
+# Teso/Kyoga districts evaluated for G5196 coverage and ruled out (kept so the coverage
+# analysis keeps showing why): Mpologoma system and Kyoga north shore.
+TESO_EXCLUDED = (
+    "Kumi",
+    "Bukedea",
+    "Pallisa",
+    "Butaleja",
+    "Kibuku",
+    "Budaka",
+    "Butebo",
+    "Kaberamaido",
+    "Kalaki",
+    "Amolatar",
+    "Dokolo",
+    "Otuke",
+    "Alebtong",
+)
 
 # Uganda's two rainy seasons (bimodal south/east; Karamoja and West Nile are
 # effectively unimodal Apr–Oct). Kept for season-splitting of statistics.
