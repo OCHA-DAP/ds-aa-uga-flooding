@@ -66,6 +66,7 @@ def coverage_page() -> str:
     shutil.copy(OUT / "zones_coverage_map.png", PAGES / "coverage" / "zones_coverage_map.png")
     parts = [
         HEAD.format(
+            v=ASSET_VERSION,
             title="Trigger zones and existing coverage",
             sub="The four OCHA/CERF zones under design, the GloFAS point, and where other organisations' flood anticipatory action already operates.",
         ),
@@ -142,6 +143,7 @@ def results_page() -> str:
     )
     parts = [
         HEAD.format(
+            v=ASSET_VERSION,
             title="Results so far",
             sub="Interim analysis outputs. Each figure and table is produced by a script in the repo; nothing here is a trigger yet.",
         ),
