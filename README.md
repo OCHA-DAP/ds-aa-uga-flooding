@@ -41,16 +41,25 @@ organisations' flood AA coverage (`src/frameworks.py`, sourced in `docs/research
 - `docs/research-notes.md` — sourced notes on other frameworks, GloFAS points, Adjumani hydrology, event history
 - `pipeline/` — batch builders, each writes to the dev blob under `ds-aa-uga-flooding/`:
   - `build_daily_adm2.py {floodscan|imerg}` — daily per-district mean/max, 1998–present
+  - `build_exposure_weights.py` + `build_floodscan_exposure.py` — daily flood-exposed population per
+    district (WorldPop 2020 × SFED), the definition the team's flood-exposure pipeline uses; Uganda
+    is not covered by that pipeline, so it is computed here via a population weight matrix
   - `build_chirps_gefs_adm2.py` — daily-issued 5-day rainfall forecast per district, 2000–2026
   - `download_glofas.py` — GloFAS v4 reanalysis (Uganda box) and per-point reforecast
   - `zones_map.py` — the coverage map; `build_pages.py` — the Pages product pages
-- `analysis/` — `teso_glofas_coverage.py` (what G5196 covers), `adjumani_lake_levels.py` (lake levels vs the West Nile flood record); skill-chain analyses to follow
+- `analysis/` — `teso_glofas_coverage.py` (what G5196 covers), `adjumani_lake_levels.py` (lake levels
+  vs the West Nile flood record), `flash_flood_rain_vs_events.py` and `flash_flood_antecedent.py`
+  (the rainfall chain), `floodscan_vs_impact.py` and `exposure_vs_impact.py` (does the satellite see
+  the impact), `backstop_options.py` (satellite vs observed rainfall vs either), `impact_maps.py`,
+  `impact_coverage.py`, `cems_pass.py`
 - `data/` — local caches (gitignored); `outputs/` — figures
 
 ## Data (dev blob, container `projects`)
 
 ```
 ds-aa-uga-flooding/processed/floodscan/floodscan_adm2_daily.parquet     date, pcode, mean, max (SFED)
+ds-aa-uga-flooding/processed/exposure/floodscan_exposure_adm2_daily.parquet  date, pcode, exposure, exposure_floor (people)
+ds-aa-uga-flooding/processed/exposure/pop_weights.npz                   population per district × FloodScan cell
 ds-aa-uga-flooding/processed/imerg/imerg_adm2_daily.parquet             date, pcode, mean, max (mm/day)
 ds-aa-uga-flooding/processed/chirps_gefs/chirps_gefs_5day_adm2.parquet  issue_date, valid_end, pcode, mean, max (mm/5 days)
 ds-aa-uga-flooding/processed/desinventar/datacards.parquet             DesInventar datacards, district-matched
