@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 
 @dataclass(frozen=True)
 class ExternalFramework:
+    """Another organisation's flood AA framework, mapped to CODAB ADM2 districts."""
+
     key: str
     org: str
     label: str
@@ -19,6 +21,22 @@ class ExternalFramework:
     source: str
     verified: bool = False
     notes: tuple[str, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True)
+class Programme:
+    """A national or sub-regional programme with no district list — early-warning
+    infrastructure, roadmaps, appeals. Not drawn on the coverage map (nothing to draw),
+    but it changes what a trigger can lean on, so it is reported alongside."""
+
+    key: str
+    org: str
+    label: str
+    scope: str
+    what: str
+    status: str
+    source: str
+    relevance: str = ""
 
 
 EXTERNAL: dict[str, ExternalFramework] = {
@@ -140,8 +158,87 @@ EXTERNAL: dict[str, ExternalFramework] = {
             "Katakwi",
         ),
         trigger="Seasonal outlook (OND 2023, 40-45% above-normal) — one-off, no standing threshold",
-        status="11 Aug - 31 Dec 2023 only (OSRO/UGA/070/BEL, USD 1M, 78,375 people). FAO's standing AA in Uganda is Karamoja drought/livestock.",
+        status=(
+            "11 Aug - 31 Dec 2023 only (OSRO/UGA/070/BEL, USD 1M, 78,375 people). Succeeded in 2025-26 by the "
+            "Japan-funded OPM/FAO flood early-warning project (see PROGRAMMES), which is infrastructure rather "
+            "than a trigger. FAO's standing AA in Uganda remains Karamoja drought/livestock, activated May 2026."
+        ),
         source="FAO project report https://openknowledge.fao.org/server/api/core/bitstreams/22e1fbf6-6ae8-436c-9118-12d9d94482f6/content pp.1-2, 7",
         verified=True,
+        notes=(
+            (
+                "Still no FAO flood framework anywhere in Uganda with a published trigger (indicator, threshold, "
+                "lead time) as of Sep 2026 — the only documented flood trigger in the country is the URCS/IFRC one."
+            ),
+        ),
+    ),
+}
+
+
+# National / sub-regional programmes: no district list, so not on the map, but they change
+# what our triggers can lean on (gauges to read, warning centres to route through).
+PROGRAMMES: dict[str, Programme] = {
+    "fao_opm_flood_ews": Programme(
+        key="fao_opm_flood_ews",
+        org="FAO + Office of the Prime Minister (Government of Japan funded)",
+        label="Enhancing Flood Management in Uganda with Integrated Early Warning Systems",
+        scope="Rwenzori and Mount Elgon sub-regions (district list not published)",
+        what=(
+            "USD 1.13 M. Installed 10 hydro-climatic stations and 2 flood early-warning centres, issued 72 "
+            "bulletins, reached 100,000+ people, trained 540, and delivered anticipatory actions to ~5,000 "
+            "households. No trigger: this is early-warning infrastructure and community preparedness."
+        ),
+        status="Mar 2025 - Mar 2026, closed; results dialogue at OPM Jun 2026",
+        source="allAfrica, 5 Jun 2026 https://allafrica.com/stories/202606050689.html",
+        relevance=(
+            "The 10 stations sit in the two sub-regions where our Elgon tier 1 has no satellite signal and needs a "
+            "gauge- or report-based backstop. Ask FAO/OPM whether the readings are accessible and at what latency."
+        ),
+    ),
+    "gou_aa_roadmap": Programme(
+        key="gou_aa_roadmap",
+        org="Government of Uganda / OPM, with WFP, FAO and IGAD",
+        label="National AA Roadmap 2026-2031 and the U-MHIEWS multi-hazard early-warning system",
+        scope=(
+            "National, with sub-national multi-hazard early-warning centres in Karamoja, Teso, Mount Elgon and "
+            "Rwenzori, plus 2 regional centres"
+        ),
+        what=(
+            "Commits to 'establish clear disaster triggers'; none published yet. Reports 1.6 M families reached "
+            "with early warning and 400,000+ households with anticipatory action since 2021."
+        ),
+        status="Launched Jul 2026",
+        source="https://reliefweb.int/report/uganda/uganda-roadmap-anticipatory-action-2026-2031",
+        relevance=(
+            "Three of our four zones (Teso, Mount Elgon, Karamoja) will have a government early-warning centre; "
+            "West Nile will not. Those centres are the natural route for dissemination and for co-owning triggers."
+        ),
+    ),
+    "fao_wfp_elnino_appeal": Programme(
+        key="fao_wfp_elnino_appeal",
+        org="FAO and WFP",
+        label="Joint El Nino anticipatory action appeal",
+        scope="22 countries including Uganda; no sub-national detail published",
+        what="USD 202 M for 8.8 M people",
+        status="Open, Jun 2026 - Mar 2027",
+        source="FAO newsroom, 18 Jun 2026",
+        relevance="A possible co-financing route for an OND 2026 activation; Uganda's share is not public.",
+    ),
+    "opm_fao_refugee_ews_assessment": Programme(
+        key="opm_fao_refugee_ews_assessment",
+        org="OPM with FAO, DRC and UNHCR",
+        label="EWS, anticipatory action and ecosystem-based DRR needs assessment, refugee-hosting districts",
+        scope="13 refugee-hosting districts incl. Adjumani, Obongi, Madi Okollo, Yumbe, Terego",
+        what=(
+            "92 responses, surveyed Dec 2025. Adjumani and Obongi report both riverine and flash flood exposure. "
+            "Early-warning coverage is thin (Obongi ~20% institutional, Adjumani no institutional data) and the "
+            "report states no comprehensive multi-hazard EWS is formally established in most of these districts."
+        ),
+        status="Preliminary report 7 Jan 2026; not published online (shared by the country team)",
+        source="Needs Assessment preliminary data analysis report, Jan 2026 (dev blob raw/country_team/uga/)",
+        relevance=(
+            "Independent support for the two-regime split in the Adjumani zone, and a warning that the last mile "
+            "there is weak — lead time must be budgeted for slow dissemination, favouring the long-lead lake-level leg."
+        ),
     ),
 }

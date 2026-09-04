@@ -25,7 +25,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.constants import GLOFAS_PIXEL_LONLAT, ZONES
-from src.frameworks import EXTERNAL
+from src.frameworks import EXTERNAL, PROGRAMMES
 
 ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
@@ -103,12 +103,38 @@ def coverage_page() -> str:
             + ("".join(f"<p class='fn'>{e(n)}</p>" for n in fw.notes) if fw.notes else "")
         )
     parts.append(
+        "<h2>National and sub-regional programmes</h2>"
+        "<p>These carry no district list, so they are not on the map, but they change what a trigger can lean on — "
+        "gauges to read, warning centres to route through, money to draw on.</p>"
+    )
+    for pr in PROGRAMMES.values():
+        parts.append(
+            f"<h3>{e(pr.org)} — {e(pr.label)}</h3>"
+            f"<p><strong>Scope:</strong> {e(pr.scope)}<br>"
+            f"<strong>What it is:</strong> {e(pr.what)}<br>"
+            f"<strong>Status:</strong> {e(pr.status)}<br>"
+            f"<strong>Source:</strong> {e(pr.source)}</p>"
+            + (
+                f"<p class='fn'><strong>Why it matters here:</strong> {e(pr.relevance)}</p>"
+                if pr.relevance
+                else ""
+            )
+        )
+    parts.append(
         "<h2>Coverage against our zones</h2><ul>"
-        "<li><strong>Teso / Kyoga:</strong> IFRC EAP (Katakwi, Amuria, Kumi, Ngora), FAO 2023 (Katakwi). No standing riverine trigger on the Akokoro/Awoja system.</li>"
-        "<li><strong>Mount Elgon:</strong> IFRC EAP (Butaleja, Sironko, Bududa, Manafwa, Bulambuli); CRS/Caritas protocol at sub-county level in Butaleja and Bududa; FAO 2023. Kapchorwa, Kween, Bukwo, Namisindwa, Mbale have no trigger.</li>"
-        "<li><strong>Karamoja:</strong> DRC (Moroto, Napak, Amudat — flash-flood ladder inside a drought/conflict plan); Nabilatuk in the IFRC list. Kaabong, Karenga, Kotido, Abim, Nakapiripirit uncovered.</li>"
-        "<li><strong>Adjumani / Albert Nile:</strong> nothing except Moyo in the IFRC list.</li>"
-        "<li><strong>Rwenzori (outside our zones):</strong> WFP's four-district plan plus IFRC (Kasese, Ntoroko).</li></ul>"
+        "<li><strong>Teso / Kyoga:</strong> IFRC EAP (Katakwi, Amuria, Kumi, Ngora), FAO 2023 (Katakwi). No standing riverine trigger on the "
+        "Akokoro/Awoja system. A government multi-hazard early-warning centre for Teso is coming under the national roadmap.</li>"
+        "<li><strong>Mount Elgon:</strong> IFRC EAP (Butaleja, Sironko, Bududa, Manafwa, Bulambuli); CRS/Caritas protocol at sub-county level in "
+        "Butaleja and Bududa; FAO 2023. Kapchorwa, Kween, Bukwo, Namisindwa and Mbale have no trigger. Since 2025 the FAO/OPM project has put "
+        "hydro-climatic stations and a flood early-warning centre in the sub-region — the most promising backstop for the slopes, where no "
+        "satellite works.</li>"
+        "<li><strong>Karamoja:</strong> DRC (Moroto, Napak, Amudat — a flash-flood ladder inside a drought and conflict plan, activated Jul 2026 "
+        "on the drought and conflict legs); Nabilatuk in the IFRC list. Kaabong, Karenga, Kotido, Abim and Nakapiripirit have no flood trigger. "
+        "The FAO/WFP Karamoja drought plan activated separately in May 2026.</li>"
+        "<li><strong>Adjumani / Albert Nile:</strong> nothing except Moyo in the IFRC list — and no early-warning centre is planned for West Nile "
+        "under the national roadmap. The OPM/FAO/UNHCR/DRC assessment finds early-warning coverage there among the thinnest in the country.</li>"
+        "<li><strong>Rwenzori (outside our zones):</strong> WFP's four-district plan, IFRC (Kasese, Ntoroko), and the other half of the FAO/OPM "
+        "station network.</li></ul>"
     )
     parts.append(FOOT.format(today=TODAY))
     return "".join(parts)
