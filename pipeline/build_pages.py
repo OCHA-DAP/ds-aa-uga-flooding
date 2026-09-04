@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "6"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "7"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -81,85 +81,114 @@ BACKSTOP = {
     "no": ("no", "rate-weak"),
 }
 
-# One row per zone tier: regime, the forecast we propose, its rating, and whether the
-# satellite backstop applies. Numbers come from the results page analyses.
+# One row per zone tier: regime, the forecast we propose (short), its rating, backstop rating
+# and text, a one-line caveat, and the headline events the tier would have been for.
 ZONE_STATUS = [
     (
         "teso_kyoga",
         "tier 1",
         "Riverine — Akokoro river (Katakwi, Amuria, Kapelebyong)",
-        "GloFAS G5196 ensemble probability of exceeding a return-period flow, 3–14 day lead; aligned with the IFRC EAP form",
+        "GloFAS G5196 return-period exceedance, 3–14 d lead (IFRC EAP form)",
         "good",
         "yes",
-        "Yes — FloodScan registers 87 % of events (AUC 0.75)",
-        "Discharge–extent relationship drifted after 2013; needs a third opinion (DWRM gauge or Google Flood Hub) before it carries an action trigger.",
+        "87 % of events register (AUC 0.75)",
+        "Relationship drifted after 2013; needs a gauge or Flood Hub cross-check.",
+        "2007 Teso floods (CERF), 2010, 2014",
     ),
     (
         "teso_kyoga",
         "tier 2",
         "Wetland fill downstream — Awoja / Lake Bisina (Soroti, Ngora, Serere)",
-        "Same G5196 signal read 3–4 weeks later, or the observed extent itself",
+        "Same G5196 signal 3–4 weeks later, or observed extent",
         "promising",
         "yes",
-        "Yes — every dated event registers (AUC 0.69)",
-        "Lagged relationship is weaker than upstream; may end up observation-led.",
+        "every dated event registers (AUC 0.69)",
+        "Lagged link is weaker; may end up observation-led.",
+        "2007, 2012 Soroti",
     ),
     (
         "elgon",
         "tier 1",
         "Flash floods and landslides on the slopes (9 districts)",
-        "Rainfall forecast (CHIRPS-GEFS / ECMWF) with an antecedent-wetness condition, 1–5 day lead",
+        "Rainfall forecast + antecedent wetness, 1–5 d lead",
         "weak",
         "no",
-        "No — 5 of 9 districts satellite-blind, 13 % of events register. Backstop must be gauge- or report-based (FAO/OPM stations, DTM, OPM)",
-        "Precision stays under 15 % at any threshold; readiness-tier signal only.",
+        "5 of 9 districts blind, 13 % of events register; gauge/report-based (FAO/OPM stations, DTM)",
+        "Precision under 15 % at any threshold; readiness-tier only.",
+        "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
     ),
     (
         "elgon",
         "tier 2",
         "Lowland riverine and wetland — Manafwa / Mpologoma / Awoja (Butaleja, Pallisa, Kumi, Bukedea, Budaka, Kibuku)",
-        "Elgon rainfall with a lag, or none — trigger on observed extent; GloFAS Manafwa point fails hydrology",
+        "Lagged Elgon rainfall, or observation-led; GloFAS Manafwa point fails",
         "promising",
         "yes",
-        "Yes — 72 % of events register (AUC 0.65; Butaleja 0.86)",
-        "Forecast leg untested; the observational leg is the strong one here.",
+        "72 % of events register (AUC 0.65; Butaleja 0.86)",
+        "Forecast leg untested; observation is the strong leg.",
+        "2018 Butaleja, 2025 Pallisa, 2007",
     ),
     (
         "karamoja",
         "tier 1",
         "Flash floods (9 districts)",
-        "Rainfall forecast with antecedent wetness, 1–5 day lead; sub-zoning by basin likely",
+        "Rainfall forecast + antecedent wetness, 1–5 d lead; sub-zone by basin",
         "weak",
         "partial",
-        "Partial — 3 of 9 districts blind, 11 % of events register; mostly report-based",
+        "3 of 9 districts blind, 11 % of events register; mostly report-based",
         "Same limits as the Elgon slopes; DRC covers Moroto, Napak, Amudat.",
+        "2007 (CERF), 2008, 2018 Napak",
     ),
     (
         "adjumani",
         "tier 1",
-        "Albert Nile bank — two regimes: lake backwater and local tributary flash floods (Adjumani, Moyo, Obongi)",
-        "Lake Victoria → Kyoga → Albert level chain for the slow regime (months of lead); rainfall for the flash regime",
+        "Albert Nile bank — lake backwater and local tributary flash floods (Adjumani, Moyo, Obongi)",
+        "Lake Victoria → Kyoga → Albert level chain (months of lead); rainfall for the flash regime",
         "promising",
         "no",
-        "No — none of 36 events register. Backstop must be a river gauge (Pakwach, Laropi) or reports",
-        "Lake-driven floods of 2020, 2021, 2024 all sat above the 90th percentile of lake level, but that is three events and the Albert altimetry starts in 2016.",
+        "none of 36 events register; river gauge (Pakwach, Laropi) or reports",
+        "Three lake-driven events on record; Albert altimetry starts 2016.",
+        "2020 Obongi, Oct–Nov 2023 Moyo, 2007",
     ),
     (
         "adjumani",
         "tier 2",
         "Lake Albert shore and upper Albert Nile backwater (Pakwach, Nebbi, Madi Okollo)",
-        "Lake Albert level with the same upstream chain",
+        "Lake Albert level, same upstream chain",
         "promising",
         "no",
-        "No — none of 39 events register; CEMS confirms lakeshore flooding is invisible to FloodScan",
-        "Cleanest lake-level case (Pakwach 2020), still few events to validate on.",
+        "none of 39 events register; CEMS confirms lakeshore floods are invisible to FloodScan",
+        "Cleanest lake-level case, few events to validate on.",
+        "2020 Pakwach (100k), 2009 Nebbi",
     ),
 ]
 
 
+def tier_impact() -> dict[tuple[str, str], dict]:
+    """Recorded impact 1998-2025 summed over each tier's districts, with national shares."""
+    t = pd.read_csv(OUT / "impact_district_year.csv")
+    tot_aff, tot_dea = t.affected_any.sum(), t.deaths_any.sum()
+    per = t.groupby("district").agg(aff=("affected_any", "sum"), dea=("deaths_any", "sum"))
+    out = {}
+    for key, z in ZONES.items():
+        for tier, ds in (("tier 1", z.core), ("tier 2", z.tier2)):
+            if not ds:
+                continue
+            sub = per.loc[[d for d in ds if d in per.index]]
+            out[(key, tier)] = {
+                "aff": float(sub.aff.sum()),
+                "dea": float(sub.dea.sum()),
+                "aff_share": float(sub.aff.sum() / tot_aff),
+                "dea_share": float(sub.dea.sum() / tot_dea),
+            }
+    return out
+
+
 def zone_status_table() -> str:
+    imp = tier_impact()
+    max_share = max(max(v["aff_share"], v["dea_share"]) for v in imp.values())
     rows = []
-    for key, tier, regime, forecast, rating, b_rating, backstop, note in ZONE_STATUS:
+    for key, tier, regime, forecast, rating, b_rating, backstop, note, events in ZONE_STATUS:
         z = ZONES[key]
         col = ZONE_COL[key]
         swatch = (
@@ -168,23 +197,38 @@ def zone_status_table() -> str:
             else f'<span class="sw sw-t2" style="border-color:{col};background:{col}22"></span>'
         )
         label, cls = RATING[rating]
+        blabel, bcls = BACKSTOP[b_rating]
+        i = imp[(key, tier)]
+        w_aff, w_dea = 100 * i["aff_share"] / max_share, 100 * i["dea_share"] / max_share
+        impact_cell = (
+            f"<div class='bar'><span style='width:{w_aff:.0f}%;background:{col}'></span></div>"
+            f"<span class='barlab'>{i['aff'] / 1000:,.0f}k affected · {100 * i['aff_share']:.0f} % of national</span>"
+            f"<div class='bar'><span style='width:{w_dea:.0f}%;background:#444'></span></div>"
+            f"<span class='barlab'>{i['dea']:,.0f} deaths · {100 * i['dea_share']:.0f} %</span>"
+            f"<span class='fn'>{e(events)}</span>"
+        )
         rows.append(
             "<tr>"
             f"<td class='zn'>{swatch}<strong>{e(z.label.split(' (')[0])}</strong><br><span class='tier'>{e(tier)}</span></td>"
             f"<td>{e(regime)}</td>"
-            f"<td class='{cls}'><span class='pill'>{e(label)}</span> {e(forecast)}<br><span class='fn'>{e(note)}</span></td>"
-            f"<td class='{BACKSTOP[b_rating][1]}'><span class='pill'>{e(BACKSTOP[b_rating][0])}</span> "
-            f"{e(backstop.split(' — ', 1)[1] if ' — ' in backstop else backstop)}</td>"
+            f"<td class='{cls}'><span class='pill'>{e(label)}</span> {e(forecast)}<span class='fn'>{e(note)}</span></td>"
+            f"<td class='{bcls}'><span class='pill'>{e(blabel)}</span> {e(backstop)}</td>"
+            f"<td class='imp'>{impact_cell}</td>"
             "</tr>"
         )
-    head = "<tr><th>Zone</th><th>Flooding regime</th><th>Proposed forecast</th><th>Observational backstop (FloodScan) applicable?</th></tr>"
+    head = (
+        "<tr><th>Zone</th><th>Flooding regime</th><th>Proposed forecast</th>"
+        "<th>Backstop (FloodScan)</th><th>Recorded impact 1998–2025 in these districts</th></tr>"
+    )
     legend = (
-        "<p class='fn'>Forecast rating: <span class='pill rate-good'>good</span> a validated signal with usable lead time · "
-        "<span class='pill rate-mid'>promising, unvalidated</span> a real signal with too few events or too short a record to calibrate on · "
+        "<p class='fn'>Forecast: <span class='pill rate-good'>good</span> validated signal with usable lead time · "
+        "<span class='pill rate-mid'>promising, unvalidated</span> real signal, too few events or too short a record to calibrate · "
         "<span class='pill rate-weak'>weak</span> readiness-tier at best, high false-alarm rate. "
-        "Backstop: <span class='pill rate-good'>yes</span> FloodScan sees most recorded events there · "
-        "<span class='pill rate-mid'>partial</span> some districts blind, a minority of events register · "
-        "<span class='pill rate-weak'>no</span> the satellite does not see the floods; the backstop must be gauge- or report-based.</p>"
+        "Backstop: <span class='pill rate-good'>yes</span> FloodScan sees most recorded events · "
+        "<span class='pill rate-mid'>partial</span> some districts blind · "
+        "<span class='pill rate-weak'>no</span> satellite does not see the floods. "
+        "Impact bars are scaled to the largest tier (Elgon slopes); they show what a trigger in that geography could in principle have "
+        "been for, not what it would have caught — event totals split evenly across the districts named, all sources (see results page).</p>"
     )
     return f'<div class="tw status"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>{legend}'
 
