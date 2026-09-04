@@ -18,6 +18,12 @@ report per-trigger and combined return periods.
 - Country documents shared Aug 2026 (UHF severity note, DTM xlsx, URCS/FAO hotspot maps,
   OPM El Niño retrospective) are internal — reference them, never commit them.
 - Severity 3+ scope decision on Teso/Kyoga districts is the working group's, not ours.
+- GloFAS G5196 vs FloodScan in Teso is NOT stationary (found 4 Sep 2026 once the reanalysis
+  reached 2024): Katakwi anomaly corr by era 0.25 / 0.83 / 0.57 / 0.15 / 0.06 for 1999-2005,
+  2006-11, 2012-13, 2014-19, 2020-24; same swing in every zone district. 2020 is the model's
+  record year with an ordinary satellite season; modelled daily variance rises 5.2 -> 17.3
+  m3/s with no satellite counterpart. Get a third opinion (DWRM gauge, Google Flood Hub)
+  and report any backtest era by era. `era_split()` in src/glofas_coverage.py.
 - Design notes from the user (3 Sep 2026), for when trigger design starts: (1) the Teso
   GloFAS trigger should align as far as possible with the IFRC/URCS EAP formulation
   (ensemble probability of exceeding a return-period flow at a reporting point, 5-day lead),

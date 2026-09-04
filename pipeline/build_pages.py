@@ -247,12 +247,20 @@ def results_page() -> str:
                 "P(extent>2yr | Q>2yr)": lambda v: f"{v:.2f}",
             },
         ),
-        "<p><strong>Reading, and what it changed:</strong> the point speaks for Amuria and Katakwi at 0–7 days, and for Soroti, Ngora and Serere with a "
+        "<p><strong>Reading, and what it changed:</strong> the point speaks for Amuria and Katakwi at lag 0, and for Soroti, Ngora and Serere with a "
         "19–30 day lag as the Awoja–Bisina wetlands fill; Kapelebyong holds the point and its headwaters (too little extent for a correlation, but "
-        "its rare floods coincide with high discharge, P 0.73). Nothing further out passes: Kumi, Bukedea, Pallisa, Butaleja and the Mpologoma "
-        "districts, and the whole Kyoga north shore (Kaberamaido, Kalaki, Amolatar, Dokolo, Otuke, Alebtong) have correlations below 0.45 and no "
-        "threshold agreement. The zone was redrawn accordingly: six core districts, no candidates. Reforecast-based thresholds and the backtest follow "
-        "once the EWDS download completes.</p>",
+        "its rare floods coincide with high discharge). Nothing further out passes: Kumi, Bukedea, Pallisa, Butaleja and the Mpologoma "
+        "districts, and the whole Kyoga north shore (Kaberamaido, Kalaki, Amolatar, Dokolo, Otuke, Alebtong) have weak correlations and no "
+        "threshold agreement. The zone was redrawn accordingly: three core districts plus a downstream-wetland tier.</p>",
+        "<p><strong>The caveat that matters most — the relationship is not stable in time.</strong> Now that the reanalysis covers 1999–2024, splitting "
+        "by era shows the Katakwi correlation running 0.25 (1999–2005), 0.83 (2006–2011), 0.57 (2012–13), 0.15 (2014–19) and 0.06 (2020–24), with every "
+        "other district in the zone swinging the same way. The full-record figure is therefore an average over periods that behave very differently, and "
+        "the recent decade — the one that matters operationally — is the weakest. Two direct contradictions: 2020 is the model's record year "
+        "(125 m³/s, three times its 2-year level) while the satellite saw an ordinary season, and 2022 is Amuria's wettest year in the satellite record "
+        "on near-minimum discharge. Modelled daily variability also rises steadily across the eras (standard deviation 5.2 → 17.3 m³/s) with no matching "
+        "change in the satellite, which points at the model rather than the river. Before this point carries an action trigger it needs a third opinion "
+        "independent of both — the Directorate of Water Resources Management gauge record if it can be obtained, or Google Flood Hub — and the backtest "
+        "must be reported era by era rather than as a single number.</p>",
         "<h2>Adjumani / Albert Nile — are the floods lake-level events?</h2>",
         "<p>Monthly altimetry levels of Lakes Victoria, Kyoga and Albert (NASA Global Water Monitor) against every dated flood record we hold for Adjumani, "
         "Moyo, Obongi, Nebbi and Pakwach (DesInventar datacards 1992–2021, EM-DAT, and curated 2019–2024 events).</p>",

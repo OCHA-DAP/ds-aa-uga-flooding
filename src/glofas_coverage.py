@@ -20,18 +20,26 @@ import pandas as pd
 from src.skill_chain import annual_max, weibull_threshold
 
 
+def _anom(s: pd.Series) -> pd.Series:
+    """Daily anomaly from the day-of-year mean — removes the shared seasonal cycle that
+    inflates raw correlation between any two wet-season series."""
+    return s - s.groupby(s.index.dayofyear).transform("mean")
+
+
 def lagged_corr(
-    dis: pd.Series, sfed: pd.Series, max_lag: int = 30, months=(8, 9, 10, 11, 12)
+    dis: pd.Series,
+    sfed: pd.Series,
+    max_lag: int = 30,
+    months=(8, 9, 10, 11, 12),
+    anomalies: bool = True,
 ) -> pd.Series:
-    """corr(discharge(t - lag), sfed(t)) for lag 0..max_lag, restricted to flood-season months."""
-    d, s = dis.asfreq("D"), sfed.asfreq("D")
-    idx = d.index.intersection(s.index)
-    out = {}
-    for lag in range(max_lag + 1):
-        dl = d.shift(lag).loc[idx]
-        m = idx.month.isin(months)
-        out[lag] = dl[m].corr(s.loc[idx][m])
-    return pd.Series(out, name="corr")
+    """corr(discharge(t - lag), sfed(t)) for lag 0..max_lag, flood-season months, on anomalies."""
+    idx = dis.asfreq("D").index.intersection(sfed.asfreq("D").index)
+    d, s = dis.asfreq("D").reindex(idx), sfed.asfreq("D").reindex(idx)
+    if anomalies:
+        d, s = _anom(d), _anom(s)
+    m = idx.month.isin(months)
+    return pd.Series({lag: d.shift(lag)[m].corr(s[m]) for lag in range(max_lag + 1)}, name="corr")
 
 
 def peak_agreement(dis: pd.Series, sfed: pd.Series, tolerance_days: int = 15) -> pd.DataFrame:
@@ -77,6 +85,25 @@ def threshold_agreement(dis: pd.Series, sfed: pd.Series, rp_years: float = 2.0) 
     )
 
 
+def era_split(
+    dis: pd.Series, sfed: pd.Series, split_year: int = 2014, months=(8, 9, 10, 11, 12)
+) -> dict:
+    """Anomaly correlation before and after `split_year` — GloFAS v4 has no gauge assimilation
+    beyond its calibration period, so a relationship that holds early can drift late."""
+    out = {}
+    for label, lo, hi in (("early", 1900, split_year - 1), ("late", split_year, 2100)):
+        d = dis[(dis.index.year >= lo) & (dis.index.year <= hi)]
+        s = sfed[(sfed.index.year >= lo) & (sfed.index.year <= hi)]
+        idx = d.dropna().index.intersection(s.dropna().index)
+        if len(idx) < 365:
+            out[f"corr_{label}"] = np.nan
+            continue
+        d, s = _anom(d.reindex(idx)), _anom(s.reindex(idx))
+        m = idx.month.isin(months)
+        out[f"corr_{label}"] = float(max(d.shift(lag)[m].corr(s[m]) for lag in range(31)))
+    return out
+
+
 def coverage_table(
     dis: pd.Series,
     sfed_by_district: dict[str, pd.Series],
@@ -100,5 +127,6 @@ def coverage_table(
             row["p_dis_given_sfedmax"] = threshold_agreement(dis, sfed_max_by_district[name])[
                 "p_dis_given_sfed"
             ]
+        row.update(era_split(dis, s))
         rows.append(row)
     return pd.DataFrame(rows).sort_values("best_corr", ascending=False).reset_index(drop=True)

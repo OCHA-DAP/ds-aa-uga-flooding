@@ -78,6 +78,14 @@ def main() -> None:
     tab["catchment"] = tab.district.eq("Kapelebyong") & (p_best >= 0.7)
     tab["record"] = f"{dis.index.min():%Y}-{dis.index.max():%Y}"
     tab.to_csv(OUT_CSV, index=False)
+    print(
+        "\nEra split (anomaly corr, Aug-Dec): the point and the satellite agreed until ~2013 and drift after"
+    )
+    print(
+        tab[["district", "membership", "corr_early", "corr_late", "best_corr"]]
+        .round(2)
+        .to_string(index=False)
+    )
     pd.set_option("display.width", 200)
     print(tab.round(2).to_string())
 
@@ -106,8 +114,8 @@ def main() -> None:
         legend_kwds={"shrink": 0.6, "label": "P(discharge > 2-yr | district extent > 2-yr)"},
     )
     for ax in axes:
-        g[g.covered].boundary.plot(ax=ax, color="red", linewidth=1.5)
-        g[g.catchment].boundary.plot(ax=ax, color="red", linewidth=1.5, linestyle="--")
+        g[g.covered].boundary.plot(ax=ax, aspect=None, color="red", linewidth=1.5)
+        g[g.catchment].boundary.plot(ax=ax, aspect=None, color="red", linewidth=1.5, linestyle="--")
         ax.plot(lon, lat, marker="^", color="black", markersize=10)
         for _, r in g.iterrows():
             c = r.geometry.representative_point()

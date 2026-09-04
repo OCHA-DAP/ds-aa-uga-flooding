@@ -14,7 +14,10 @@ documents are referenced, not reproduced.
 | DRC | **Karamoja AAP 2026** (drought, resource conflict, flash flood; cross-border with Kenya) | Moroto, Napak, Amudat | Flash-flood ladder: Kospir River at 80–85 % and rising; ~150 mm forecast in 24–48 h; livestock moving to high ground. Drought: SPI ≤ −1.5, Kobebe dam <50 %, body condition <3.0 | **Activated 27 Jul 2026** on drought + conflict (not flood). Napak floodplains flagged highest flash-flood risk; DRC's OND-2026 central scenario: 48,000 flood-displaced in Uganda |
 | WFP / FAO / OPM | PRO-ACT multi-hazard EWS + Karamoja **drought** AAP | 9 Karamoja districts + Kaberamaido, Katakwi | drought (SPI); **no flood trigger** | drought AAP activated May 2026 |
 | FAO | OSRO/UGA/070/BEL El Niño flood AA | Mbale, Butaleja, Sironko, Bulambuli, Manafwa, Namisindwa, Bundibugyo, Ntoroko, Kasese, Katakwi | seasonal outlook, one-off | 11 Aug–31 Dec 2023 only |
-| GoU / OPM | AA Roadmap 2026–2031 + U-MHIEWS | national | none specified yet | launched 3 Jul 2026 |
+| FAO + OPM (Japan-funded) | "Enhancing Flood Management in Uganda with Integrated EWS", USD 1.13 M | Rwenzori + Mt Elgon (district list not published) | **no published trigger** — EWS infrastructure, not an AAP: 10 hydro-climatic stations, 2 flood early-warning centres, 72 bulletins, ~5,000 households given anticipatory actions | Mar 2025 – Mar 2026, closed; results dialogue at OPM Jun 2026 |
+| FAO (+WFP, OPM) | Karamoja **drought** AAP | 9 Karamoja districts | "government forecasts crossed trigger thresholds" — values not published | **activated May 2026** (110,000 people, worst in Kotido and Kaabong), superseded by a government drought declaration Jul 2026 (6 months, 300,000 households) |
+| GoU / OPM (WFP, FAO, IGAD) | AA Roadmap 2026–2031 + U-MHIEWS | national, with **sub-national multi-hazard EW centres in Karamoja, Teso, Mt Elgon and Rwenzori** | roadmap commits to "establish clear disaster triggers"; none published | launched Jul 2026; since 2021, 1.6 M families reached with early warning, 400k+ households with AA |
+| FAO + WFP | Joint El Niño AA appeal, USD 202 M / 8.8 M people / 22 countries | Uganda listed, no sub-national detail | n/a | open appeal, Jun 2026 – Mar 2027 |
 | NBI / NELSAP | NB-FFEWS flash-flood EWS (48 h) | basin-wide emails to NMHSs | thresholds not public | operational testing 2026 |
 
 The WFP, CRS and DRC rows come from documents shared by the country team on 2 Sep 2026
@@ -90,6 +93,30 @@ paywalled), NASA GLC/COOLR. **No published intensity–duration or antecedent-ra
 threshold exists for Mt Elgon** — Kitutu 2011 / Knapen 2006 are qualitative (prolonged
 low-intensity rain, Aug–Nov peak). Transferable: Monsieurs et al. 2019 (NHESS 19:775)
 antecedent-rainfall thresholds for the western East African Rift.
+
+## 4b. FAO EWS & AA needs assessment, refugee-hosting districts (Dec 2025 survey, preliminary report 7 Jan 2026)
+
+OPM-led with FAO, DRC and UNHCR technical support; 92 responses across 13 refugee-hosting
+districts. Not public (shared by the country team; not findable online as of 4 Sep 2026).
+Relevant to the Adjumani zone:
+
+- **Both flood regimes are reported by the districts themselves**: "several districts (e.g.
+  Kiryandongo, Adjumani, Obongi) also report notable exposure to riverine and flash floods" —
+  independent support for the two-regime split we found in the record.
+- **Early-warning coverage is thin exactly there**: Adjumani no institutional data / ~40 %
+  non-institutional; Obongi ~20 % / ~30 %; Madi Okollo no institutional data / ~40–100 %
+  (the report flags that range as inconsistent understanding). The assessment states plainly
+  that "no comprehensive, multi-hazard EWS has been formally established in most of these
+  locations".
+- **System-performance issues** (share of respondents reporting each): Madi Okollo 51 %,
+  Obongi 50 % average issue prevalence, driven by irregular EWS updates from national
+  institutions (67 % and 75 %) and absent MEAL systems; Adjumani scores best at 28 % but on a
+  small sample, with 80 % reporting no environmental plan.
+- Very-high-risk districts named: Kiryandongo, Madi Okollo, Terego, Yumbe, Lamwo.
+
+**Design implication**: in the Adjumani zone the last mile is the weak link, so lead time has
+to be budgeted for slow dissemination, and the trigger should lean on the long-lead lake-level
+signal rather than a short-fuse forecast.
 
 ## 5. National disaster-loss data
 
