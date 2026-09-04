@@ -27,11 +27,18 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.constants import GLOFAS_PIXEL_LONLAT, ZONES
 from src.frameworks import EXTERNAL, PROGRAMMES
 
+ZONE_COL = {
+    "teso_kyoga": "#2a78d6",
+    "elgon": "#e34948",
+    "karamoja": "#eda100",
+    "adjumani": "#4a3aa7",
+}
+
 ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "3"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "4"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -62,6 +69,111 @@ def table(df: pd.DataFrame, fmt: dict | None = None) -> str:
     return f'<div class="tw"><table><thead><tr>{cols}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
 
 
+# Rating vocabulary for the "proposed forecast" column (status colours, never reused for series)
+RATING = {
+    "good": ("good", "rate-good"),
+    "promising": ("promising, unvalidated", "rate-mid"),
+    "weak": ("weak", "rate-weak"),
+}
+
+# One row per zone tier: regime, the forecast we propose, its rating, and whether the
+# satellite backstop applies. Numbers come from the results page analyses.
+ZONE_STATUS = [
+    (
+        "teso_kyoga",
+        "tier 1",
+        "Riverine — Akokoro river (Katakwi, Amuria, Kapelebyong)",
+        "GloFAS G5196 ensemble probability of exceeding a return-period flow, 3–14 day lead; aligned with the IFRC EAP form",
+        "good",
+        "Yes — FloodScan registers 87 % of events (AUC 0.75)",
+        "Discharge–extent relationship drifted after 2013; needs a third opinion (DWRM gauge or Google Flood Hub) before it carries an action trigger.",
+    ),
+    (
+        "teso_kyoga",
+        "tier 2",
+        "Wetland fill downstream — Awoja / Lake Bisina (Soroti, Ngora, Serere)",
+        "Same G5196 signal read 3–4 weeks later, or the observed extent itself",
+        "promising",
+        "Yes — every dated event registers (AUC 0.69)",
+        "Lagged relationship is weaker than upstream; may end up observation-led.",
+    ),
+    (
+        "elgon",
+        "tier 1",
+        "Flash floods and landslides on the slopes (9 districts)",
+        "Rainfall forecast (CHIRPS-GEFS / ECMWF) with an antecedent-wetness condition, 1–5 day lead",
+        "weak",
+        "No — 5 of 9 districts satellite-blind, 13 % of events register. Backstop must be gauge- or report-based (FAO/OPM stations, DTM, OPM)",
+        "Precision stays under 15 % at any threshold; readiness-tier signal only.",
+    ),
+    (
+        "elgon",
+        "tier 2",
+        "Lowland riverine and wetland — Manafwa / Mpologoma / Awoja (Butaleja, Pallisa, Kumi, Bukedea, Budaka, Kibuku)",
+        "Elgon rainfall with a lag, or none — trigger on observed extent; GloFAS Manafwa point fails hydrology",
+        "promising",
+        "Yes — 72 % of events register (AUC 0.65; Butaleja 0.86)",
+        "Forecast leg untested; the observational leg is the strong one here.",
+    ),
+    (
+        "karamoja",
+        "tier 1",
+        "Flash floods (9 districts)",
+        "Rainfall forecast with antecedent wetness, 1–5 day lead; sub-zoning by basin likely",
+        "weak",
+        "Partial — 3 of 9 districts blind, 11 % of events register; mostly report-based",
+        "Same limits as the Elgon slopes; DRC covers Moroto, Napak, Amudat.",
+    ),
+    (
+        "adjumani",
+        "tier 1",
+        "Albert Nile bank — two regimes: lake backwater and local tributary flash floods (Adjumani, Moyo, Obongi)",
+        "Lake Victoria → Kyoga → Albert level chain for the slow regime (months of lead); rainfall for the flash regime",
+        "promising",
+        "No — none of 36 events register. Backstop must be a river gauge (Pakwach, Laropi) or reports",
+        "Lake-driven floods of 2020, 2021, 2024 all sat above the 90th percentile of lake level, but that is three events and the Albert altimetry starts in 2016.",
+    ),
+    (
+        "adjumani",
+        "tier 2",
+        "Lake Albert shore and upper Albert Nile backwater (Pakwach, Nebbi, Madi Okollo)",
+        "Lake Albert level with the same upstream chain",
+        "promising",
+        "No — none of 39 events register; CEMS confirms lakeshore flooding is invisible to FloodScan",
+        "Cleanest lake-level case (Pakwach 2020), still few events to validate on.",
+    ),
+]
+
+
+def zone_status_table() -> str:
+    rows = []
+    for key, tier, regime, forecast, rating, backstop, note in ZONE_STATUS:
+        z = ZONES[key]
+        col = ZONE_COL[key]
+        swatch = (
+            f'<span class="sw sw-t1" style="background:{col}"></span>'
+            if tier == "tier 1"
+            else f'<span class="sw sw-t2" style="border-color:{col};background:{col}22"></span>'
+        )
+        label, cls = RATING[rating]
+        rows.append(
+            "<tr>"
+            f"<td class='zn'>{swatch}<strong>{e(z.label.split(' (')[0])}</strong><br><span class='tier'>{e(tier)}</span></td>"
+            f"<td>{e(regime)}</td>"
+            f"<td class='{cls}'><span class='pill'>{e(label)}</span> {e(forecast)}<br><span class='fn'>{e(note)}</span></td>"
+            f"<td>{e(backstop)}</td>"
+            "</tr>"
+        )
+    head = "<tr><th>Zone</th><th>Flooding regime</th><th>Proposed forecast</th><th>Observational backstop (FloodScan) applicable?</th></tr>"
+    legend = (
+        "<p class='fn'>Forecast rating: <span class='pill rate-good'>good</span> a validated signal with usable lead time · "
+        "<span class='pill rate-mid'>promising, unvalidated</span> a real signal with too few events or too short a record to calibrate on · "
+        "<span class='pill rate-weak'>weak</span> readiness-tier at best, high false-alarm rate. "
+        "Backstop = whether FloodScan flood extent sees the events that were recorded there (results page).</p>"
+    )
+    return f'<div class="tw status"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>{legend}'
+
+
 def coverage_page() -> str:
     shutil.copy(OUT / "zones_coverage_map.png", PAGES / "coverage" / "zones_coverage_map.png")
     parts = [
@@ -74,6 +186,9 @@ def coverage_page() -> str:
         "<figcaption>Backdrop: share of Oct–Dec seasons 1998–2025 with FloodScan flooding (SFED ≥ 0.05), clipped to Uganda. "
         "Zones: solid = core districts, dashed = second tier (same driver, different flood regime, different indicator). Hatched: other organisations' "
         "flood AA districts. Triangles: GloFAS reporting points (filled = G5196, calibrated).</figcaption></figure>",
+        "<h2>At a glance</h2>",
+        "<p>What each zone is for, what would trigger it, and whether the satellite backstop can be trusted there.</p>",
+        zone_status_table(),
         "<h2>The zones</h2>",
     ]
     for z in ZONES.values():

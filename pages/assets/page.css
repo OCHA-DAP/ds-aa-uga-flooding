@@ -16,3 +16,19 @@
 table { border-collapse: collapse; font: 400 13.5px/1.4 Roboto, sans-serif; min-width: 640px; }
 th, td { text-align: left; padding: 6px 10px; border-bottom: 1px solid #e6e6e6; white-space: nowrap; }
 th { background: #f4f4f4; font-weight: 500; }
+
+/* At-a-glance status table under the coverage map */
+.status table { min-width: 720px; }
+.status th, .status td { white-space: normal; vertical-align: top; }
+.status td.zn { white-space: nowrap; min-width: 150px; }
+.status .tier { color: #555; font-size: 12px; }
+.sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 8px; vertical-align: -2px; }
+.sw-t1 { border: 1px solid rgba(0,0,0,.15); }
+.sw-t2 { border: 2px dashed; box-sizing: border-box; }
+.pill { display: inline-block; font: 500 11.5px/1.3 Roboto, sans-serif; padding: 2px 8px; border-radius: 10px; margin-right: 6px; color: #fff; }
+.rate-good .pill, .pill.rate-good { background: #007a3d; }
+.rate-mid .pill,  .pill.rate-mid  { background: #b86e00; }
+.rate-weak .pill, .pill.rate-weak { background: #c0392b; }
+td.rate-good { box-shadow: inset 4px 0 0 #007a3d; }
+td.rate-mid  { box-shadow: inset 4px 0 0 #b86e00; }
+td.rate-weak { box-shadow: inset 4px 0 0 #c0392b; }
