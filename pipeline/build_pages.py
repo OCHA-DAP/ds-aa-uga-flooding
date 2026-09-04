@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "8"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "9"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -112,8 +112,8 @@ ZONE_STATUS = [
         "Flash floods and landslides on the slopes (9 districts)",
         "Rainfall forecast + antecedent wetness, 1–5 d lead",
         "weak",
-        "no",
-        "extent is negligible, but population-weighted exposure discriminates impact years well (AUC 0.59 to 0.81). Event detection still needs the observed-rainfall OR-leg (+17 pts) and gauges/reports",
+        "partial",
+        "year-level only: extent is negligible and 5 of 9 districts are blind, but population-weighted exposure separates impact years well (AUC 0.81). For event detection it needs the observed-rainfall OR-leg (+17 pts) and gauges/reports",
         "Precision under 15 % at any threshold; readiness-tier only.",
         "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
     ),
@@ -224,9 +224,9 @@ def zone_status_table() -> str:
         "<p class='fn'>Forecast: <span class='pill rate-good'>good</span> validated signal with usable lead time · "
         "<span class='pill rate-mid'>promising, unvalidated</span> real signal, too few events or too short a record to calibrate · "
         "<span class='pill rate-weak'>weak</span> readiness-tier at best, high false-alarm rate. "
-        "Backstop: <span class='pill rate-good'>yes</span> FloodScan sees most recorded events · "
-        "<span class='pill rate-mid'>partial</span> some districts blind · "
-        "<span class='pill rate-weak'>no</span> satellite does not see the floods. Every zone also has the option of an observed-rainfall OR-leg (rain already fallen, over its return-period level) alongside the satellite, tested on the results page. "
+        "Backstop: <span class='pill rate-good'>yes</span> most recorded events register · "
+        "<span class='pill rate-mid'>partial</span> a minority register, or the signal is year-level rather than event-level · "
+        "<span class='pill rate-weak'>no</span> nothing registers at all, exposure included. Every zone also has the option of an observed-rainfall OR-leg (rain already fallen, over its return-period level) alongside the satellite, tested on the results page. "
         "Impact bars are scaled to the largest tier (Elgon slopes); they show what a trigger in that geography could in principle have "
         "been for, not what it would have caught — event totals split evenly across the districts named, all sources (see results page).</p>"
     )
@@ -300,8 +300,8 @@ def coverage_page() -> str:
         "Akokoro/Awoja system. A government multi-hazard early-warning centre for Teso is coming under the national roadmap.</li>"
         "<li><strong>Mount Elgon:</strong> IFRC EAP (Butaleja, Sironko, Bududa, Manafwa, Bulambuli); CRS/Caritas protocol at sub-county level in "
         "Butaleja and Bududa; FAO 2023. Kapchorwa, Kween, Bukwo, Namisindwa and Mbale have no trigger. Since 2025 the FAO/OPM project has put "
-        "hydro-climatic stations and a flood early-warning centre in the sub-region — the most promising backstop for the slopes, where no "
-        "satellite works.</li>"
+        "hydro-climatic stations and a flood early-warning centre in the sub-region — the most promising backstop for the slopes, where the "
+        "satellite gives a year-level signal but not event detection.</li>"
         "<li><strong>Karamoja:</strong> DRC (Moroto, Napak, Amudat — a flash-flood ladder inside a drought and conflict plan, activated Jul 2026 "
         "on the drought and conflict legs); Nabilatuk in the IFRC list. Kaabong, Karenga, Kotido, Abim and Nakapiripirit have no flood trigger. "
         "The FAO/WFP Karamoja drought plan activated separately in May 2026.</li>"
