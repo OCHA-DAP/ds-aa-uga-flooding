@@ -15,7 +15,8 @@ lays them out. Run after re-running any analysis:
   uv run python pipeline/build_pages.py
 """
 
-import html
+import html as html_mod
+import re
 import shutil
 import sys
 from datetime import date
@@ -38,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "9"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "10"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -56,7 +57,7 @@ FOOT = """<div class="note"><p>Generated {today} by <code>pipeline/build_pages.p
 
 
 def e(x) -> str:
-    return html.escape(str(x))
+    return html_mod.escape(str(x))
 
 
 def table(df: pd.DataFrame, fmt: dict | None = None) -> str:
@@ -345,6 +346,28 @@ def impact_coverage_table() -> str:
             "district-years with a record": lambda v: f"{v:,.0f}",
         },
     )
+
+
+def add_heading_anchors(html: str) -> str:
+    """Give every h2/h3 a stable id and a hover-revealed '#' link to it, so sections can be
+    linked to directly. Ids are slugs of the heading text, de-duplicated with a numeric suffix."""
+    seen: dict[str, int] = {}
+
+    def slug(text: str) -> str:
+        t = html_mod.unescape(re.sub(r"<[^>]+>", "", text)).lower()
+        t = re.sub(r"[^a-z0-9]+", "-", t).strip("-") or "section"
+        seen[t] = seen.get(t, 0) + 1
+        return t if seen[t] == 1 else f"{t}-{seen[t]}"
+
+    def repl(m: re.Match) -> str:
+        level, inner = m.group(1), m.group(2)
+        sid = slug(inner)
+        return (
+            f'<h{level} id="{sid}">{inner}'
+            f'<a class="anchor" href="#{sid}" aria-label="Link to this section">#</a></h{level}>'
+        )
+
+    return re.sub(r"<h([23])>(.*?)</h\1>", repl, html, flags=re.DOTALL)
 
 
 def exposure_table() -> str:
@@ -663,8 +686,8 @@ def results_page() -> str:
 
 
 def main() -> None:
-    (PAGES / "coverage" / "index.html").write_text(coverage_page())
-    (PAGES / "results" / "index.html").write_text(results_page())
+    (PAGES / "coverage" / "index.html").write_text(add_heading_anchors(coverage_page()))
+    (PAGES / "results" / "index.html").write_text(add_heading_anchors(results_page()))
     print("wrote pages/coverage/index.html and pages/results/index.html")
 
 
