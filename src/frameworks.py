@@ -224,6 +224,26 @@ PROGRAMMES: dict[str, Programme] = {
         source="FAO newsroom, 18 Jun 2026",
         relevance="A possible co-financing route for an OND 2026 activation; Uganda's share is not public.",
     ),
+    "drf_aa_twg": Programme(
+        key="drf_aa_twg",
+        org="Government of Uganda — national Disaster Risk Financing / Anticipatory Action Technical Working Group",
+        label="The coordination body every Uganda AA framework reports into",
+        scope="National",
+        what=(
+            "Members per the WFP South-West plan: DMS (met service), DWRM (water resources), OPM Department of "
+            "Disaster Preparedness and Management, Ministries of Local Government, Finance, Agriculture, Water and "
+            "Environment, the National Planning Authority, academia, FAO, URCS, World Vision and Action Against Hunger. "
+            "WFP's plan routes post-activation trigger reviews (lead time, hits, false alarms, misses) through DWRM and DMS "
+            "with WFP, FAO, URCS and OPM. CRS's protocol names URCS, FAO and WFP as members of the same group."
+        ),
+        status="Standing; convened the national AA dialogues of Nov 2022 and May 2024 and the 2026 roadmap",
+        source="WFP Southwest Flood AAP (Aug 2026) on institutional arrangements; CRS/Caritas protocol 2.1; CRS learning brief (Jul 2024)",
+        relevance=(
+            "Any OCHA/CERF trigger for Uganda should be tabled here, and the IFRC-form alignment for Teso is the natural "
+            "opening. Note the WFP plan's own admission that 'limited information at lower administrative levels' "
+            "constrains lead time and accuracy — the same gap our district-level analysis fills."
+        ),
+    ),
     "opm_fao_refugee_ews_assessment": Programme(
         key="opm_fao_refugee_ews_assessment",
         org="OPM with FAO, DRC and UNHCR",

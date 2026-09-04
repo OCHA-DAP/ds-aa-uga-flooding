@@ -118,6 +118,32 @@ Relevant to the Adjumani zone:
 to be budgeted for slow dissemination, and the trigger should lean on the long-lead lake-level
 signal rather than a short-fuse forecast.
 
+## 4c. Sweep of the shared documents for anything missed (4 Sep 2026)
+
+All eleven country-team documents were text-extracted and searched for FAO and for every
+other agency alongside trigger / threshold / anticipatory / activation / 2025 / 2026.
+
+- **FAO**: nothing beyond what is recorded. The CRS protocol lists FAO as a National AA TWG
+  member that "has made significant investments to improve AA in Uganda"; the WFP plan names
+  FAO as technical support to the post-activation trigger review. No FAO trigger, plan or
+  district list appears in any shared document; the FAO items we hold came from the web.
+- **WFP**: the El Niño retrospective records ECHO-funded cash to 5,000+ people in four
+  sub-counties of Kasese (UGX 645,000 per household) in the 2023-24 response — response, not
+  a trigger, and inside WFP's later South-West plan area.
+- **UNICEF**: water-purification support to 2,000 households in Ntoroko in 2024 — response.
+- **URCS**: the CRS protocol says URCS "has provided technical assistance to establish a
+  national flood anticipatory action plan (AAP)". No such government-owned national flood AAP
+  is described in any other shared or public source (the Anticipation Hub's Jan 2025 Uganda
+  floods case study is about the URCS EAP itself), so this most likely refers to the EAP
+  development; treated as unconfirmed.
+- **Coordination**: the national DRF/AA Technical Working Group and its membership are
+  described in the WFP plan and CRS protocol (now a `PROGRAMMES` entry).
+- **UHF note** (already used): its trigger-matrix recommendation — DMS-MWE rainfall warnings,
+  river thresholds, soil/slope indicators, evacuation orders, verified displacement — is the
+  country team's own framing of what the mechanism should read.
+
+Nothing in the shared documents changes the coverage picture or contradicts the web record.
+
 ## 5. National disaster-loss data
 
 DesInventar Uganda (<https://www.desinventar.net/DesInventar/profiletab.jsp?countrycode=uga>):
