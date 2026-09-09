@@ -141,6 +141,52 @@ EXTERNAL: dict[str, ExternalFramework] = {
         source="DRC Karamoja Anticipatory Action Plan AAP2026KS (country team share; dev blob raw/external_frameworks/)",
         verified=True,
     ),
+    "fao_elgon_aap": ExternalFramework(
+        key="fao_elgon_aap",
+        org="FAO",
+        label="Mt Elgon Flood AAP (draft, 7 Sep 2026)",
+        districts=("Bududa", "Bulambuli", "Sironko", "Manafwa", "Mbale", "Butaleja", "Namisindwa"),
+        trigger=(
+            "Three triggers. T1 seasonal: ICPAC forecast '>50% of long-term mean rainfall' for MAM and OND, "
+            "30-90 day lead. T2 immediate: GloFAS >=60% probability of a 5-year return-period flood affecting "
+            ">1,000 households, 5-day lead. T3 landslide: cumulative rainfall >100 mm over 3 days AND soil-moisture "
+            "saturation >80%, 1-3 day lead. Monitoring indicators: river discharge and water levels, rainfall "
+            "intensity, soil moisture index."
+        ),
+        status=(
+            "Draft circulated 7 Sep 2026 by FAO Uganda and FAO SWALIM; 100,000 households, USD 150,000 readiness "
+            "and USD 1,530,000 activation, MAM and SOND seasons. Aimed at agrifood systems (crops, livestock, "
+            "post-harvest, grazing), not shelter or WASH."
+        ),
+        source="FAO_Uganda_Flood AAP for Elgon (docx, created 2026-09-07; country team share, dev blob raw/external_frameworks/)",
+        verified=True,
+        notes=(
+            (
+                "This supersedes our earlier finding that FAO had no flood framework with a published trigger "
+                "anywhere in Uganda. It is a draft, so the numbers may still move."
+            ),
+            (
+                "T2 reuses the IFRC/URCS EAP formulation verbatim, but applied to Mt Elgon, where GloFAS has no "
+                "usable point: the only reporting point in the sub-region, Manafwa at Butaleja, has a modified KGE "
+                "of -10.6 against its station record, and there are no upper-reach points on the slopes at all."
+            ),
+            (
+                "T3 backtested against IMERG 1998-2026 (analysis/fao_elgon_triggers.py): as a district mean the "
+                "100 mm / 3-day threshold is met 0.6 times a year and catches none of the 40 major events; at the "
+                "wettest pixel it fires 16 times a year and catches 40%. The document does not say which scale it "
+                "means, and the answer differs by an order of magnitude."
+            ),
+            (
+                "T1's wording is ambiguous: '>50% of long-term mean rainfall' read literally is a drought "
+                "threshold that is met almost every season; ICPAC's tercile products suggest '>50% probability of "
+                "above-normal rainfall' is intended."
+            ),
+            (
+                "Overlaps our Elgon zone almost exactly: six of the seven districts are our tier 1, and Butaleja "
+                "is our tier 2. Only Kapchorwa, Kween and Bukwo in our tier 1 are outside it."
+            ),
+        ),
+    ),
     "fao_2023": ExternalFramework(
         key="fao_2023",
         org="FAO",
@@ -167,8 +213,8 @@ EXTERNAL: dict[str, ExternalFramework] = {
         verified=True,
         notes=(
             (
-                "Still no FAO flood framework anywhere in Uganda with a published trigger (indicator, threshold, "
-                "lead time) as of Sep 2026 — the only documented flood trigger in the country is the URCS/IFRC one."
+                "Superseded on 7 Sep 2026 by FAO's draft Mt Elgon Flood AAP (see `fao_elgon_aap`), which does "
+                "publish triggers. Until then the only documented flood trigger in Uganda was the URCS/IFRC one."
             ),
         ),
     ),
@@ -191,8 +237,10 @@ PROGRAMMES: dict[str, Programme] = {
         status="Mar 2025 - Mar 2026, closed; results dialogue at OPM Jun 2026",
         source="allAfrica, 5 Jun 2026 https://allafrica.com/stories/202606050689.html",
         relevance=(
-            "The 10 stations sit in the two sub-regions where our Elgon tier 1 has no satellite signal and needs a "
-            "gauge- or report-based backstop. Ask FAO/OPM whether the readings are accessible and at what latency."
+            "The 10 stations sit in the two sub-regions where our Elgon tier 1 has no event-level satellite signal and needs a "
+            "gauge- or report-based backstop, and they are almost certainly the monitoring behind the draft Mt Elgon "
+            "Flood AAP's river-discharge and soil-moisture indicators. Ask FAO/OPM whether the readings are accessible "
+            "and at what latency."
         ),
     ),
     "gou_aa_roadmap": Programme(

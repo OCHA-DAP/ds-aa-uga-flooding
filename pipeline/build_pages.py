@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "10"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "11"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -115,7 +115,8 @@ ZONE_STATUS = [
         "weak",
         "partial",
         "year-level only: extent is negligible and 5 of 9 districts are blind, but population-weighted exposure separates impact years well (AUC 0.81). For event detection it needs the observed-rainfall OR-leg (+17 pts) and gauges/reports",
-        "Precision under 15 % at any threshold; readiness-tier only.",
+        "Precision under 15 % at any threshold; readiness-tier only. FAO's draft Mt Elgon AAP proposes the same "
+        "rainfall-plus-soil-moisture design here \u2014 coordinate rather than duplicate.",
         "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
     ),
     (
@@ -299,7 +300,8 @@ def coverage_page() -> str:
         "<h2>Coverage against our zones</h2><ul>"
         "<li><strong>Teso / Kyoga:</strong> IFRC EAP (Katakwi, Amuria, Kumi, Ngora), FAO 2023 (Katakwi). No standing riverine trigger on the "
         "Akokoro/Awoja system. A government multi-hazard early-warning centre for Teso is coming under the national roadmap.</li>"
-        "<li><strong>Mount Elgon:</strong> IFRC EAP (Butaleja, Sironko, Bududa, Manafwa, Bulambuli); CRS/Caritas protocol at sub-county level in "
+        "<li><strong>Mount Elgon:</strong> now the most crowded zone in the country. FAO\u2019s draft Mt Elgon Flood AAP (7 Sep 2026) covers seven "
+        "districts with three published triggers and a USD 1.68 M envelope; IFRC EAP (Butaleja, Sironko, Bududa, Manafwa, Bulambuli); CRS/Caritas protocol at sub-county level in "
         "Butaleja and Bududa; FAO 2023. Kapchorwa, Kween, Bukwo, Namisindwa and Mbale have no trigger. Since 2025 the FAO/OPM project has put "
         "hydro-climatic stations and a flood early-warning centre in the sub-region — the most promising backstop for the slopes, where the "
         "satellite gives a year-level signal but not event detection.</li>"
@@ -368,6 +370,27 @@ def add_heading_anchors(html: str) -> str:
         )
 
     return re.sub(r"<h([23])>(.*?)</h\1>", repl, html, flags=re.DOTALL)
+
+
+def fao_trigger_table() -> str:
+    d = pd.read_csv(OUT / "fao_elgon_triggers.csv")
+    d = d[(d.scope == "any of the 7 districts") & (d.events == "major")]
+    show = d[["rule", "per_year", "recall", "precision"]].rename(
+        columns={
+            "rule": "reading of Trigger 3",
+            "per_year": "activations per year",
+            "recall": "major events caught",
+            "precision": "activations with an event",
+        }
+    )
+    return table(
+        show,
+        {
+            "activations per year": lambda v: f"{v:.1f}",
+            "major events caught": lambda v: f"{v:.0%}",
+            "activations with an event": lambda v: f"{v:.0%}",
+        },
+    )
 
 
 def exposure_table() -> str:
@@ -488,6 +511,7 @@ def results_page() -> str:
         "cems_pass.png",
         "exposure_timeseries.png",
         "backstop_options.png",
+        "fao_elgon_triggers.png",
     ):
         shutil.copy(OUT / f, PAGES / "results" / f)
     cov = pd.read_csv(OUT / "teso_glofas_coverage.csv")
@@ -641,6 +665,44 @@ def results_page() -> str:
         "major events. Loosening to a 2-year level buys little (Elgon slopes 20 % to 22 %, Karamoja unchanged at 31 %) while raising "
         "activations from about 1.7 to 2.6 a year. An observational backstop is a safety net against the worst misses, not a second trigger, "
         "and it should be described that way to the fund.</p>",
+        "<h2>FAO\u2019s draft Mt Elgon triggers, backtested</h2>",
+        "<p>FAO Uganda and FAO SWALIM circulated a draft <strong>Mt Elgon Flood Anticipatory Action Plan</strong> on "
+        "7 September 2026 covering Bududa, Bulambuli, Sironko, Manafwa, Mbale, Butaleja and Namisindwa \u2014 100,000 "
+        "households, USD 150,000 readiness and USD 1.53 M activation, MAM and SOND. Six of its seven districts are our "
+        "Elgon tier 1 and the seventh, Butaleja, is our tier 2, so its three triggers are worth testing against the same "
+        "record we have used throughout.</p>",
+        "<ul>"
+        "<li><strong>T1, seasonal:</strong> ICPAC forecast \u201c&gt;50 % of long-term mean rainfall\u201d for MAM and OND, "
+        "30\u201390 day lead. Read literally this is a drought threshold that is met almost every season; ICPAC\u2019s "
+        "tercile products suggest \u201c&gt;50 % probability of above-normal rainfall\u201d is intended. Worth clarifying "
+        "before it is calibrated.</li>"
+        "<li><strong>T2, immediate:</strong> GloFAS \u226560 % probability of a 5-year return-period flood affecting more "
+        "than 1,000 households, 5-day lead \u2014 the IFRC/URCS formulation applied to Mt Elgon. The difficulty is that "
+        "GloFAS has no usable point there: the only reporting point in the sub-region, Manafwa at Butaleja, scores a "
+        "modified KGE of \u221210.6 against its own station record, and there are no upper-reach points on the slopes at "
+        "all. The formulation is sound; the sub-region cannot currently supply it.</li>"
+        "<li><strong>T3, landslide:</strong> cumulative rainfall above 100 mm over 3 days with soil-moisture saturation "
+        "above 80 %, 1\u20133 day lead \u2014 directly testable, and the one aimed at the hazard that kills on these "
+        "slopes.</li></ul>",
+        '<figure><img src="fao_elgon_triggers.png" alt="Histogram of 3-day rainfall against FAO\u2019s 100 mm threshold, and a recall-versus-activations trade-off curve">'
+        "<figcaption>Left: where the 100 mm threshold sits in the 1998\u20132026 IMERG record, at district-mean and "
+        "wettest-pixel scale. Right: major-event recall and activations per year across candidate thresholds.</figcaption></figure>",
+        fao_trigger_table(),
+        "<p><strong>Reading:</strong> everything turns on a detail the document does not state \u2014 whether 100 mm is an "
+        "areal average or a point reading. As a <em>district mean</em> the threshold is met 0.6 times a year and catches "
+        "<strong>none</strong> of the 40 major events in the record. At the <em>wettest pixel</em>, closer to what a rain "
+        "gauge on a slope would record, it fires 16 times a year and catches 40 % \u2014 too often for a plan with a "
+        "USD 1.53 M activation budget. Adding the soil-moisture condition halves the activations and costs little recall, "
+        "so the condition is doing useful work; but no reading of the threshold gives both a tolerable activation rate and "
+        "meaningful recall.</p>",
+        "<p><strong>What we would suggest to FAO.</strong> First, state the spatial scale and the rainfall product, because "
+        "the same number means very different things across them. Second, at an activation rate of about four a year, a "
+        "district-mean threshold near 70 mm catches 22 % of major events where the pixel-based 130 mm catches 10 % \u2014 "
+        "so the areal average is the better statistic once it is set at the right level. Third, the ceiling is low either "
+        "way: this is the same limit our own rainfall work ran into on these slopes, and it argues for T3 being a readiness "
+        "trigger with T2 or a gauge carrying the action decision. Finally, IMERG underestimates extreme rainfall in "
+        "mountainous terrain, so a threshold calibrated on gauge data will not transfer to satellite monitoring unchanged \u2014 "
+        "whichever product operates the trigger should be the one it is calibrated on.</p>",
         "<h2>A second witness: Copernicus EMS rapid mapping</h2>",
         "<p>The team's CEMS flood archive holds every Copernicus EMS rapid-mapping flood activation since 2012 as harmonised polygons "
         "with acquisition dates. Uganda has three: EMSR438 (May 2020, the East Africa rains; three areas of interest with observed "
