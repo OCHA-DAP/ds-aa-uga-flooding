@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "12"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "13"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -313,6 +313,19 @@ def coverage_page() -> str:
         "<li><strong>Rwenzori (outside our zones):</strong> WFP's four-district plan, IFRC (Kasese, Ntoroko), and the other half of the FAO/OPM "
         "station network.</li></ul>"
     )
+    parts.append(
+        "<h2>Harmonising triggers, area by area</h2>"
+        "<p>The same information organised by geography rather than by organisation, including the areas we are not "
+        "proposing to cover. This is the view for the national Disaster Risk Financing and Anticipatory Action working "
+        "group: who already triggers where, on what, and where two triggers point at the same districts with different "
+        "instruments.</p>"
+    )
+    parts.append(harmonisation_table())
+    parts.append(
+        "<p class='fn'>Districts per area are ours where we have a zone, and the conventional sub-region otherwise. "
+        "Overlap counts are computed from the framework registry, so they cannot drift from the per-organisation "
+        "sections above. Drought plans (FAO/WFP Karamoja, PRO-ACT) are excluded \u2014 different hazard.</p>"
+    )
     parts.append(FOOT.format(today=TODAY))
     return "".join(parts)
 
@@ -370,6 +383,128 @@ def add_heading_anchors(html: str) -> str:
         )
 
     return re.sub(r"<h([23])>(.*?)</h\1>", repl, html, flags=re.DOTALL)
+
+
+# Short form of each framework's trigger for the harmonisation table (full text is in the
+# per-framework sections above). Keyed to src/frameworks.py.
+SHORT_TRIGGER = {
+    "ifrc_eap": "GloFAS \u226560\u201370 % of a 5-yr RP flood, >1,000 hh \u00b7 5 d",
+    "wfp_sw": "SPI-1 over a 3/5-yr RP (15\u201330 d) \u00b7 7-day rainfall at the 90/95/99th pctl or per-district mm (7 d) \u00b7 same on 2 consecutive days (5 d)",
+    "crs_elgon": "DMS seasonal outlook (1 mo) \u00b7 DMS \u226570 % of a 5-yr RP flood or community indicators (7 d)",
+    "drc_karamoja": "Kospir River at 80\u201385 % and rising \u00b7 ~150 mm forecast in 24\u201348 h",
+    "fao_elgon_aap": "ICPAC seasonal (30\u201390 d) \u00b7 GloFAS \u226560 % of a 5-yr RP (5 d) \u00b7 rain >100 mm/3 d + soil moisture >80 % (1\u20133 d)",
+    "fao_2023": "seasonal outlook, one-off",
+}
+
+# Geography first, organisation second: the view needed to harmonise triggers. Areas are
+# district sets; who operates where is computed from src/frameworks.py so it cannot drift.
+HARMONISATION = [
+    (
+        "Teso / Lake Kyoga",
+        "teso_kyoga",
+        None,
+        "GloFAS G5196 return-period exceedance, 3\u201314 d",
+        "IFRC covers four of our six districts with the same instrument we propose. Agree one reporting point and one "
+        "threshold: Akokoro is the only defensible point in the sub-region, and thresholds have to be set in model "
+        "space. Nobody else operates here.",
+    ),
+    (
+        "Mount Elgon \u2014 slopes",
+        "elgon",
+        "core",
+        "rainfall + antecedent wetness, 1\u20135 d (readiness tier)",
+        "Three actors, one hazard, three instruments. FAO\u2019s draft T3 is the same rainfall-plus-soil-moisture design "
+        "we propose; CRS reads the DMS dashboard plus community indicators; IFRC applies GloFAS, which does not work "
+        "here. One rule with one owner would beat three, with FAO\u2019s station network as the shared observation "
+        "layer. Sebei \u2014 Kapchorwa, Kween and Bukwo, 138k affected and 181 deaths on record \u2014 is in "
+        "nobody\u2019s plan.",
+    ),
+    (
+        "Mount Elgon \u2014 lowlands",
+        "elgon",
+        "tier2",
+        "observed extent; lagged Elgon rainfall",
+        "Butaleja alone is covered by IFRC, CRS and FAO, while Pallisa, Kumi, Bukedea, Budaka and Kibuku have nothing "
+        "\u2014 and this is the tier where the satellite backstop actually works. The clearest rebalancing "
+        "opportunity in the country.",
+    ),
+    (
+        "Karamoja",
+        "karamoja",
+        None,
+        "rainfall + antecedent wetness, 1\u20135 d",
+        "DRC covers three of nine districts with a local river gauge inside a drought and conflict plan; the FAO/WFP "
+        "Karamoja plan is drought, a different hazard. Six districts have no flood trigger. DRC\u2019s "
+        "gauge-plus-forecast ladder is the model to extend rather than replace.",
+    ),
+    (
+        "Adjumani / Albert Nile",
+        "adjumani",
+        None,
+        "lake-level chain (months of lead); rainfall for the flash regime",
+        "Only Moyo, through the IFRC list, and no early-warning centre is planned for West Nile under the national "
+        "roadmap. No lake-level trigger exists anywhere in Uganda, so there is nothing to harmonise with: this is "
+        "greenfield, and the design should be shared with the Nile Basin Initiative and DWRM rather than with the AA "
+        "actors.",
+    ),
+    (
+        "Rwenzori / South-West",
+        None,
+        None,
+        "\u2014 outside our zones",
+        "The sharpest harmonisation case in the country, and not ours: WFP and IFRC both hold triggers over Kasese and "
+        "Ntoroko with different instruments (percentile rainfall versus GloFAS) and different thresholds. Worth "
+        "flagging to the DRF/AA working group even though we propose nothing here.",
+    ),
+    (
+        "Kampala and central",
+        None,
+        None,
+        "\u2014 outside our zones",
+        "IFRC only, for urban flash flooding. No overlap with our design.",
+    ),
+]
+RWENZORI = ("Kasese", "Ntoroko", "Bundibugyo", "Kisoro", "Bunyangabu", "Kabarole")
+
+
+def harmonisation_table() -> str:
+    from src.zones import zone_districts
+
+    rows = []
+    for area, zkey, tier, ours, note in HARMONISATION:
+        if zkey:
+            g = zone_districts(zkey)
+            ds = set(g[g.membership == tier].ADM2_EN) if tier else set(g.ADM2_EN)
+        elif area.startswith("Rwenzori"):
+            ds = set(RWENZORI)
+        else:
+            ds = {"Kampala"}
+        who = []
+        for key, fw in EXTERNAL.items():
+            overlap = sorted(ds & set(fw.districts))
+            if not overlap:
+                continue
+            tag = (
+                " (closed)" if key == "fao_2023" else (" (draft)" if key == "fao_elgon_aap" else "")
+            )
+            who.append(
+                f"<div class='who'><strong>{e(fw.org)}</strong>{tag} &mdash; {len(overlap)} of {len(ds)} districts"
+                f"<span class='fn'>{SHORT_TRIGGER.get(key, '')}</span></div>"
+            )
+        cell = "".join(who) if who else "<em>no trigger operates here</em>"
+        rows.append(
+            "<tr>"
+            f"<td class='zn'><strong>{area}</strong><br><span class='tier'>{len(ds)} district{'s' if len(ds) != 1 else ''}</span></td>"
+            f"<td>{cell}</td>"
+            f"<td>{e(ours)}</td>"
+            f"<td>{note}</td>"
+            "</tr>"
+        )
+    head = (
+        "<tr><th>Area</th><th>Existing triggers operating there</th><th>What we would add</th>"
+        "<th>Harmonisation note</th></tr>"
+    )
+    return f'<div class="tw harmon"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>'
 
 
 def fao_trigger_table() -> str:
