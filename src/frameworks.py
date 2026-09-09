@@ -167,8 +167,12 @@ EXTERNAL: dict[str, ExternalFramework] = {
             ),
             (
                 "T2 reuses the IFRC/URCS EAP formulation verbatim, but applied to Mt Elgon, where GloFAS has no "
-                "usable point: the only reporting point in the sub-region, Manafwa at Butaleja, has a modified KGE "
-                "of -10.6 against its station record, and there are no upper-reach points on the slopes at all."
+                "usable point. Judged on correlation rather than KGE (bias is handled by setting thresholds in model "
+                "space): the only reporting point in the sub-region, Manafwa at Butaleja, correlates 0.37 with its own "
+                "station record and at best 0.20 with observed flood extent in any of the seven districts, against 0.65 "
+                "and 0.49 for the Akokoro point we do trust. GloFAS also shows no forecast skill over climatology there "
+                "at any lead, which is the binding constraint for a 5-day trigger. No upper-reach points exist on the "
+                "slopes at all."
             ),
             (
                 "T3 backtested against IMERG 1998-2026 (analysis/fao_elgon_triggers.py): as a district mean the "

@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "11"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "12"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -677,10 +677,14 @@ def results_page() -> str:
         "tercile products suggest \u201c&gt;50 % probability of above-normal rainfall\u201d is intended. Worth clarifying "
         "before it is calibrated.</li>"
         "<li><strong>T2, immediate:</strong> GloFAS \u226560 % probability of a 5-year return-period flood affecting more "
-        "than 1,000 households, 5-day lead \u2014 the IFRC/URCS formulation applied to Mt Elgon. The difficulty is that "
-        "GloFAS has no usable point there: the only reporting point in the sub-region, Manafwa at Butaleja, scores a "
-        "modified KGE of \u221210.6 against its own station record, and there are no upper-reach points on the slopes at "
-        "all. The formulation is sound; the sub-region cannot currently supply it.</li>"
+        "than 1,000 households, 5-day lead \u2014 the IFRC/URCS formulation applied to Mt Elgon. The formulation is sound; "
+        "the sub-region cannot currently supply it. The test is correlation, not Kling-Gupta efficiency: KGE is dominated "
+        "by bias and variance ratio, and a biased model is perfectly usable once thresholds are set in model space, which "
+        "is exactly what we do for the Akokoro point at 1.7\u00d7 wet. On correlation, the only reporting point in the "
+        "sub-region, Manafwa at Butaleja, manages 0.37 against its own station record and at best <strong>0.20</strong> "
+        "against observed flood extent in any of the seven districts \u2014 against 0.65 and 0.49 for Akokoro. The unnamed "
+        "Mpologoma point is no better at 0.22. GloFAS also shows no forecast skill over climatology at Manafwa at any lead, "
+        "which is the binding constraint for a 5-day trigger, and there are no upper-reach points on the slopes at all.</li>"
         "<li><strong>T3, landslide:</strong> cumulative rainfall above 100 mm over 3 days with soil-moisture saturation "
         "above 80 %, 1\u20133 day lead \u2014 directly testable, and the one aimed at the hazard that kills on these "
         "slopes.</li></ul>",

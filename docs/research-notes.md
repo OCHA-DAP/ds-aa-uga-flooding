@@ -104,9 +104,14 @@ Kapchorwa, Kween and Bukwo in our tier 1 sit outside it. Full backtest:
 - **T1** read literally (">50 % of long-term mean rainfall") is a drought threshold met
   almost every season. ICPAC's tercile products suggest ">50 % probability of above-normal
   rainfall" is intended. Needs clarifying before calibration.
-- **T2** reuses the IFRC/URCS formulation, but Mt Elgon has no usable GloFAS point: Manafwa
-  at Butaleja scores a modified KGE of −10.6 against its station record and there are no
-  upper-reach points on the slopes. The formulation is sound, the sub-region cannot supply it.
+- **T2** reuses the IFRC/URCS formulation, but Mt Elgon has no usable GloFAS point. Judge it
+  on correlation, not KGE: KGE is dominated by bias and variance ratio, and a biased model is
+  fine once thresholds sit in model space (which is how we treat Akokoro at 1.7× wet).
+  Manafwa at Butaleja correlates 0.37 with its own station record and at best **0.20** with
+  observed flood extent in any of the seven districts; the unnamed Mpologoma point reaches
+  0.22. Akokoro, the point we do trust, is 0.65 and 0.49. GloFAS also has no forecast skill
+  over climatology at Manafwa at any lead, which is what actually binds a 5-day trigger, and
+  there are no upper-reach points on the slopes. Measured in `analysis/fao_elgon_triggers.py`.
 - **T3** is directly testable and the answer depends entirely on a detail the document does
   not state — whether 100 mm is an areal average or a point reading:
 

@@ -23,7 +23,12 @@ sub-region:
     at two readings of ">80%" — the 80th percentile of the local record, and a wet-season
     absolute floor. ERA5-Land volumetric soil water will replace the proxy when it lands.
 
-T1 and T2 are assessed qualitatively in the report (see docs/research-notes.md).
+T2 is assessed on the one thing that decides whether it can work: whether GloFAS discharge at
+the only reporting point in the sub-region tracks observed flooding there. Kling-Gupta
+efficiency is not the test to use — it is dominated by bias and variance ratio, and a biased
+model is fine once thresholds are set in model space (as they are for G5196, which runs 1.7x
+wet). Correlation is the test, so correlation is what is measured. T1 is assessed
+qualitatively in the report (docs/research-notes.md).
 
 Writes outputs/fao_elgon_triggers.csv and outputs/fao_elgon_triggers.png.
 Run:  uv run python analysis/fao_elgon_triggers.py
@@ -42,6 +47,8 @@ from analysis.backstop_options import score
 from analysis.exposure_vs_impact import dated_events_df
 from analysis.flash_flood_antecedent import api_index, pctl
 from src.constants import PROJECT_PREFIX
+from src.datasources import glofas
+from src.glofas_coverage import lagged_corr
 from src.skill_chain import rolling_sum
 from src.zones import load_adm2
 
@@ -141,6 +148,39 @@ def main() -> None:
                 f"  >={thr:3d} mm: {a.sum() / years:5.1f} activations/yr, "
                 f"major-event recall {sm['recall']:.0%}, precision {sm['precision']:.0%}"
             )
+
+    # --- T2: does GloFAS at the only Elgon point track observed flooding there? -----------
+    # G5220 Manafwa at Butaleja, LISFLOOD v4 pixel; and the unnamed fixed point on the Mpologoma.
+    print(
+        "\nT2 check - GloFAS reanalysis vs observed flood extent, correlation at best lag (Aug-Dec anomalies):"
+    )
+    ex = stratus.load_parquet_from_blob(
+        f"{PROJECT_PREFIX}/processed/exposure/floodscan_exposure_adm2_daily.parquet", stage="dev"
+    )
+    fs = stratus.load_parquet_from_blob(
+        f"{PROJECT_PREFIX}/processed/floodscan/floodscan_adm2_daily.parquet", stage="dev"
+    )
+    for label, (plat, plon) in {
+        "G5220 Manafwa at Butaleja": (0.925, 34.075),
+        "unnamed point on the Mpologoma": (0.775, 33.775),
+    }.items():
+        try:
+            dis = glofas.load_reanalysis_point(plat, plon).asfreq("D")
+        except Exception as err:  # noqa: BLE001 - reanalysis not downloaded is a skip, not a failure
+            print(f"  {label}: reanalysis unavailable ({err})")
+            continue
+        best = []
+        for d in FAO_DISTRICTS:
+            se = fs[fs.pcode == pc[d]].set_index("date")["mean"].asfreq("D")
+            sx = ex[ex.pcode == pc[d]].set_index("date")["exposure"].asfreq("D")
+            best.append((d, float(lagged_corr(dis, se).max()), float(lagged_corr(dis, sx).max())))
+        print(f"  {label} (mean {dis.mean():.0f} m3/s)")
+        for d, ce, cx in sorted(best, key=lambda t: -t[1]):
+            print(f"    {d:11s} extent {ce:+.2f}  exposure {cx:+.2f}")
+        print(
+            f"    -> best of any district: extent {max(b[1] for b in best):.2f}, "
+            f"versus 0.49 for Amuria at G5196, the point we do trust"
+        )
 
     fig, (ax, ax2) = plt.subplots(1, 2, figsize=(14, 5.2), gridspec_kw={"width_ratios": [1.1, 1]})
     ax.hist(
