@@ -49,3 +49,15 @@ td.rate-weak { box-shadow: inset 4px 0 0 #c0392b; }
 .page h2 .anchor:focus, .page h3 .anchor:focus { opacity: 1; }
 .page h2:target, .page h3:target { background: #fff6d9; box-shadow: -6px 0 0 #fff6d9, 6px 0 0 #fff6d9; }
 @media (hover: none) { .page h2 .anchor, .page h3 .anchor { opacity: .35; } }
+
+/* Harmonisation table: wrap freely, give the note column room */
+.harmon table { min-width: 860px; table-layout: fixed; width: 100%; }
+.harmon th, .harmon td { white-space: normal; vertical-align: top; }
+.harmon td.zn { white-space: normal; min-width: 0; }
+.harmon th:nth-child(1), .harmon td:nth-child(1) { width: 13%; }
+.harmon th:nth-child(2), .harmon td:nth-child(2) { width: 30%; }
+.harmon th:nth-child(3), .harmon td:nth-child(3) { width: 16%; }
+.harmon th:nth-child(4), .harmon td:nth-child(4) { width: 41%; }
+.harmon .fn { display: block; margin-top: 2px; color: #666; font-size: 12.5px; line-height: 1.45; }
+.harmon .who { margin-bottom: 9px; }
+.harmon .who:last-child { margin-bottom: 0; }
