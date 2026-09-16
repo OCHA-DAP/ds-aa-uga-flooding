@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "15"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "16"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -186,8 +186,68 @@ def tier_impact() -> dict[tuple[str, str], dict]:
     return out
 
 
+def fmt_district(name: str, flags: dict[str, list[str]]) -> str:
+    """District name, with a caution badge where the analyses flagged one."""
+    if name not in flags:
+        return f"<span class='dist'>{e(name)}</span>"
+    badges = "".join(f"<span class='flag f-{f.split()[0]}'>{e(f)}</span>" for f in flags[name])
+    return f"<span class='dist dist-flag'>{e(name)}{badges}</span>"
+
+
+def district_flags() -> dict[str, list[str]]:
+    """Per-district cautions, computed from the analyses rather than asserted.
+
+    Three flags, each meaning something a designer can act on:
+      no satellite signal  FloodScan 2-year extent under 1 % - the observational backstop
+                           cannot work in this district at all (floodscan_vs_impact.py)
+      thin record          fewer than 3 years with a recorded impact, so nothing can be
+                           validated there either way
+      weak gauge link      Teso only: GloFAS correlation with observed extent under 0.30,
+                           i.e. the gauge the zone is built on says little about this district
+    """
+    d = pd.read_csv(OUT / "floodscan_vs_impact_district.csv").set_index("district")
+    teso = pd.read_csv(OUT / "teso_glofas_coverage.csv").set_index("district")
+    zone_of = {dd: k for k, z in ZONES.items() for dd in z.core + z.tier2}
+    flags: dict[str, list[str]] = {}
+    for dd, key in zone_of.items():
+        f = []
+        if bool(d.blind.get(dd, False)):
+            f.append("no satellite signal")
+        if float(d.n_impact_years.get(dd, 0)) < 3:
+            f.append("thin record")
+        if key == "teso_kyoga" and float(teso.best_corr.get(dd, 1.0)) < 0.30:
+            f.append("weak gauge link")
+        if f:
+            flags[dd] = f
+    return flags
+
+
+TIER_RATIONALE = (
+    "<p><strong>What the tiers mean.</strong> A zone is one driver of flooding \u2014 one river, one massif, one lake "
+    "system. Within a zone the water can still arrive in two different ways, and the two need different indicators, so "
+    "each zone is split.</p>"
+    "<ul>"
+    "<li><strong>Tier 1</strong> is what the zone is for: the districts where the driver acts directly, and where the "
+    "trigger is designed. Teso tier 1 is the reach the gauge actually measures; the Elgon slopes are where the rain "
+    "falls and the hillsides fail; the Albert Nile bank is where the river tops out.</li>"
+    "<li><strong>Tier 2</strong> is the same driver arriving differently, and therefore read differently: the Awoja and "
+    "Bisina wetlands fill three to four weeks after the gauge peaks; the Elgon lowlands flood slowly for days after the "
+    "rain that triggered the landslides above them; the Lake Albert shore floods on lake stand rather than on rain. "
+    "Tier 2 is not a lower priority \u2014 the Elgon lowlands carry more recorded impact than Teso tier 1, and are the "
+    "only Elgon districts where the satellite backstop works.</li>"
+    "</ul>"
+    "<p>The split is drawn from evidence, not geography. Teso was settled by correlating GloFAS discharge at the "
+    "G5196 point against each district\u2019s observed flood extent: direct at lag 0 in tier 1, a 19\u201330 day lag in "
+    "tier 2, and thirteen districts ruled out entirely. Elgon was split after the impact record showed every lowland "
+    "flood year is also a slope flood year, while the flood regime, the satellite\u2019s ability to see it and the usable "
+    "indicator all differ between them. Adjumani was split because the record contains two distinct regimes, lake "
+    "backwater with months of lead and local tributary flash floods with none.</p>"
+)
+
+
 def zone_district_list() -> str:
     """Plain reference list of which districts sit in which zone and tier."""
+    flags = district_flags()
     rows = []
     for key, z in ZONES.items():
         col = ZONE_COL[key]
@@ -208,7 +268,7 @@ def zone_district_list() -> str:
                 f"<td class='zn'>{swatch}<strong>{e(z.label.split(' (')[0])}</strong>"
                 f"<br><span class='tier'>{tier}{' · ' + e(label) if tier != 'tier 1' else ''}</span></td>"
                 f"<td class='cnt'>{len(ds)}</td>"
-                f"<td>{e(', '.join(sorted(ds)))}</td>"
+                f"<td>{''.join(fmt_district(x, flags) for x in sorted(ds))}</td>"
                 "</tr>"
             )
     head = "<tr><th>Zone and tier</th><th>Districts</th><th>Which</th></tr>"
@@ -216,7 +276,15 @@ def zone_district_list() -> str:
     return (
         f'<div class="tw zlist"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>'
         f"<p class='fn'>{total} districts in total, of Uganda's 135. Names follow the CODAB admin-2 vintage used "
-        "throughout (FieldMaps).</p>"
+        "throughout (FieldMaps). Badges mark districts where the evidence is thinner than their neighbours\u2019, so "
+        "they warrant care in targeting: "
+        "<span class='flag f-no'>no satellite signal</span> FloodScan\u2019s 2-year extent there is under 1 %, so the "
+        "observational backstop cannot work in that district; "
+        "<span class='flag f-thin'>thin record</span> fewer than three years carry a recorded impact, so nothing can be "
+        "validated either way; "
+        "<span class='flag f-weak'>weak gauge link</span> in Teso only, the G5196 discharge correlates under 0.30 with "
+        "that district\u2019s observed flooding. All three are computed in <code>pipeline/build_pages.py</code> from the "
+        "results-page analyses.</p>"
     )
 
 
@@ -285,6 +353,7 @@ def coverage_page() -> str:
         "<p>What each zone is for, what would trigger it, and whether the satellite backstop can be trusted there.</p>",
         zone_status_table(),
         "<h2>Districts in each zone</h2>",
+        TIER_RATIONALE,
         zone_district_list(),
         "<h2>The zones</h2>",
     ]

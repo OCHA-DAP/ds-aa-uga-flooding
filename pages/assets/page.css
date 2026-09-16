@@ -67,3 +67,12 @@ td.rate-weak { box-shadow: inset 4px 0 0 #c0392b; }
 .zlist th, .zlist td { white-space: normal; vertical-align: top; }
 .zlist td.zn { white-space: nowrap; }
 .zlist td.cnt { text-align: right; width: 70px; color: #52514e; }
+
+/* District cautions in the zone list */
+.zlist .dist { display: inline-block; margin: 0 10px 3px 0; }
+.zlist .dist-flag { font-weight: 500; }
+.flag { display: inline-block; margin-left: 5px; padding: 1px 6px; border-radius: 9px;
+        font: 500 10.5px/1.5 Roboto, sans-serif; vertical-align: 1px; white-space: nowrap; }
+.f-no   { background: #fde2e0; color: #8f2a20; }
+.f-thin { background: #fdf0d5; color: #7a5600; }
+.f-weak { background: #e6e6f5; color: #3b357a; }
