@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "16"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "17"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -186,12 +186,17 @@ def tier_impact() -> dict[tuple[str, str], dict]:
     return out
 
 
+# Subtle markers rather than badges: a district name should read as a district name.
+FLAG_MARK = {"no satellite signal": "*", "thin record": "\u2020", "weak gauge link": "\u2021"}
+
+
 def fmt_district(name: str, flags: dict[str, list[str]]) -> str:
-    """District name, with a caution badge where the analyses flagged one."""
+    """District name, with a small superscript marker where the analyses flagged a caution."""
     if name not in flags:
         return f"<span class='dist'>{e(name)}</span>"
-    badges = "".join(f"<span class='flag f-{f.split()[0]}'>{e(f)}</span>" for f in flags[name])
-    return f"<span class='dist dist-flag'>{e(name)}{badges}</span>"
+    marks = "".join(FLAG_MARK[f] for f in flags[name])
+    tip = e("; ".join(flags[name]))
+    return f"<span class='dist'>{e(name)}<sup class='mk' title='{tip}'>{marks}</sup></span>"
 
 
 def district_flags() -> dict[str, list[str]]:
@@ -276,15 +281,12 @@ def zone_district_list() -> str:
     return (
         f'<div class="tw zlist"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>'
         f"<p class='fn'>{total} districts in total, of Uganda's 135. Names follow the CODAB admin-2 vintage used "
-        "throughout (FieldMaps). Badges mark districts where the evidence is thinner than their neighbours\u2019, so "
-        "they warrant care in targeting: "
-        "<span class='flag f-no'>no satellite signal</span> FloodScan\u2019s 2-year extent there is under 1 %, so the "
-        "observational backstop cannot work in that district; "
-        "<span class='flag f-thin'>thin record</span> fewer than three years carry a recorded impact, so nothing can be "
-        "validated either way; "
-        "<span class='flag f-weak'>weak gauge link</span> in Teso only, the G5196 discharge correlates under 0.30 with "
-        "that district\u2019s observed flooding. All three are computed in <code>pipeline/build_pages.py</code> from the "
-        "results-page analyses.</p>"
+        "throughout (FieldMaps). Markers flag districts where the evidence is thinner than their neighbours\u2019, so "
+        "they warrant care in targeting \u2014 <sup class='mk'>*</sup> FloodScan\u2019s 2-year extent is under 1 %, so "
+        "the observational backstop cannot work there; <sup class='mk'>\u2020</sup> fewer than three years carry a "
+        "recorded impact, so nothing can be validated either way; <sup class='mk'>\u2021</sup> in Teso only, G5196 "
+        "discharge correlates under 0.30 with that district\u2019s observed flooding. Computed from the results-page "
+        "analyses.</p>"
     )
 
 
