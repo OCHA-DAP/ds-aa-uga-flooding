@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "14"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "15"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -186,6 +186,40 @@ def tier_impact() -> dict[tuple[str, str], dict]:
     return out
 
 
+def zone_district_list() -> str:
+    """Plain reference list of which districts sit in which zone and tier."""
+    rows = []
+    for key, z in ZONES.items():
+        col = ZONE_COL[key]
+        for tier, label, ds in (
+            ("tier 1", z.label.split(" (")[0], z.core),
+            ("tier 2", z.tier2_label, z.tier2),
+            ("candidate", "still to be ruled in or out", z.candidate),
+        ):
+            if not ds:
+                continue
+            swatch = (
+                f'<span class="sw sw-t1" style="background:{col}"></span>'
+                if tier == "tier 1"
+                else f'<span class="sw sw-t2" style="border-color:{col};background:{col}22"></span>'
+            )
+            rows.append(
+                "<tr>"
+                f"<td class='zn'>{swatch}<strong>{e(z.label.split(' (')[0])}</strong>"
+                f"<br><span class='tier'>{tier}{' · ' + e(label) if tier != 'tier 1' else ''}</span></td>"
+                f"<td class='cnt'>{len(ds)}</td>"
+                f"<td>{e(', '.join(sorted(ds)))}</td>"
+                "</tr>"
+            )
+    head = "<tr><th>Zone and tier</th><th>Districts</th><th>Which</th></tr>"
+    total = sum(len(z.core) + len(z.tier2) + len(z.candidate) for z in ZONES.values())
+    return (
+        f'<div class="tw zlist"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>'
+        f"<p class='fn'>{total} districts in total, of Uganda's 135. Names follow the CODAB admin-2 vintage used "
+        "throughout (FieldMaps).</p>"
+    )
+
+
 def zone_status_table() -> str:
     imp = tier_impact()
     max_share = max(max(v["aff_share"], v["dea_share"]) for v in imp.values())
@@ -250,12 +284,18 @@ def coverage_page() -> str:
         "<h2>At a glance</h2>",
         "<p>What each zone is for, what would trigger it, and whether the satellite backstop can be trusted there.</p>",
         zone_status_table(),
+        "<h2>Districts in each zone</h2>",
+        zone_district_list(),
         "<h2>The zones</h2>",
     ]
     for z in ZONES.values():
         parts.append(
-            f"<h3>{e(z.label)}</h3><p><strong>Regime:</strong> {e(z.regime)}. <strong>Core:</strong> {e(', '.join(z.core))}."
-            + (f" <strong>Candidates:</strong> {e(', '.join(z.candidate))}." if z.candidate else "")
+            f"<h3>{e(z.label)}</h3><p><strong>Regime:</strong> {e(z.regime)}."
+            + (
+                f" <strong>Second tier:</strong> {e(z.tier2_label)} \u2014 {e(z.tier2_regime)}."
+                if z.tier2
+                else ""
+            )
             + (f"<br><em>{e(z.note)}</em>" if z.note else "")
             + "</p>"
         )

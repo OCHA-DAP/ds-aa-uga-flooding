@@ -61,3 +61,9 @@ td.rate-weak { box-shadow: inset 4px 0 0 #c0392b; }
 .harmon .fn { display: block; margin-top: 2px; color: #666; font-size: 12.5px; line-height: 1.45; }
 .harmon .who { margin-bottom: 9px; }
 .harmon .who:last-child { margin-bottom: 0; }
+
+/* Zone district reference list */
+.zlist table { min-width: 620px; }
+.zlist th, .zlist td { white-space: normal; vertical-align: top; }
+.zlist td.zn { white-space: nowrap; }
+.zlist td.cnt { text-align: right; width: 70px; color: #52514e; }
