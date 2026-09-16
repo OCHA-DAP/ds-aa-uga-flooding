@@ -189,3 +189,35 @@ DesInventar Uganda (<https://www.desinventar.net/DesInventar/profiletab.jsp?coun
 export mirrored to blob and parsed (`src/datasources/desinventar.py`); coverage ends 2021,
 2019 has no records. OPM/NECOC publishes annual State of Disaster reports (sectoral, not
 event-level) and monthly U-NIEWS bulletins to Jul 2024.
+
+
+## 6. Correction: FloodScan usability is rank-based, not absolute (16 Sep 2026)
+
+An earlier version of `analysis/floodscan_vs_impact.py` gated districts on **absolute**
+extent — a 2-year annual maximum under 1 % was labelled "blind" and treated as
+disqualifying. That was wrong. An operational threshold is a percentile or return period of
+the district's own record, so a district where FloodScan only ever reaches half a percent is
+perfectly usable provided those small peaks land on the days people actually flooded.
+
+The script now tests only rank-based quantities:
+
+- **events in the top fifth** — share of dated events whose window reaches the district's own
+  80th percentile (chance is 20 %); a district is usable at ≥30 %;
+- **flat** — over 95 % exactly-zero days, i.e. no distribution to take a percentile of;
+- **AUC** on annual maxima, as before (already rank-based).
+
+Event percentiles were also switched to **midrank**: with many tied zeros, "share strictly
+below" reported percentile 0 for any zero-valued day even where zero was the modal value,
+which is what produced the earlier "0 % of Adjumani events register".
+
+**What changed.** Usable districts per tier: Teso 3/3 and 3/3, Elgon slopes **5/9** (was
+"5 of 9 blind"), Elgon lowlands 6/6, Karamoja **6/9** (previously described as 11 % of events
+registering), Adjumani 0/3 and 0/3. Kapchorwa, Manafwa and Mbale on the slopes, and Abim,
+Kotido, Nakapiripirit and Napak in Karamoja, were wrongly written off. The districts that
+genuinely fail are Bududa, Bukwo and Kween (series essentially always zero), Sironko (floods
+do not land high in its own record), Moroto, and all of Adjumani.
+
+**What did not change.** Adjumani fails the rank-based test too (3 % and 10 % of events in the
+top fifth, against 20 % by chance), so the lake-level and gauge conclusion stands. The
+backstop-options and exposure analyses were already normalised per district — they use
+Weibull return periods and AUC — so their results are unaffected.

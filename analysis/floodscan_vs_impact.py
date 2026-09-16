@@ -8,7 +8,7 @@ recorded flood/landslide impact and years without:
     random non-impact year (0.5 = no relation, 1 = perfect separation);
   * hit rate — share of impact years in which the annual max reached the district's
     2-yr level (Weibull); precision — share of 2-yr years with a recorded impact;
-  * "blind" — the district's 2-yr level is below the 0.01 extent, i.e. FloodScan
+  * "flat" — the district's 2-yr level is below the 0.01 extent, i.e. FloodScan
     essentially never registers flooding there (mountain slopes).
 
 Event level: for day-dated impact events (DesInventar, EM-DAT, curated), the max SFED in
@@ -40,7 +40,10 @@ from src.zones import load_adm2, zone_districts
 
 OUT = Path(__file__).resolve().parent.parent / "outputs"
 YEARS = range(1998, 2026)
-BLIND_LEVEL = 0.01
+FLAT_ZERO_SHARE = (
+    0.95  # above this share of exactly-zero days there is barely a distribution to threshold
+)
+EVENT_TOP_PCTL = 80  # "reaches the district's own top fifth"
 ZONE_COL = {
     "teso_kyoga": "#2a78d6",
     "elgon": "#e34948",
@@ -79,7 +82,8 @@ def district_year_scores(fs: pd.DataFrame, t: pd.DataFrame, adm: pd.Series) -> p
                 district=name,
                 n_impact_years=int(imp.sum()),
                 sfed_2yr=thr2,
-                blind=thr2 < BLIND_LEVEL,
+                zero_share=float((s.dropna() <= 0).mean()),
+                flat=bool((s.dropna() <= 0).mean() > FLAT_ZERO_SHARE),
                 auc=auc(pos, neg),
                 hit_rate_2yr=hit,
                 precision_2yr=prec,
@@ -103,6 +107,7 @@ def event_percentiles(fs: pd.DataFrame, adm: pd.Series) -> pd.DataFrame:
     )
     allev = allev[allev.start.dt.year >= 1998]
     series = {p: fs[fs.pcode == p].set_index("date")["mean"].sort_index() for p in adm.index}
+    ranks = {adm[p]: s.rank(pct=True) for p, s in series.items()}
     zone_of = {dd: k for k, z in ZONES.items() for dd in z.core + z.tier2}
     rows = []
     for _, e in allev.iterrows():
@@ -114,6 +119,8 @@ def event_percentiles(fs: pd.DataFrame, adm: pd.Series) -> pd.DataFrame:
         if win.empty:
             continue
         v = float(win.max())
+        # Midrank percentile. With many tied zeros, "share strictly below" reads any zero day
+        # as percentile 0 even when zero is the modal value, which understates badly.
         rows.append(
             dict(
                 event_id=e.event_id,
@@ -123,10 +130,16 @@ def event_percentiles(fs: pd.DataFrame, adm: pd.Series) -> pd.DataFrame:
                 deaths=e.deaths,
                 start=e.start,
                 sfed_max=v,
-                sfed_pctl=float((s < v).mean() * 100),
+                sfed_pctl=float(ranks[e.district].loc[win.index].max() * 100),
             )
         )
     return pd.DataFrame(rows)
+
+
+def event_top_share(evp: pd.DataFrame) -> pd.Series:
+    """Per district: share of dated events whose window reaches the district's own 80th
+    percentile. Chance is 0.20, so values near or below that mean no usable signal."""
+    return evp.groupby("district").sfed_pctl.apply(lambda x: float((x >= EVENT_TOP_PCTL).mean()))
 
 
 def main() -> None:
@@ -142,15 +155,20 @@ def main() -> None:
     sc.to_csv(OUT / "floodscan_vs_impact_district.csv", index=False)
     evp = event_percentiles(fs, adm)
     evp.to_csv(OUT / "floodscan_vs_impact_events.csv", index=False)
+    top = event_top_share(evp)
+    sc["events_in_top_fifth"] = sc.district.map(top)
+    sc["n_dated_events"] = sc.district.map(evp.groupby("district").size())
+    sc["usable"] = (sc.events_in_top_fifth >= 0.30) & ~sc.flat
+    sc.to_csv(OUT / "floodscan_vs_impact_district.csv", index=False)
 
     pd.set_option("display.width", 200)
-    ok = sc[(sc.n_impact_years >= 3) & ~sc.blind]
+    ok = sc[(sc.n_impact_years >= 3) & ~sc.flat]
     print(
-        f"districts with >=3 impact years: {int((sc.n_impact_years >= 3).sum())}, of which FloodScan-blind: "
-        f"{int(sc[(sc.n_impact_years >= 3)].blind.sum())}"
+        f"districts with >=3 impact years: {int((sc.n_impact_years >= 3).sum())}, of which flat series: "
+        f"{int(sc[(sc.n_impact_years >= 3)].flat.sum())}"
     )
     print(
-        "\nby coverage class (districts with >=3 impact years, not blind): median AUC / hit rate / precision"
+        "\nby coverage class (districts with >=3 impact years, not flat): median AUC / hit rate / precision"
     )
     print(ok.groupby("cls")[["auc", "hit_rate_2yr", "precision_2yr"]].median().round(2).to_string())
     print("\nby zone (core + tier 2):")
@@ -172,7 +190,7 @@ def main() -> None:
                 "cls",
                 "n_impact_years",
                 "sfed_2yr",
-                "blind",
+                "flat",
                 "auc",
                 "hit_rate_2yr",
                 "precision_2yr",
@@ -194,10 +212,10 @@ def main() -> None:
     )
     g = adm_g.merge(sc, left_on="ADM2_EN", right_on="district", how="left")
     g.plot(ax=ax, color="#f4f3ef", edgecolor="white", linewidth=0.4, aspect=None)
-    g[g.blind.fillna(False)].plot(
+    g[g.flat.fillna(False)].plot(
         ax=ax, facecolor="none", edgecolor="#999999", hatch="////", linewidth=0.3, aspect=None
     )
-    scored = g[(g.n_impact_years >= 3) & ~g.blind.fillna(True)]
+    scored = g[(g.n_impact_years >= 3) & ~g.flat.fillna(True)]
     scored.plot(
         ax=ax,
         column="auc",
@@ -238,7 +256,7 @@ def main() -> None:
                 facecolor="none",
                 edgecolor="#999999",
                 hatch="////",
-                label="FloodScan blind (2-yr extent < 0.01)",
+                label="series too flat to threshold (>95 % zero days)",
             ),
             Patch(facecolor="#f4f3ef", label="fewer than 3 impact years"),
             Line2D([], [], color=INK2, lw=1.5, label="zone tier 1"),

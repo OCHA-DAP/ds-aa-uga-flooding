@@ -38,6 +38,12 @@ report per-trigger and combined return periods.
   and therefore a different indicator (Elgon lowlands, Teso downstream wetlands, Lake Albert
   shore); candidate = to be ruled in/out by analysis. Teso was settled by
   `analysis/teso_glofas_coverage.py` (3 core + 3 tier 2, 13 ruled out in `TESO_EXCLUDED`).
+- FloodScan usability is judged on RANK-BASED evidence only (share of events reaching the
+  district's own 80th percentile; AUC; a flat-series check). Never gate on absolute extent:
+  thresholds are percentiles of each district's own record, so a tiny-but-informative series
+  is fine. An earlier absolute gate ("2-yr extent < 1 % = blind") wrongly wrote off Kapchorwa,
+  Manafwa, Mbale and most of Karamoja — see docs/research-notes.md section 6.
+- Event percentiles use midrank; with many tied zeros, "share strictly below" understates.
 - `analysis/impact_coverage.py` is the accounting of recorded impact by coverage class
   (zone core / tier 2 / partner-only / uncovered) — rerun it after any zone change.
 - Blob paths use `PROJECT_PREFIX`; everything derived goes to `processed/<source>/`.

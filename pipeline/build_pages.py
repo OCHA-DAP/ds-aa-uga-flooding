@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "17"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "19"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -92,7 +92,7 @@ ZONE_STATUS = [
         "GloFAS G5196 return-period exceedance, 3–14 d lead (IFRC EAP form)",
         "good",
         "yes",
-        "87 % of events register; exposure AUC 0.73. Rainfall OR-leg adds nothing here (slow riverine)",
+        "all 3 districts usable; 79 % of events reach the district's top fifth. Rainfall OR-leg adds nothing (slow riverine)",
         "Relationship drifted after 2013; needs a gauge or Flood Hub cross-check.",
         "2007 Teso floods (CERF), 2010, 2014",
     ),
@@ -103,7 +103,7 @@ ZONE_STATUS = [
         "Same G5196 signal 3–4 weeks later, or observed extent",
         "promising",
         "yes",
-        "every dated event registers; exposure AUC 0.68",
+        "all 3 districts usable; 68 % of events in the top fifth",
         "Lagged link is weaker; may end up observation-led.",
         "2007, 2012 Soroti",
     ),
@@ -114,7 +114,7 @@ ZONE_STATUS = [
         "Rainfall forecast + antecedent wetness, 1–5 d lead",
         "weak",
         "partial",
-        "year-level only: extent is negligible and 5 of 9 districts are blind, but population-weighted exposure separates impact years well (AUC 0.81). For event detection it needs the observed-rainfall OR-leg (+17 pts) and gauges/reports",
+        "mixed: 5 of 9 districts usable (Bulambuli, Kapchorwa, Manafwa, Mbale, Namisindwa). Bududa, Bukwo and Kween are always zero and Sironko's floods do not land high. Needs the observed-rainfall OR-leg (+17 pts) and gauges where the satellite fails",
         "Precision under 15 % at any threshold; readiness-tier only. FAO's draft Mt Elgon AAP proposes the same "
         "rainfall-plus-soil-moisture design here \u2014 coordinate rather than duplicate.",
         "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
@@ -126,7 +126,7 @@ ZONE_STATUS = [
         "Lagged Elgon rainfall, or observation-led; GloFAS Manafwa point fails",
         "promising",
         "yes",
-        "72 % of events register; exposure AUC 0.92. Rainfall OR-leg adds +18 pts on major events",
+        "all 6 districts usable; 72 % of events in the top fifth, exposure AUC 0.92. Rainfall OR-leg adds +18 pts on major events",
         "Forecast leg untested; observation is the strong leg.",
         "2018 Butaleja, 2025 Pallisa, 2007",
     ),
@@ -137,7 +137,7 @@ ZONE_STATUS = [
         "Rainfall forecast + antecedent wetness, 1–5 d lead; sub-zone by basin",
         "weak",
         "partial",
-        "exposure alone catches no major event; the observed-rainfall OR-leg is the only one that works (+31 pts), plus reports",
+        "6 of 9 districts usable and 50 % of events in the top fifth, but year-level AUC near chance; for major events the observed-rainfall OR-leg is the leg that works (+31 pts)",
         "Same limits as the Elgon slopes; DRC covers Moroto, Napak, Amudat.",
         "2007 (CERF), 2008, 2018 Napak",
     ),
@@ -148,7 +148,7 @@ ZONE_STATUS = [
         "Lake Victoria → Kyoga → Albert level chain (months of lead); rainfall for the flash regime",
         "promising",
         "no",
-        "none of 36 events register, exposure included; neither leg works, so it needs a river gauge (Pakwach, Laropi) or reports",
+        "0 of 3 districts usable: 3 % of events reach the top fifth against 20 % by chance. Needs a river gauge (Pakwach, Laropi) or reports",
         "Three lake-driven events on record; Albert altimetry starts 2016.",
         "2020 Obongi, Oct–Nov 2023 Moyo, 2007",
     ),
@@ -159,7 +159,7 @@ ZONE_STATUS = [
         "Lake Albert level, same upstream chain",
         "promising",
         "no",
-        "none of 39 events register, exposure included; CEMS confirms lakeshore floods are invisible to FloodScan",
+        "0 of 3 districts usable: 10 % of events reach the top fifth. CEMS confirms lakeshore floods are invisible to FloodScan",
         "Cleanest lake-level case, few events to validate on.",
         "2020 Pakwach (100k), 2009 Nebbi",
     ),
@@ -187,7 +187,12 @@ def tier_impact() -> dict[tuple[str, str], dict]:
 
 
 # Subtle markers rather than badges: a district name should read as a district name.
-FLAG_MARK = {"no satellite signal": "*", "thin record": "\u2020", "weak gauge link": "\u2021"}
+FLAG_MARK = {
+    "flat satellite series": "*",
+    "floods not visible to the satellite": "*",
+    "thin record": "\u2020",
+    "weak gauge link": "\u2021",
+}
 
 
 def fmt_district(name: str, flags: dict[str, list[str]]) -> str:
@@ -216,8 +221,10 @@ def district_flags() -> dict[str, list[str]]:
     flags: dict[str, list[str]] = {}
     for dd, key in zone_of.items():
         f = []
-        if bool(d.blind.get(dd, False)):
-            f.append("no satellite signal")
+        if bool(d.flat.get(dd, False)):
+            f.append("flat satellite series")
+        elif float(d.events_in_top_fifth.get(dd, 1.0)) < 0.30:
+            f.append("floods not visible to the satellite")
         if float(d.n_impact_years.get(dd, 0)) < 3:
             f.append("thin record")
         if key == "teso_kyoga" and float(teso.best_corr.get(dd, 1.0)) < 0.30:
@@ -282,8 +289,9 @@ def zone_district_list() -> str:
         f'<div class="tw zlist"><table><thead>{head}</thead><tbody>{"".join(rows)}</tbody></table></div>'
         f"<p class='fn'>{total} districts in total, of Uganda's 135. Names follow the CODAB admin-2 vintage used "
         "throughout (FieldMaps). Markers flag districts where the evidence is thinner than their neighbours\u2019, so "
-        "they warrant care in targeting \u2014 <sup class='mk'>*</sup> FloodScan\u2019s 2-year extent is under 1 %, so "
-        "the observational backstop cannot work there; <sup class='mk'>\u2020</sup> fewer than three years carry a "
+        "they warrant care in targeting \u2014 <sup class='mk'>*</sup> recorded floods there do not reach the district\u2019s "
+        "own top fifth of FloodScan days (chance is a fifth), or the series is too flat to threshold at all, so the "
+        "observational backstop has little to work with; <sup class='mk'>\u2020</sup> fewer than three years carry a "
         "recorded impact, so nothing can be validated either way; <sup class='mk'>\u2021</sup> in Teso only, G5196 "
         "discharge correlates under 0.30 with that district\u2019s observed flooding. Computed from the results-page "
         "analyses.</p>"
@@ -324,7 +332,7 @@ def zone_status_table() -> str:
         )
     head = (
         "<tr><th>Zone</th><th>Flooding regime</th><th>Proposed forecast</th>"
-        "<th>Backstop (FloodScan extent + exposure, or observed rainfall)</th><th>Recorded impact 1998–2025 in these districts</th></tr>"
+        "<th>Backstop (FloodScan, read as percentiles of each district's own record)</th><th>Recorded impact 1998–2025 in these districts</th></tr>"
     )
     legend = (
         "<p class='fn'>Forecast: <span class='pill rate-good'>good</span> validated signal with usable lead time · "
@@ -332,7 +340,7 @@ def zone_status_table() -> str:
         "<span class='pill rate-weak'>weak</span> readiness-tier at best, high false-alarm rate. "
         "Backstop: <span class='pill rate-good'>yes</span> most recorded events register · "
         "<span class='pill rate-mid'>partial</span> a minority register, or the signal is year-level rather than event-level · "
-        "<span class='pill rate-weak'>no</span> nothing registers at all, exposure included. Every zone also has the option of an observed-rainfall OR-leg (rain already fallen, over its return-period level) alongside the satellite, tested on the results page. "
+        "<span class='pill rate-weak'>no</span> recorded floods sit no higher in the record than chance. Every zone also has the option of an observed-rainfall OR-leg (rain already fallen, over its return-period level) alongside the satellite, tested on the results page. "
         "Impact bars are scaled to the largest tier (Elgon slopes); they show what a trigger in that geography could in principle have "
         "been for, not what it would have caught — event totals split evenly across the districts named, all sources (see results page).</p>"
     )
@@ -697,7 +705,12 @@ def backstop_table() -> str:
 
 
 def floodscan_impact_table() -> str:
-    """One row per zone tier (and one for outside the zones): FloodScan visibility of the impact record."""
+    """One row per zone tier: whether the satellite sees the floods recorded there.
+
+    Rank-based throughout. An operational threshold would be a percentile of the district's
+    own record, so absolute extent is irrelevant; what matters is whether recorded floods
+    land high in that record.
+    """
     d = pd.read_csv(OUT / "floodscan_vs_impact_district.csv")
     ev = pd.read_csv(OUT / "floodscan_vs_impact_events.csv")
     tier_of = {dd: "tier 1" for z in ZONES.values() for dd in z.core} | {
@@ -705,41 +718,34 @@ def floodscan_impact_table() -> str:
     }
     d["tier"] = d.district.map(tier_of)
     ev["tier"] = ev.district.map(tier_of)
-    ok = d[(d.n_impact_years >= 3) & ~d.blind]
     rows = []
     groups = [
         (z, t) for z in ZONES for t in ("tier 1", "tier 2") if t == "tier 1" or ZONES[z].tier2
-    ] + [("outside", None)]
+    ]
+    groups.append(("outside", None))
     for z, t in groups:
         if z == "outside":
-            dz, ez, okz = d[d.zone.isna()], ev[ev.zone == "outside"], ok[ok.zone.isna()]
+            dz, ez = d[d.zone.isna()], ev[ev.zone == "outside"]
             name = "outside the zones"
         else:
-            dz, ez, okz = (
-                d[(d.zone == z) & (d.tier == t)],
-                ev[(ev.zone == z) & (ev.tier == t)],
-                ok[(ok.zone == z) & (ok.tier == t)],
-            )
-            name = f"{ZONES[z].label.split(' (')[0]} — {t}" + (
+            dz = d[(d.zone == z) & (d.tier == t)]
+            ez = ev[(ev.zone == z) & (ev.tier == t)]
+            name = f"{ZONES[z].label.split(' (')[0]} \u2014 {t}" + (
                 f" ({ZONES[z].tier2_label.split(' (')[0]})" if t == "tier 2" else ""
             )
         rows.append(
             {
                 "area": name,
                 "districts": len(dz),
-                "FloodScan-blind": int(dz.blind.sum()),
-                "median AUC (non-blind, ≥3 impact years)": round(okz.auc.median(), 2)
-                if len(okz)
-                else float("nan"),
+                "usable": f"{int(dz.usable.sum())} of {len(dz)}",
                 "dated events": len(ez),
-                "median FloodScan percentile in the event window": round(ez.sfed_pctl.median())
+                "median percentile at events": round(ez.sfed_pctl.median())
                 if len(ez)
                 else float("nan"),
-                "share of events with any FloodScan flooding": round(
-                    (ez.sfed_max >= 0.01).mean(), 2
-                )
+                "events in the top fifth": f"{(ez.sfed_pctl >= 80).mean():.0%}"
                 if len(ez)
-                else float("nan"),
+                else "\u2014",
+                "median AUC": round(dz.auc.median(), 2) if len(dz) else float("nan"),
             }
         )
     return table(pd.DataFrame(rows))
@@ -863,23 +869,29 @@ def results_page() -> str:
         "while the record is kept; and DesInventar double-counts deaths across cards, so EM-DAT or curated death tolls take precedence where "
         "they exist. Table: <code>outputs/impact_district_year.csv</code>.</p>",
         "<h2>Does FloodScan see the recorded impact?</h2>",
-        "<p>The observational backstop leans on FloodScan, so this asks, district by district, whether the satellite registers the "
-        "floods people actually reported. Two tests: at year level, the AUC — the probability that a random impact year has a higher "
-        "FloodScan annual maximum than a random non-impact year (0.5 = no relation); and at event level, where each dated event's "
-        "window (3 days before to 7 days after) sits in the district's own FloodScan distribution. A district is called blind when "
-        "its 2-year annual-maximum extent is below 1 percent — FloodScan essentially never registers flooding there.</p>",
+        "<p>The observational backstop leans on FloodScan, so this asks, district by district, whether the satellite registers "
+        "the floods people actually reported. Everything here is rank-based, because an operational threshold would be a "
+        "percentile or return period of the district\u2019s own record rather than an absolute extent \u2014 a district "
+        "where FloodScan only ever reaches half a percent is perfectly usable if those small peaks land on the days people "
+        "flooded. Two tests: at year level the AUC, the probability that a random impact year has a higher annual maximum "
+        "than a random non-impact year; and at event level whether each dated event reaches the district\u2019s own top "
+        "fifth of days, against the fifth expected by chance. A district counts as usable when at least 30 % of its events "
+        "reach that top fifth and its series is not so flat (over 95 % exactly-zero days) that there is nothing to "
+        "threshold.</p>"
+        "<p class='fn'>An earlier version of this page gated on absolute extent \u2014 a 2-year level under 1 % was called "
+        "\u2018blind\u2019 \u2014 and wrongly wrote off districts whose relative signal is fine. Kapchorwa, Manafwa, Mbale "
+        "and most of Karamoja were casualties of that error; the numbers below are the corrected, rank-based ones.</p>"
         '<figure><img src="floodscan_vs_impact.png" alt="Map of AUC per district and a histogram of event percentiles by zone"></figure>',
         floodscan_impact_table(),
-        "<p><strong>Reading:</strong> FloodScan is a good witness exactly where the riverine and wetland zones are — Butaleja, Bulambuli, "
-        "Amuria, Katakwi and Soroti have AUCs of 0.7 to 0.86, and Teso events sit at the 94th percentile of the district record — and it is "
-        "blind across most of the rest of the country: 60 of the 100 districts with three or more impact years never reach 1 percent "
-        "extent. The tiers split cleanly on this. Elgon tier 1 (the slopes) is blind in five of nine districts, its events sit at the "
-        "37th percentile and only 13 percent register at all; Elgon tier 2 (the lowlands) has no blind district, an AUC of 0.65, events "
-        "at the 91st percentile and 72 percent registering. Both Teso tiers are fully visible. Both Adjumani tiers are invisible: none "
-        "of the 75 Albert Nile and Lake Albert events registered, because they are narrow riverbank and lakeshore floods a 9-km product "
-        "does not resolve. So the satellite backstop is sound for the Teso zone and the two lowland tiers, partial for Karamoja, and "
-        "cannot serve the Elgon slopes or the Adjumani zone, where the backstop has to be report-based (DTM, OPM), gauge-based, or the "
-        "lake level itself.</p>",
+        "<p><strong>Reading:</strong> the satellite is a good witness across both Teso tiers (79 % and 68 % of events in the "
+        "district\u2019s top fifth, all six districts usable) and across the whole Elgon lowland tier (72 %, six of six). "
+        "On the Elgon slopes it is mixed rather than absent: five of nine districts are usable \u2014 Bulambuli, Kapchorwa, "
+        "Manafwa, Mbale and Namisindwa \u2014 while Bududa, Bukwo and Kween have series that are essentially always zero "
+        "and Sironko\u2019s floods do not land high in its own record. Karamoja is better than an absolute reading "
+        "suggested: six of nine districts are usable, though the year-level AUC stays near chance, so it detects events "
+        "better than it ranks years. Adjumani is the one clear failure and it survives the rank-based test: 3 % and 10 % of "
+        "events reach the top fifth, against the 20 % expected by chance, so the Albert Nile really is invisible and the "
+        "backstop there has to be a river gauge or reports.</p>"
         "<h2>Exposure, not just extent</h2>",
         "<p>Extent answers \u201cis there water\u201d; exposure answers \u201cis there water where people are\u201d, which is what an "
         "observational trigger should key on. Uganda is not one of the countries in the team\u2019s flood-exposure pipeline, so exposure was "
@@ -889,12 +901,11 @@ def results_page() -> str:
         "<figcaption>Daily population living under water in each tier\u2019s districts. Grey lines mark days with a recorded flood or "
         "landslide impact anywhere in the zone.</figcaption></figure>",
         exposure_table(),
-        "<p><strong>Reading:</strong> exposure is the better witness in five of the seven tiers, and on the Mount Elgon slopes it changes the "
-        "verdict \u2014 the AUC rises from 0.59 to 0.81. The slopes are densely populated, so a flooded patch far too small to move a "
-        "district-mean extent still puts thousands of people in water. The earlier blind finding stands in absolute terms (the 2-year extent "
-        "there is under 1 %), but the year-to-year variation, once population-weighted, separates impact years well. Karamoja improves and "
-        "stays weak, and both Adjumani tiers sit at a median exposure percentile of zero at their events \u2014 exposure confirms the Albert "
-        "Nile is invisible, it does not rescue it.</p>",
+        "<p><strong>Reading:</strong> exposure is the better witness in five of the seven tiers, and on the Mount Elgon slopes "
+        "it lifts the year-level AUC from 0.59 to 0.81. The slopes are densely populated, so a flooded patch far too small "
+        "to move a district-mean extent still puts thousands of people in water. Karamoja improves and stays weak at year "
+        "level, and both Adjumani tiers sit around the 36th percentile at their events \u2014 below chance \u2014 so "
+        "exposure confirms the Albert Nile is invisible rather than rescuing it.</p>"
         "<h2>Backstop options: satellite, observed rainfall, or either</h2>",
         "<p>The backstop exists so a forecast miss still activates, and FloodScan alone cannot serve three of the four zones. This tests an "
         "observed-rainfall leg alongside it \u2014 rain that has already fallen (IMERG), not forecast, so no forecast skill is involved \u2014 "

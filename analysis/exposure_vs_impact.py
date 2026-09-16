@@ -116,11 +116,13 @@ def main() -> None:
             pos, neg = am.to_numpy()[mask], am.to_numpy()[~mask]
             pos, neg = pos[np.isfinite(pos)], neg[np.isfinite(neg)]
             row[f"auc_{name}"] = auc(pos, neg)
+            # midrank percentile: with many tied zeros, "share strictly below" understates
+            rank = s.dropna().rank(pct=True)
             pct = []
             for d0 in evd:
-                win = s.loc[d0 - pd.Timedelta(days=3) : d0 + pd.Timedelta(days=7)].dropna()
+                win = rank.loc[d0 - pd.Timedelta(days=3) : d0 + pd.Timedelta(days=7)].dropna()
                 if len(win):
-                    pct.append(float((s.dropna() < win.max()).mean() * 100))
+                    pct.append(float(win.max() * 100))
             row[f"event_pctl_{name}"] = float(np.median(pct)) if pct else np.nan
         rows.append(row)
     tab = pd.DataFrame(rows)
