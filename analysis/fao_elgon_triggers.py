@@ -1,39 +1,31 @@
-"""Backtest of FAO's proposed Mt Elgon flood AAP triggers against the observed record.
+"""Backtest a partner's draft Mt Elgon flood AAP triggers against the observed record.
 
-FAO Uganda and FAO SWALIM circulated a Mt Elgon Flood Anticipatory Action Plan
-(document dated 7 Sep 2026) covering Bududa, Bulambuli, Sironko, Manafwa, Mbale,
-Butaleja and Namisindwa — 100,000 households, USD 150k readiness + USD 1.53M activation,
-MAM and SOND seasons — with three triggers:
+The plan is UNPUBLISHED. This repository and its GitHub Pages site are public, so the
+partner's thresholds, districts, household target and budget are NOT hardcoded here and no
+output of this script is committed. The parameters are read at runtime from
 
-  T1 seasonal   ICPAC forecast ">50% of long-term mean rainfall" for MAM and OND, 30-90 d lead
-  T2 immediate  GloFAS >=60% probability of a 5-year return-period flood affecting >1,000
-                households, 5 d lead
-  T3 landslide  cumulative rainfall >100 mm over 3 days AND soil-moisture saturation >80%,
-                1-3 d lead
+    config/partner_triggers.local.json        (gitignored)
 
-Only T3 is directly testable from the observed record we hold, and it is the one aimed at
-the hazard that kills on these slopes. This script measures, per district and for the
-sub-region:
+with the shape {"districts": [...], "rain_mm": <float>, "antecedent_pctl": <float>,
+"glofas_points": {"<label>": [lat, lon]}}. Without that file the script exits with a message.
+Results are printed to the console and written to outputs/, which is gitignored.
 
-  * how often the 100 mm / 3-day threshold is met (activations per year, per district and
-    any-district), 1998-2026 from IMERG;
+What it measures, all against the same record used elsewhere in the repo:
+
+  * how often the partner's cumulative-rainfall threshold is met, per district and for the
+    sub-region, at two readings of "cumulative rainfall" — the district MEAN (an areal
+    average) and the district's WETTEST PIXEL (closer to a rain gauge). The plan does not say
+    which it intends and the answer differs by an order of magnitude;
   * what it catches: recall and precision against the dated impact record, all events and
     major ones (5+ deaths or 5,000+ affected);
-  * what the soil-moisture condition changes, using the IMERG antecedent index as a proxy
-    at two readings of ">80%" — the 80th percentile of the local record, and a wet-season
-    absolute floor. ERA5-Land volumetric soil water will replace the proxy when it lands.
+  * what the soil-moisture condition changes, using the IMERG antecedent index as a proxy;
+  * whether GloFAS at the only reporting points in the sub-region tracks observed flooding
+    there at all, judged on correlation rather than Kling-Gupta efficiency.
 
-T2 is assessed on the one thing that decides whether it can work: whether GloFAS discharge at
-the only reporting point in the sub-region tracks observed flooding there. Kling-Gupta
-efficiency is not the test to use — it is dominated by bias and variance ratio, and a biased
-model is fine once thresholds are set in model space (as they are for G5196, which runs 1.7x
-wet). Correlation is the test, so correlation is what is measured. T1 is assessed
-qualitatively in the report (docs/research-notes.md).
-
-Writes outputs/fao_elgon_triggers.csv and outputs/fao_elgon_triggers.png.
 Run:  uv run python analysis/fao_elgon_triggers.py
 """
 
+import json
 import sys
 from pathlib import Path
 
@@ -53,18 +45,35 @@ from src.skill_chain import rolling_sum
 from src.zones import load_adm2
 
 OUT = Path(__file__).resolve().parent.parent / "outputs"
-FAO_DISTRICTS = ("Bududa", "Bulambuli", "Sironko", "Manafwa", "Mbale", "Butaleja", "Namisindwa")
-RAIN_MM = 100.0  # FAO's cumulative 3-day threshold
-ANTE_PCTL = 80.0  # ">80% soil moisture saturation" read as the 80th percentile of the local record
+CONFIG = Path(__file__).resolve().parent.parent / "config" / "partner_triggers.local.json"
+
+
+def load_config() -> dict:
+    """Partner trigger parameters, kept out of this public repo."""
+    if not CONFIG.exists():
+        print(
+            f"No partner trigger config at {CONFIG.relative_to(CONFIG.parents[2])}.\n"
+            "The plan it describes is unpublished and this repo is public, so the parameters are "
+            "not committed. Create the file (gitignored) to run this analysis; the expected shape "
+            "is in the module docstring."
+        )
+        raise SystemExit(0)
+    return json.loads(CONFIG.read_text())
+
+
 RED, INK, INK2 = "#e34948", "#0b0b0b", "#52514e"
 
 
 def main() -> None:
+    cfg = load_config()
+    fao_districts = tuple(cfg["districts"])
+    rain_mm = float(cfg["rain_mm"])
+    ante_pctl = float(cfg["antecedent_pctl"])
     adm = load_adm2().set_index("ADM2_EN").ADM2_PCODE
     im = stratus.load_parquet_from_blob(
         f"{PROJECT_PREFIX}/processed/imerg/imerg_adm2_daily.parquet", stage="dev"
     )
-    pc = {d: adm[d] for d in FAO_DISTRICTS}
+    pc = {d: adm[d] for d in fao_districts}
 
     # Two readings of "cumulative rainfall": the district MEAN (an areal average, what a
     # zone-scale product reports) and the district's WETTEST PIXEL (closer to what a rain
@@ -80,14 +89,14 @@ def main() -> None:
     rain, rain_max, ante = pd.DataFrame(rain), pd.DataFrame(rain_max), pd.DataFrame(ante)
     years = rain.index.year.nunique()
 
-    ev = dated_events_df(FAO_DISTRICTS)
+    ev = dated_events_df(fao_districts)
     major = ev[(ev.deaths.fillna(0) >= 5) | (ev.affected.fillna(0) >= 5000)]
     esets = {"all": pd.DatetimeIndex(ev.day), "major": pd.DatetimeIndex(major.day)}
 
     rows = []
-    for d in FAO_DISTRICTS:
+    for d in fao_districts:
         for lbl, df in (("district mean", rain), ("wettest pixel", rain_max)):
-            hits = (df[d] >= RAIN_MM).fillna(False)
+            hits = (df[d] >= rain_mm).fillna(False)
             rows.append(
                 dict(
                     scope=d,
@@ -97,10 +106,10 @@ def main() -> None:
                     max_3d=float(df[d].max()),
                 )
             )
-    any_rain = (rain >= RAIN_MM).any(axis=1).fillna(False)
-    any_rain_px = (rain_max >= RAIN_MM).any(axis=1).fillna(False)
-    any_both = ((rain >= RAIN_MM) & (ante >= ANTE_PCTL)).any(axis=1).fillna(False)
-    any_both_px = ((rain_max >= RAIN_MM) & (ante >= ANTE_PCTL)).any(axis=1).fillna(False)
+    any_rain = (rain >= rain_mm).any(axis=1).fillna(False)
+    any_rain_px = (rain_max >= rain_mm).any(axis=1).fillna(False)
+    any_both = ((rain >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
+    any_both_px = ((rain_max >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
     for name, act in (
         ("T3, district mean", any_rain),
         ("T3, district mean + antecedent >= 80th pctl", any_both),
@@ -121,7 +130,7 @@ def main() -> None:
     tab = pd.DataFrame(rows)
     tab.to_csv(OUT / "fao_elgon_triggers.csv", index=False)
     pd.set_option("display.width", 220)
-    print("Per-district frequency of FAO's 100 mm / 3-day threshold (IMERG, 1998-2026):")
+    print("Per-district frequency of the partner threshold (IMERG, 1998-2026):")
     print(
         tab[tab.scope != "any of the 7 districts"][
             ["scope", "rule", "n_days", "per_year", "max_3d"]
@@ -161,8 +170,7 @@ def main() -> None:
         f"{PROJECT_PREFIX}/processed/floodscan/floodscan_adm2_daily.parquet", stage="dev"
     )
     for label, (plat, plon) in {
-        "G5220 Manafwa at Butaleja": (0.925, 34.075),
-        "unnamed point on the Mpologoma": (0.775, 33.775),
+        k: tuple(v) for k, v in cfg.get("glofas_points", {}).items()
     }.items():
         try:
             dis = glofas.load_reanalysis_point(plat, plon).asfreq("D")
@@ -170,7 +178,7 @@ def main() -> None:
             print(f"  {label}: reanalysis unavailable ({err})")
             continue
         best = []
-        for d in FAO_DISTRICTS:
+        for d in fao_districts:
             se = fs[fs.pcode == pc[d]].set_index("date")["mean"].asfreq("D")
             sx = ex[ex.pcode == pc[d]].set_index("date")["exposure"].asfreq("D")
             best.append((d, float(lagged_corr(dis, se).max()), float(lagged_corr(dis, sx).max())))
@@ -198,10 +206,10 @@ def main() -> None:
         label="wettest pixel",
     )
     ax.legend(fontsize=8, frameon=False)
-    ax.axvline(RAIN_MM, color=INK, lw=2)
+    ax.axvline(rain_mm, color=INK, lw=2)
     ax.annotate(
-        f"FAO threshold {RAIN_MM:.0f} mm\n{any_rain.sum()} days in {years} years\n({any_rain.sum() / years:.1f}/yr)",
-        (RAIN_MM, ax.get_ylim()[1] * 0.55),
+        f"FAO threshold {rain_mm:.0f} mm\n{any_rain.sum()} days in {years} years\n({any_rain.sum() / years:.1f}/yr)",
+        (rain_mm, ax.get_ylim()[1] * 0.55),
         xytext=(14, 0),
         textcoords="offset points",
         fontsize=9,
@@ -228,7 +236,7 @@ def main() -> None:
     ax2.plot(thrs, rec_px, color=INK2, lw=2, ls=":", label="recall, wettest pixel")
     ax2.set_xlabel("3-day rainfall threshold, mm (any of the 7 districts)")
     ax2.set_ylabel("share of major events caught")
-    ax2.axvline(RAIN_MM, color=INK, lw=2)
+    ax2.axvline(rain_mm, color=INK, lw=2)
     ax3 = ax2.twinx()
     ax3.plot(thrs, acts, color=INK2, lw=1.4, ls="--", label="activations per year")
     ax3.set_ylabel("activations per year")

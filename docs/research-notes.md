@@ -14,7 +14,7 @@ documents are referenced, not reproduced.
 | DRC | **Karamoja AAP 2026** (drought, resource conflict, flash flood; cross-border with Kenya) | Moroto, Napak, Amudat | Flash-flood ladder: Kospir River at 80–85 % and rising; ~150 mm forecast in 24–48 h; livestock moving to high ground. Drought: SPI ≤ −1.5, Kobebe dam <50 %, body condition <3.0 | **Activated 27 Jul 2026** on drought + conflict (not flood). Napak floodplains flagged highest flash-flood risk; DRC's OND-2026 central scenario: 48,000 flood-displaced in Uganda |
 | WFP / FAO / OPM | PRO-ACT multi-hazard EWS + Karamoja **drought** AAP | 9 Karamoja districts + Kaberamaido, Katakwi | drought (SPI); **no flood trigger** | drought AAP activated May 2026 |
 | FAO | OSRO/UGA/070/BEL El Niño flood AA | Mbale, Butaleja, Sironko, Bulambuli, Manafwa, Namisindwa, Bundibugyo, Ntoroko, Kasese, Katakwi | seasonal outlook, one-off | 11 Aug–31 Dec 2023 only |
-| FAO (Uganda + SWALIM) | **Mt Elgon Flood AAP — draft, 7 Sep 2026** | Bududa, Bulambuli, Sironko, Manafwa, Mbale, Butaleja, Namisindwa | **T1 seasonal**: ICPAC forecast ">50 % of long-term mean rainfall" MAM and OND, 30–90 d lead. **T2 immediate**: GloFAS ≥60 % probability of a 5-yr RP flood affecting >1,000 households, 5 d lead. **T3 landslide**: rainfall >100 mm / 3 days AND soil-moisture saturation >80 %, 1–3 d lead | Draft; 100,000 households, USD 150k readiness + USD 1.53 M activation, MAM and SOND; agrifood focus (crops, livestock, post-harvest, grazing) |
+| FAO (Uganda + SWALIM) | Mt Elgon flood AAP — **unpublished draft**, Sep 2026 | Mount Elgon sub-region | *not recorded here: the plan is not public and this repo is* | Draft; detail and our backtest held with the country team, see §4a |
 | FAO + OPM (Japan-funded) | "Enhancing Flood Management in Uganda with Integrated EWS", USD 1.13 M | Rwenzori + Mt Elgon (district list not published) | **no published trigger** — EWS infrastructure, not an AAP: 10 hydro-climatic stations, 2 flood early-warning centres, 72 bulletins, ~5,000 households given anticipatory actions | Mar 2025 – Mar 2026, closed; results dialogue at OPM Jun 2026 |
 | FAO (+WFP, OPM) | Karamoja **drought** AAP | 9 Karamoja districts | "government forecasts crossed trigger thresholds" — values not published | **activated May 2026** (110,000 people, worst in Kotido and Kaabong), superseded by a government drought declaration Jul 2026 (6 months, 300,000 households) |
 | GoU / OPM (WFP, FAO, IGAD) | AA Roadmap 2026–2031 + U-MHIEWS | national, with **sub-national multi-hazard EW centres in Karamoja, Teso, Mt Elgon and Rwenzori** | roadmap commits to "establish clear disaster triggers"; none published | launched Jul 2026; since 2021, 1.6 M families reached with early warning, 400k+ households with AA |
@@ -95,43 +95,32 @@ threshold exists for Mt Elgon** — Kitutu 2011 / Knapen 2006 are qualitative (p
 low-intensity rain, Aug–Nov peak). Transferable: Monsieurs et al. 2019 (NHESS 19:775)
 antecedent-rainfall thresholds for the western East African Rift.
 
-## 4a. FAO's draft Mt Elgon Flood AAP (7 Sep 2026) — backtested
+## 4a. A partner's unpublished draft Elgon AAP — held internally
 
-Six of its seven districts are our Elgon tier 1; the seventh, Butaleja, is our tier 2. Only
-Kapchorwa, Kween and Bukwo in our tier 1 sit outside it. Full backtest:
-`analysis/fao_elgon_triggers.py`, figure `outputs/fao_elgon_triggers.png`.
+A partner circulated an unpublished draft anticipatory-action plan for the Mount Elgon
+sub-region in September 2026. Its scope, triggers, thresholds, household target and budget
+are **not recorded here or on the published site**: the document is not public, and this repo
+and its GitHub Pages site are. The detail, and our backtest of its three triggers, stay with
+the country team.
 
-- **T1** read literally (">50 % of long-term mean rainfall") is a drought threshold met
-  almost every season. ICPAC's tercile products suggest ">50 % probability of above-normal
-  rainfall" is intended. Needs clarifying before calibration.
-- **T2** reuses the IFRC/URCS formulation, but Mt Elgon has no usable GloFAS point. Judge it
-  on correlation, not KGE: KGE is dominated by bias and variance ratio, and a biased model is
-  fine once thresholds sit in model space (which is how we treat Akokoro at 1.7× wet).
-  Manafwa at Butaleja correlates 0.37 with its own station record and at best **0.20** with
-  observed flood extent in any of the seven districts; the unnamed Mpologoma point reaches
-  0.22. Akokoro, the point we do trust, is 0.65 and 0.49. GloFAS also has no forecast skill
-  over climatology at Manafwa at any lead, which is what actually binds a 5-day trigger, and
-  there are no upper-reach points on the slopes. Measured in `analysis/fao_elgon_triggers.py`.
-- **T3** is directly testable and the answer depends entirely on a detail the document does
-  not state — whether 100 mm is an areal average or a point reading:
+What is safe to carry forward, because it is our own analysis rather than their document:
 
-  | reading of T3 | activations/yr | major events caught | precision |
-  |---|---|---|---|
-  | district mean, 100 mm | 0.6 | **0 %** | 0 % |
-  | district mean + antecedent ≥80th pctl | 0.3 | 0 % | 0 % |
-  | wettest pixel, 100 mm | 16.3 | 40 % | 5 % |
-  | wettest pixel + antecedent ≥80th pctl | 7.8 | 35 % | 8 % |
+- A rainfall threshold on these slopes has a low ceiling at any level. At about four
+  activations a year the best threshold we tested catches roughly a fifth of major events,
+  with precision under 15 %; set high enough to be rare enough for an action trigger, it stops
+  catching events at all.
+- Spatial scale and rainfall product matter enormously — the same number means very different
+  things as an areal average and as a point reading, and satellite rainfall underestimates
+  extremes in mountains, so a gauge-calibrated threshold does not transfer to satellite
+  monitoring unchanged. Any threshold should state both.
+- GloFAS cannot currently supply a discharge leg on Mt Elgon: the only reporting point,
+  Manafwa at Butaleja, correlates 0.37 with its station record and at best 0.20 with observed
+  flood extent in the sub-region, against 0.65 and 0.49 for the Akokoro point, and shows no
+  forecast skill over climatology at any lead.
 
-  At a comparable activation rate of about four a year, a district-mean threshold near 70 mm
-  catches 22 % of major events where a pixel threshold of 130 mm catches 10 % — the areal
-  average is the better statistic once set at the right level. The soil-moisture condition
-  halves activations for little lost recall, so it earns its place.
-
-  Caveats to carry into any conversation: the antecedent index is an IMERG proxy, not
-  volumetric soil moisture (ERA5-Land is still downloading), and "saturation >80 %" is a
-  different quantity from an 80th percentile. IMERG also underestimates extreme rainfall in
-  mountainous terrain, so a gauge-calibrated threshold will not transfer to satellite
-  monitoring unchanged.
+`analysis/fao_elgon_triggers.py` reads the partner thresholds from an untracked local config
+(`config/partner_triggers.local.json`, gitignored) and prints results to the console only.
+Without that file it exits with a message rather than failing.
 
 ## 4b. FAO EWS & AA needs assessment, refugee-hosting districts (Dec 2025 survey, preliminary report 7 Jan 2026)
 
