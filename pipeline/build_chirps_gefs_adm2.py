@@ -13,6 +13,7 @@ Run:  uv run python pipeline/build_chirps_gefs_adm2.py [start_year] [end_year]
 """
 
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
@@ -32,12 +33,19 @@ CKDIR = Path(__file__).resolve().parent / ".checkpoint_chirps_gefs"
 ARCHIVE_END = date(2026, 7, 4)
 
 
-def _one(args):
+def _one(args, attempts: int = 4):
+    """One issue day. Retries with backoff: a transient network error must not be recorded as
+    a missing day — that is how Mar-Dec 2013 was silently lost from the first build, although
+    CHC serves every one of those files. Only a day that fails every attempt returns None."""
     issue, polys = args
-    try:
-        arr, bounds, wkt = read_windowed_url(url_5day(issue))
-    except rasterio.errors.RasterioIOError:
-        return None  # missing issue day in the archive; logged by the caller
+    for i in range(attempts):
+        try:
+            arr, bounds, wkt = read_windowed_url(url_5day(issue))
+            break
+        except rasterio.errors.RasterioIOError:
+            if i == attempts - 1:
+                return None  # genuinely missing (e.g. Jan-Sep 2020, the GEFS v12 gap), or down
+            time.sleep(2 ** (i + 1))
     df = zonal_stats(arr, bounds, wkt, polys)
     df.insert(0, "valid_end", pd.Timestamp(issue + timedelta(days=4)))
     df.insert(0, "issue_date", pd.Timestamp(issue))

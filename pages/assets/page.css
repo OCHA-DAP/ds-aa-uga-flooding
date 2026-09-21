@@ -72,3 +72,23 @@ td.rate-weak { box-shadow: inset 4px 0 0 #c0392b; }
 .zlist .dist { display: inline-block; margin: 0 11px 3px 0; }
 .mk { color: #a33; font-size: 11px; letter-spacing: 1px; margin-left: 1px; cursor: help; }
 .fn .mk { margin: 0 2px 0 0; }
+
+/* Draft trigger page */
+.callout { background: #fff8e6; border-left: 4px solid #b86e00; padding: 10px 14px; }
+h2 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 9px; vertical-align: -1px; }
+.trig-sum td, .trig-zone td, .trig-over td { vertical-align: top; }
+.trig-sum td.num, .trig-zone td.num { text-align: right; white-space: nowrap; }
+.trig-sum .fn, .trig-zone .fn { display: block; }
+.trig-over table, .trig-zone table { min-width: 0; }
+.trig-over td, .trig-over th { text-align: center; padding: 4px 8px; }
+.trig-over td.fn { text-align: left; }
+td.yr { font-weight: 500; white-space: nowrap; }
+td.yr .fn { display: block; font-weight: 400; }
+td.act { color: #fff; font-weight: 500; white-space: nowrap; }
+td.act .d { display: block; font-weight: 400; font-size: 11.5px; opacity: .9; }
+td.nodata { color: #777; font-size: 12px; background: repeating-linear-gradient(135deg, #f3f3f3 0 6px, #e6e6e6 6px 12px); }
+td.any { color: #1a1a1a; font-size: 15px; }
+.oc { font: 500 12px/1.3 Roboto, sans-serif; white-space: nowrap; }
+.oc-hit { color: #007a3d; }
+.oc-miss { color: #c0392b; }
+.oc-fa { color: #777; font-weight: 400; }
