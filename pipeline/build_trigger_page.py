@@ -35,7 +35,9 @@ def ramp(t: float, lo=(253, 236, 230), hi=(165, 15, 21)) -> str:
 def impact_cell(v: float, top: float, floor: float) -> str:
     """Log shading from `floor` (palest) to the largest value in any zone (darkest), so a few
     thousand people affected reads light and a hundred thousand reads dark."""
-    if not v or v <= 0 or pd.isna(v):
+    # EM-DAT figures are split evenly across the districts an event names, so values can be
+    # fractional; anything that rounds to zero is shown as nothing recorded
+    if pd.isna(v) or round(v) <= 0:
         return "<td class='num'></td>"
     t = (math.log10(max(v, floor)) - math.log10(floor)) / (math.log10(top) - math.log10(floor))
     t = 0.08 + 0.92 * t  # keep even the smallest recorded value visibly tinted
@@ -274,6 +276,12 @@ def page() -> str:
         "<p class='fn'>“No data”: CHIRPS-GEFS has no forecasts from 1 January to 4 October 2020, the gap between "
         "the GEFS v12 reforecast and the operational feed, so the rain-based triggers cannot be judged that year. "
         "Adjumani’s lake leg can, and activated. 2025 is shown but was not used to calibrate.</p>",
+        "<p><strong>2007 activates nowhere,</strong> although it is the largest flood year in the record and a CERF "
+        "year. Two zones came close — Karamoja’s Nakapiripirit reached a 1-in-32 level against its 1-in-35 bar, and "
+        "the Teso gauge 1-in-8 against about 1-in-11 — while Adjumani reached 1-in-14 against 1-in-48 and Elgon’s "
+        "forecast saw nothing unusual at all. 2007 was a long wet season, August to October, rather than one extreme "
+        "week, which is what a 5-day peak cannot see. A longer accumulation window, alongside the 5-day one, is the "
+        "obvious thing to test next.</p>",
     ]
     for z in ZONE_ORDER:
         what, lead = trigger_text(z, thr)
@@ -303,6 +311,7 @@ def page() -> str:
         "<h2>What this draft does not settle</h2>",
         "<ul>"
         "<li>Teso needs the reforecast, and a third opinion on why the model and the satellite parted ways after 2013.</li>"
+        "<li>Prolonged wet seasons such as 2007 need a longer accumulation window than 5 days.</li>"
         "<li>The rain-based triggers are weak at year level in every zone they are used in. They carry the lead time; "
         "whether they should sit behind an observational confirmation (the FloodScan backstop where it works) is the "
         "next design question.</li>"
