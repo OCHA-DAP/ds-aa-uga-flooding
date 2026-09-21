@@ -128,11 +128,13 @@ def recurrence_layer(ax, uganda):
     )
 
 
-def main() -> None:
+def main(frameworks: dict | None = None, out: Path = OUT) -> None:
+    """Render the map. The default is the public set; the password-protected page passes the
+    public set plus unpublished partner frameworks and writes to a gitignored path."""
     adm2 = load_adm2()
     uganda = adm2.dissolve().geometry.iloc[0]
     lakes, rivers, countries = load_ne()
-    ext = list(EXTERNAL.values())
+    ext = list((frameworks if frameworks is not None else EXTERNAL).values())
 
     fig = plt.figure(figsize=(12.5, 15.2), facecolor="white")
     gs = fig.add_gridspec(
@@ -439,8 +441,8 @@ def main() -> None:
         ha="left",
         va="bottom",
     )
-    fig.savefig(OUT, dpi=170, facecolor="white")
-    print(f"wrote {OUT}")
+    fig.savefig(out, dpi=170, facecolor="white")
+    print(f"wrote {out}")
 
 
 if __name__ == "__main__":

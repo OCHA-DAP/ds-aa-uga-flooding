@@ -5,7 +5,9 @@ marked `verified=False` are placeholders awaiting confirmation from the
 source documents and must not be presented as fact.
 """
 
+import json
 from dataclasses import dataclass, field
+from pathlib import Path
 
 
 @dataclass(frozen=True)
@@ -265,3 +267,25 @@ PROGRAMMES: dict[str, Programme] = {
         ),
     ),
 }
+
+
+PRIVATE_CONFIG = Path(__file__).resolve().parent.parent / "config" / "private_frameworks.local.json"
+
+
+def load_private() -> dict:
+    """Unpublished partner material, kept out of this public repository.
+
+    Read from config/private_frameworks.local.json (gitignored). It is rendered only into the
+    password-protected page (pipeline/build_private_page.py), never into the public pages.
+    Returns an empty dict when the file is absent, so public builds need nothing extra.
+    """
+    if not PRIVATE_CONFIG.exists():
+        return {}
+    raw = json.loads(PRIVATE_CONFIG.read_text())
+    fws = {}
+    for f in raw.get("frameworks", []):
+        f = dict(f)
+        f["districts"] = tuple(f["districts"])
+        f["notes"] = tuple(f.get("notes", ()))
+        fws[f["key"]] = ExternalFramework(**f)
+    return {**raw, "frameworks": fws}

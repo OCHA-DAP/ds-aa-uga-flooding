@@ -17,6 +17,12 @@ report per-trigger and combined return periods.
   FloodScan OND recurrence, EM-DAT event modality split, IOM DTM district counts.
 - Country documents shared Aug 2026 (UHF severity note, DTM xlsx, URCS/FAO hotspot maps,
   OPM El Niño retrospective) are internal — reference them, never commit them.
+- Unpublished partner material (currently FAO's draft Mt Elgon flood AAP, Sep 2026) never
+  goes in committed source or the public pages — this repo and its Pages site are public. It
+  lives in gitignored `config/*.local.json`; `pipeline/build_private_page.py` renders it into
+  gitignored `site_private/` with images as data URIs, then staticrypt-encrypts it into
+  `pages/partner/index.html`, the only committed form. The public pages may say a draft exists
+  and link to `/partner/`, nothing more. The script refuses to write if plaintext survives.
 - Severity 3+ scope decision on Teso/Kyoga districts is the working group's, not ours.
 - GloFAS G5196 vs FloodScan in Teso is NOT stationary (found 4 Sep 2026 once the reanalysis
   reached 2024): Katakwi anomaly corr by era 0.25 / 0.83 / 0.57 / 0.15 / 0.06 for 1999-2005,

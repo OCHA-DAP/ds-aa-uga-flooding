@@ -14,7 +14,7 @@ documents are referenced, not reproduced.
 | DRC | **Karamoja AAP 2026** (drought, resource conflict, flash flood; cross-border with Kenya) | Moroto, Napak, Amudat | Flash-flood ladder: Kospir River at 80–85 % and rising; ~150 mm forecast in 24–48 h; livestock moving to high ground. Drought: SPI ≤ −1.5, Kobebe dam <50 %, body condition <3.0 | **Activated 27 Jul 2026** on drought + conflict (not flood). Napak floodplains flagged highest flash-flood risk; DRC's OND-2026 central scenario: 48,000 flood-displaced in Uganda |
 | WFP / FAO / OPM | PRO-ACT multi-hazard EWS + Karamoja **drought** AAP | 9 Karamoja districts + Kaberamaido, Katakwi | drought (SPI); **no flood trigger** | drought AAP activated May 2026 |
 | FAO | OSRO/UGA/070/BEL El Niño flood AA | Mbale, Butaleja, Sironko, Bulambuli, Manafwa, Namisindwa, Bundibugyo, Ntoroko, Kasese, Katakwi | seasonal outlook, one-off | 11 Aug–31 Dec 2023 only |
-| FAO (Uganda + SWALIM) | Mt Elgon flood AAP — **unpublished draft**, Sep 2026 | Mount Elgon sub-region | *not recorded here: the plan is not public and this repo is* | Draft; detail and our backtest held with the country team, see §4a |
+| FAO (Uganda + SWALIM) | Mt Elgon flood AAP — **unpublished draft**, Sep 2026 | Mount Elgon sub-region | *not recorded here: the plan is not public and this repo is* | Draft; detail and our backtest on the restricted page `/partner/`, see §4a |
 | FAO + OPM (Japan-funded) | "Enhancing Flood Management in Uganda with Integrated EWS", USD 1.13 M | Rwenzori + Mt Elgon (district list not published) | **no published trigger** — EWS infrastructure, not an AAP: 10 hydro-climatic stations, 2 flood early-warning centres, 72 bulletins, ~5,000 households given anticipatory actions | Mar 2025 – Mar 2026, closed; results dialogue at OPM Jun 2026 |
 | FAO (+WFP, OPM) | Karamoja **drought** AAP | 9 Karamoja districts | "government forecasts crossed trigger thresholds" — values not published | **activated May 2026** (110,000 people, worst in Kotido and Kaabong), superseded by a government drought declaration Jul 2026 (6 months, 300,000 households) |
 | GoU / OPM (WFP, FAO, IGAD) | AA Roadmap 2026–2031 + U-MHIEWS | national, with **sub-national multi-hazard EW centres in Karamoja, Teso, Mt Elgon and Rwenzori** | roadmap commits to "establish clear disaster triggers"; none published | launched Jul 2026; since 2021, 1.6 M families reached with early warning, 400k+ households with AA |
@@ -99,9 +99,10 @@ antecedent-rainfall thresholds for the western East African Rift.
 
 A partner circulated an unpublished draft anticipatory-action plan for the Mount Elgon
 sub-region in September 2026. Its scope, triggers, thresholds, household target and budget
-are **not recorded here or on the published site**: the document is not public, and this repo
-and its GitHub Pages site are. The detail, and our backtest of its three triggers, stay with
-the country team.
+are **not recorded here or on the public pages**: the document is not public, and this repo
+and its GitHub Pages site are. The detail and our backtest of its three triggers are on the
+password-protected page `/partner/` (staticrypt, team review password), built by
+`pipeline/build_private_page.py` from the gitignored `config/private_frameworks.local.json`.
 
 What is safe to carry forward, because it is our own analysis rather than their document:
 
@@ -119,7 +120,8 @@ What is safe to carry forward, because it is our own analysis rather than their 
   forecast skill over climatology at any lead.
 
 `analysis/fao_elgon_triggers.py` reads the partner thresholds from an untracked local config
-(`config/partner_triggers.local.json`, gitignored) and prints results to the console only.
+(`config/partner_triggers.local.json`, gitignored); its outputs stay in gitignored `outputs/`
+and reach the web only inside the encrypted page.
 Without that file it exits with a message rather than failing.
 
 ## 4b. FAO EWS & AA needs assessment, refugee-hosting districts (Dec 2025 survey, preliminary report 7 Jan 2026)

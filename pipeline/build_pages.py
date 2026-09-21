@@ -115,8 +115,8 @@ ZONE_STATUS = [
         "weak",
         "partial",
         "mixed: 5 of 9 districts usable (Bulambuli, Kapchorwa, Manafwa, Mbale, Namisindwa). Bududa, Bukwo and Kween are always zero and Sironko's floods do not land high. Needs the observed-rainfall OR-leg (+17 pts) and gauges where the satellite fails",
-        "Precision under 15 % at any threshold; readiness-tier only. FAO's draft Mt Elgon AAP proposes the same "
-        "rainfall-plus-soil-moisture design that a partner draft also proposes \u2014 coordinate rather than duplicate.",
+        "Precision under 15 % at any threshold; readiness-tier only. A partner plan for the sub-region is in draft "
+        "\u2014 coordinate rather than duplicate.",
         "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
     ),
     (
@@ -442,7 +442,9 @@ def coverage_page() -> str:
     parts.append(
         "<p class='fn'>Districts per area are ours where we have a zone, and the conventional sub-region otherwise. "
         "Overlap counts are computed from the framework registry, so they cannot drift from the per-organisation "
-        "sections above. Drought plans (FAO/WFP Karamoja, PRO-ACT) are excluded \u2014 different hazard.</p>"
+        "sections above. Drought plans (FAO/WFP Karamoja, PRO-ACT) are excluded \u2014 different hazard. Partner plans "
+        "still in draft are left out here; the version including them is on the "
+        '<a href="../partner/">restricted partner page</a>.</p>'
     )
     parts.append(FOOT.format(today=TODAY))
     return "".join(parts)
@@ -530,10 +532,9 @@ HARMONISATION = [
         "elgon",
         "core",
         "rainfall + antecedent wetness, 1\u20135 d (readiness tier)",
-        "Three actors, one hazard, three instruments. FAO\u2019s draft T3 is the same rainfall-plus-soil-moisture design "
-        "we propose; CRS reads the DMS dashboard plus community indicators; IFRC applies GloFAS, which does not work "
-        "here. One rule with one owner would beat three, with FAO\u2019s station network as the shared observation "
-        "layer. Sebei \u2014 Kapchorwa, Kween and Bukwo, 138k affected and 181 deaths on record \u2014 is in "
+        "Several actors, one hazard, different instruments: CRS reads the DMS dashboard plus community indicators, "
+        "IFRC applies GloFAS, which does not work here, and a partner plan for the sub-region is in draft. One rule with "
+        "one owner would beat several, with FAO\u2019s new station network as the shared observation layer. Sebei \u2014 Kapchorwa, Kween and Bukwo, 138k affected and 181 deaths on record \u2014 is in "
         "nobody\u2019s plan.",
     ),
     (
@@ -584,8 +585,20 @@ HARMONISATION = [
 RWENZORI = ("Kasese", "Ntoroko", "Bundibugyo", "Kisoro", "Bunyangabu", "Kabarole")
 
 
-def harmonisation_table() -> str:
+def harmonisation_table(
+    frameworks: dict | None = None,
+    short: dict | None = None,
+    tags: dict | None = None,
+    notes: dict | None = None,
+) -> str:
+    """Area-by-area view of who triggers where. Defaults are the public set; the
+    password-protected page passes unpublished partner frameworks and note overrides."""
     from src.zones import zone_districts
+
+    frameworks = EXTERNAL if frameworks is None else frameworks
+    short = SHORT_TRIGGER if short is None else short
+    tags = {"fao_2023": " (closed)"} | (tags or {})
+    notes = notes or {}
 
     rows = []
     for area, zkey, tier, ours, note in HARMONISATION:
@@ -597,14 +610,14 @@ def harmonisation_table() -> str:
         else:
             ds = {"Kampala"}
         who = []
-        for key, fw in EXTERNAL.items():
+        for key, fw in frameworks.items():
             overlap = sorted(ds & set(fw.districts))
             if not overlap:
                 continue
-            tag = " (closed)" if key == "fao_2023" else ""
+            tag = tags.get(key, "")
             who.append(
                 f"<div class='who'><strong>{e(fw.org)}</strong>{tag} &mdash; {len(overlap)} of {len(ds)} districts"
-                f"<span class='fn'>{SHORT_TRIGGER.get(key, '')}</span></div>"
+                f"<span class='fn'>{short.get(key, '')}</span></div>"
             )
         cell = "".join(who) if who else "<em>no trigger operates here</em>"
         rows.append(
@@ -612,7 +625,7 @@ def harmonisation_table() -> str:
             f"<td class='zn'><strong>{area}</strong><br><span class='tier'>{len(ds)} district{'s' if len(ds) != 1 else ''}</span></td>"
             f"<td>{cell}</td>"
             f"<td>{e(ours)}</td>"
-            f"<td>{note}</td>"
+            f"<td>{notes.get(area, note)}</td>"
             "</tr>"
         )
     head = (
@@ -900,8 +913,8 @@ def results_page() -> str:
         "<p>A partner has circulated a draft anticipatory-action plan for the Mount Elgon sub-region whose design "
         "overlaps this zone closely, including a rainfall-plus-soil-moisture trigger of the same shape as the one "
         "tested above. We have backtested its triggers against the same record used throughout this page. The plan is "
-        "not published, so its scope, thresholds and budget are not reproduced here and the results are held "
-        "internally with the country team.</p>",
+        "not published, so its scope, thresholds and budget are not reproduced here; the plan and our backtest of it "
+        'are on the <a href="../partner/">restricted partner page</a> (password shared internally).</p>',
         "<p>The one finding that is ours to state, because it comes from our own analysis rather than their document: "
         "a rainfall threshold on these slopes has a low ceiling whatever level it is set at. At about four activations "
         "a year the best any threshold we tested manages is roughly a fifth of major events, and precision stays under "
