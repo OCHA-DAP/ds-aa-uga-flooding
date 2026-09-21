@@ -92,3 +92,11 @@ td.any { color: #1a1a1a; font-size: 15px; }
 .oc-hit { color: #007a3d; }
 .oc-miss { color: #c0392b; }
 .oc-fa { color: #777; font-weight: 400; }
+.trig-sum table { table-layout: fixed; width: 100%; min-width: 860px; }
+.trig-sum th, .trig-sum td { white-space: normal; }
+.trig-sum th:nth-child(1) { width: 11%; } .trig-sum th:nth-child(2) { width: 37%; }
+.trig-sum th:nth-child(3) { width: 16%; } .trig-sum th:nth-child(4) { width: 9%; }
+.trig-sum th:nth-child(5) { width: 9%; }  .trig-sum th:nth-child(6) { width: 9%; }
+.trig-sum th:nth-child(7) { width: 9%; }
+.trig-zone th, .trig-zone td { white-space: normal; }
+.trig-zone td.act, .trig-zone td.num { white-space: nowrap; }
