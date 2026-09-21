@@ -32,10 +32,13 @@ def ramp(t: float, lo=(253, 236, 230), hi=(165, 15, 21)) -> str:
     return "#" + "".join(f"{round(a + (b - a) * t):02x}" for a, b in zip(lo, hi, strict=True))
 
 
-def impact_cell(v: float, top: float) -> str:
+def impact_cell(v: float, top: float, floor: float) -> str:
+    """Log shading from `floor` (palest) to the largest value in any zone (darkest), so a few
+    thousand people affected reads light and a hundred thousand reads dark."""
     if not v or v <= 0 or pd.isna(v):
         return "<td class='num'></td>"
-    t = math.log10(v + 1) / math.log10(top + 1)
+    t = (math.log10(max(v, floor)) - math.log10(floor)) / (math.log10(top) - math.log10(floor))
+    t = 0.08 + 0.92 * t  # keep even the smallest recorded value visibly tinted
     fg = "#fff" if t > 0.55 else "#1a1a1a"
     return f"<td class='num' style='background:{ramp(t)};color:{fg}'>{v:,.0f}</td>"
 
@@ -168,7 +171,10 @@ def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float) -> str:
             )
         else:
             act = "<td></td>"
-        peak = f"1-in-{r.peak_rp:.0f}" if pd.notna(r.peak_rp) and r.data else ""
+        if pd.notna(r.peak_rp) and r.data:
+            peak = f"1-in-{r.peak_rp:.0f}" if r.peak_rp >= 2 else "below 1-in-2"
+        else:
+            peak = ""
         if (
             pd.notna(r.peak_rp)
             and r.data
@@ -180,7 +186,7 @@ def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float) -> str:
         rows.append(
             f"<tr><td class='yr'>{y}{'' if r.in_calibration else '<span class=fn>not in calibration</span>'}</td>"
             f"{act}<td class='num'>{peak}</td>"
-            f"{impact_cell(r.affected, top_aff)}{impact_cell(r.deaths, top_d)}"
+            f"{impact_cell(r.affected, top_aff, 500)}{impact_cell(r.deaths, top_d, 1)}"
             f"<td class='num'>{int(r.districts) if r.districts else ''}</td>"
             f"<td>{outcome(r, worst)}</td>"
             f"<td class='fn'>{bp.e(source_labels(src))}</td>"
