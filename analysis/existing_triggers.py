@@ -64,7 +64,7 @@ PUBLIC_SPECS = [
         key="ifrc_teso",
         short="IFRC EAP",
         label=(
-            "IFRC/URCS EAP: GloFAS 5-year flood at a reporting point, 5-day lead. Stand-in: the reanalysis at "
+            "GloFAS 5-year flood at a reporting point, 5-day lead (IFRC/URCS EAP2021UG01). Stand-in: the reanalysis at "
             "G5196, the point in their Teso districts, reaching its 5-year level (the >1,000-household condition "
             "cannot be backtested)"
         ),
@@ -78,7 +78,7 @@ PUBLIC_SPECS = [
         key="ifrc_elgon",
         short="IFRC EAP",
         label=(
-            "IFRC/URCS EAP: GloFAS 5-year flood at a reporting point, 5-day lead. Stand-in: the reanalysis at "
+            "GloFAS 5-year flood at a reporting point, 5-day lead (IFRC/URCS EAP2021UG01). Stand-in: the reanalysis at "
             "G5220, Manafwa at Butaleja — the only reporting point in the sub-region — reaching its "
             "5-year level"
         ),
