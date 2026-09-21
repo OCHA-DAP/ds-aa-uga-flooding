@@ -23,6 +23,7 @@ from src.constants import ZONES
 
 TRIG = bp.OUT / "triggers"
 ZONE_ORDER = ["teso_kyoga", "elgon", "karamoja", "adjumani"]
+EXT_COL = "#5b5b5b"  # existing (other organisations') triggers: one neutral colour
 SHORT = {"teso_kyoga": "Teso", "elgon": "Elgon", "karamoja": "Karamoja", "adjumani": "Adjumani"}
 
 
@@ -145,21 +146,94 @@ def source_labels(raw: str) -> str:
     return ", ".join(out)
 
 
-def outcome(r: pd.Series, worst: set[int]) -> str:
-    if not r.data:
-        return ""
-    if r.activated and r.major:
-        return "<span class='oc oc-hit'>hit</span>"
-    if r.activated:
-        return "<span class='oc oc-fa'>no major impact recorded</span>"
-    if r.name in worst:
-        return "<span class='oc oc-miss'>missed</span>"
-    return ""
+def load_existing(path) -> dict[str, list[tuple[str, str, pd.DataFrame]]]:
+    """Existing triggers per zone as (short name, description, per-year frame)."""
+    out: dict[str, list[tuple[str, str, pd.DataFrame]]] = {}
+    if not Path(path).exists():
+        return out
+    df = pd.read_csv(path)
+    for z, g in df.groupby("zone", sort=False):
+        out[z] = [
+            (h.short.iloc[0], h.label.iloc[0], h.set_index("year"))
+            for _, h in g.groupby("key", sort=False)
+        ]
+    return out
 
 
-def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float) -> str:
+def merge_existing(*dicts) -> dict[str, list[tuple[str, str, pd.DataFrame]]]:
+    """Combine sets of existing triggers. Triggers whose year-by-year activations are identical
+    in the backtest (several organisations' GloFAS 5-year triggers reduce to the same stand-in
+    at the same point) become one column with their names joined, not duplicate columns."""
+    out: dict[str, list[tuple[str, str, pd.DataFrame]]] = {}
+    for d in dicts:
+        for z, cols in d.items():
+            cur = out.setdefault(z, [])
+            for short, label, h in cols:
+                sig = tuple(h.activated & h.data)
+                for i, (s0, l0, p0) in enumerate(cur):
+                    if tuple(p0.activated & p0.data) == sig:
+                        cur[i] = (f"{s0} · {short}", f"{l0}<br>{label}", p0)
+                        break
+                else:
+                    cur.append((short, label, h))
+    return out
+
+
+def rates(activated: pd.Series, data: pd.Series, tab: pd.DataFrame) -> dict:
     cal = tab[tab.in_calibration]
+    a = activated.reindex(cal.index).fillna(False).astype(bool)
+    d = data.reindex(cal.index).fillna(False).astype(bool)
+    act_years = set(a[a & d].index)
+    n = int(d.sum())
     worst = set(cal.affected.nlargest(5).index)
+    major = set(cal[cal.major].index)
+    return dict(
+        n=len(act_years),
+        years=n,
+        rp=(n + 1) / len(act_years) if act_years else float("nan"),
+        worst=len(worst & act_years),
+        major=len(major & act_years),
+    )
+
+
+def compare_table(z: str, tab: pd.DataFrame, cols) -> str:
+    """Our draft and each existing trigger over the same calibration years."""
+    items = [("Our draft", tab.activated, tab.data, bp.ZONE_COL[z])]
+    items += [(short, h.activated, h.data, EXT_COL) for short, _, h in cols]
+    base = tab[tab.in_calibration].major.mean()
+    rows = []
+    for name, act, dat, col in items:
+        r = rates(act, dat, tab)
+        rp = f"1-in-{r['rp']:.1f}" if r["n"] else "never"
+        rows.append(
+            f"<tr><td><span class='sw' style='background:{col}'></span>{bp.e(name)}</td>"
+            f"<td class='num'>{r['n']} of {r['years']}</td><td class='num'><strong>{rp}</strong></td>"
+            f"<td class='num'>{r['worst']} of 5</td><td class='num'>{r['major']} of {r['n']}</td></tr>"
+        )
+    head = (
+        "<tr><th>Trigger</th><th>Activation years</th><th>Return period</th><th>Five worst years caught</th>"
+        f"<th>Activations in a major-impact year (base rate {base:.0%})</th></tr>"
+    )
+    return f"<div class='tw trig-cmp'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+
+
+def existing_notes(cols) -> str:
+    if not cols:
+        return ""
+    items = "".join(f"<li><strong>{bp.e(short)}</strong>: {label}</li>" for short, label, _ in cols)
+    return f"<ul class='ext-notes'>{items}</ul>"
+
+
+def existing_cell(h: pd.DataFrame, y: int) -> str:
+    if y not in h.index or not h.loc[y].data:
+        return "<td class='nodata'>no data</td>"
+    r = h.loc[y]
+    if r.activated:
+        return f"<td class='act' style='background:{EXT_COL}'>activated<span class='d'>{r.first_date}</span></td>"
+    return "<td></td>"
+
+
+def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float, cols=()) -> str:
     rows = []
     for y, r in tab.sort_index(ascending=False).iterrows():
         if not r.data:
@@ -175,28 +249,25 @@ def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float) -> str:
             act = "<td></td>"
         if pd.notna(r.peak_rp) and r.data:
             peak = f"1-in-{r.peak_rp:.0f}" if r.peak_rp >= 2 else "below 1-in-2"
+            if isinstance(r.peak_where, str) and z in ("karamoja", "adjumani"):
+                peak += f"<span class='fn'>{bp.e(r.peak_where)}</span>"
         else:
             peak = ""
-        if (
-            pd.notna(r.peak_rp)
-            and r.data
-            and isinstance(r.peak_where, str)
-            and z in ("karamoja", "adjumani")
-        ):
-            peak += f"<span class='fn'>{bp.e(r.peak_where)}</span>"
         src = r.sources if isinstance(r.sources, str) else ""
+        yr = f"{y}" + ("" if r.in_calibration else "<span class='fn'>not in calibration</span>")
         rows.append(
-            f"<tr><td class='yr'>{y}{'' if r.in_calibration else '<span class=fn>not in calibration</span>'}</td>"
-            f"{act}<td class='num'>{peak}</td>"
-            f"{impact_cell(r.affected, top_aff, 500)}{impact_cell(r.deaths, top_d, 1)}"
+            f"<tr><td class='yr'>{yr}</td>{act}<td class='num'>{peak}</td>"
+            + "".join(existing_cell(h, y) for _, _, h in cols)
+            + f"{impact_cell(r.affected, top_aff, 500)}{impact_cell(r.deaths, top_d, 1)}"
             f"<td class='num'>{int(r.districts) if r.districts else ''}</td>"
-            f"<td>{outcome(r, worst)}</td>"
-            f"<td class='fn'>{bp.e(source_labels(src))}</td>"
-            f"<td class='fn'>{bp.e(r.cerf) if isinstance(r.cerf, str) else ''}</td></tr>"
+            f"<td class='src'>{bp.e(source_labels(src))}</td>"
+            f"<td class='src'>{bp.e(r.cerf) if isinstance(r.cerf, str) else ''}</td></tr>"
         )
     head = (
-        "<tr><th>Year</th><th>Trigger</th><th>Year’s peak</th><th>People affected</th><th>Deaths</th>"
-        "<th>Districts reporting</th><th>Reading</th><th>Impact sources</th><th>CERF</th></tr>"
+        "<tr><th>Year</th><th>Our draft</th><th>Year’s peak</th>"
+        + "".join(f"<th>{bp.e(short)}</th>" for short, _, _ in cols)
+        + "<th>People affected</th><th>Deaths</th><th>Districts reporting</th><th>Impact sources</th>"
+        "<th>CERF</th></tr>"
     )
     return f"<div class='tw trig-zone'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
@@ -241,10 +312,29 @@ ZONE_NOTE = {
 }
 
 
+# Where an existing trigger operates in the zone but is not shown on this public page
+EXISTING_NOTE = {
+    "elgon": (
+        "Two partner plans also trigger here \u2014 a draft FAO plan and the CRS/Caritas Tororo protocol. Neither is "
+        'published, so their backtests sit on the <a href="../partner/">restricted partner page</a>.'
+    ),
+    "karamoja": (
+        "The IFRC EAP lists Nabilatuk, but there is no GloFAS reporting point in Karamoja to reproduce it with. DRC\u2019s "
+        "Karamoja plan covers Moroto, Napak and Amudat; it is not published, so its backtest sits on the "
+        '<a href="../partner/">restricted partner page</a>.'
+    ),
+    "adjumani": (
+        "The IFRC EAP lists Moyo, but there is no GloFAS reporting point on the Albert Nile to reproduce it with. No "
+        "other organisation has a flood trigger in the zone."
+    ),
+}
+
+
 def page() -> str:
     s = pd.read_csv(TRIG / "summary.csv")
     thr = pd.read_csv(TRIG / "thresholds.csv")
     tabs = {z: pd.read_csv(TRIG / f"{z}.csv").set_index("year") for z in ZONE_ORDER}
+    existing = merge_existing(load_existing(TRIG / "existing_public.csv"))
     years = sorted(tabs["teso_kyoga"].index, reverse=True)
     top_aff = max(float(t.affected.max()) for t in tabs.values())
     top_d = max(float(t.deaths.max()) for t in tabs.values())
@@ -290,8 +380,17 @@ def page() -> str:
             f"<h2><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{bp.e(zl)}</h2>",
             f"<p><strong>Activates when</strong> {what}. <strong>Lead time:</strong> {lead}.</p>",
             f"<p>{ZONE_NOTE[z].format(rp=round(float(thr[thr.zone == z].series_rp.iloc[0])))}</p>",
-            zone_table(z, tabs[z], top_aff, top_d),
         ]
+        cols = existing.get(z, [])
+        if cols:
+            parts += [
+                "<p><strong>Alongside existing triggers.</strong></p>",
+                compare_table(z, tabs[z], cols),
+                existing_notes(cols),
+            ]
+        if EXISTING_NOTE.get(z):
+            parts.append(f"<p class='fn'>{EXISTING_NOTE[z]}</p>")
+        parts.append(zone_table(z, tabs[z], top_aff, top_d, cols))
     parts += [
         "<h2>Reading the tables</h2>",
         "<ul>"
@@ -302,9 +401,10 @@ def page() -> str:
         "which is not the same as what happened: DesInventar ends in 2021, so later years rest on EM-DAT, press "
         "reports and IOM DTM rounds, and quiet recent years are partly quiet reporting. EM-DAT events spanning many "
         "districts are split evenly across them.</li>"
-        "<li><strong>Reading</strong>: <em>hit</em> is an activation in a major-impact year; <em>no major impact "
-        "recorded</em> is an activation without one; <em>missed</em> marks one of the zone’s five worst years "
-        "with no activation.</li>"
+        "<li><strong>Existing triggers</strong> (grey columns) are other organisations’ triggers for the same "
+        "zone, reproduced as closely as public data allows over the same years; each is described under its zone’s "
+        "comparison table. They were designed for their own coverage and return periods, not for this budget, so "
+        "the comparison is about which years each would have picked, not a ranking.</li>"
         "<li><strong>CERF</strong> marks the national flood allocations of October 2007 and January 2020 (for the "
         "late-2019 floods); they are not zone-specific.</li>"
         "</ul>",

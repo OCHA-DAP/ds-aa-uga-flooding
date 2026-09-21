@@ -29,6 +29,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_pages as bp
+import build_trigger_page as tp
 import zones_map
 
 from src.frameworks import EXTERNAL, load_private
@@ -75,6 +76,49 @@ def framework_card(fw) -> str:
     )
 
 
+def partner_trigger_section() -> list[str]:
+    """Our draft triggers alongside the partner triggers, for the zones they cover."""
+    pub = tp.TRIG / "existing_public.csv"
+    prv = BUILD / "existing_private.csv"
+    if not prv.exists():
+        return []
+    existing = tp.merge_existing(tp.load_existing(pub), tp.load_existing(prv))
+    tabs = {z: pd.read_csv(tp.TRIG / f"{z}.csv").set_index("year") for z in tp.ZONE_ORDER}
+    top_aff = max(float(t.affected.max()) for t in tabs.values())
+    top_d = max(float(t.deaths.max()) for t in tabs.values())
+    priv_zones = set(pd.read_csv(prv).zone)
+    out = [
+        "<h2>Our draft triggers alongside the partner triggers</h2>",
+        '<p>The same backtest as the public <a href="../triggers/">draft triggers</a> page \u2014 same years, same '
+        "impact record, same thresholds for our drafts \u2014 with the partner triggers added as grey columns. Partner "
+        "triggers are reproduced as closely as public data allows; each is described under its comparison table, "
+        "including what could not be backtested. Where two organisations\u2019 triggers reduce to the same stand-in "
+        "and activate in exactly the same years, they share a column.</p>",
+    ]
+    for z in tp.ZONE_ORDER:
+        if z not in priv_zones:
+            continue
+        cols = existing.get(z, [])
+        out += [
+            f"<h3><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>"
+            f"{bp.e(tp.ZONES[z].label.split(' (')[0])}</h3>",
+            tp.compare_table(z, tabs[z], cols),
+            tp.existing_notes(cols),
+            tp.zone_table(z, tabs[z], top_aff, top_d, cols),
+        ]
+    out.append(
+        "<p><strong>Reading.</strong> Both partner rain triggers turn on a detail their documents leave open: the "
+        "spatial scale of the rainfall figure. Read as a district average, FAO\u2019s 100 mm in 3 days activates in "
+        "5 of 25 years and DRC\u2019s 150 mm never does; read at the wettest pixel, closer to a rain gauge, FAO\u2019s "
+        "activates every year and DRC\u2019s in 16 of 24. Neither reading gives a rarity a fund could budget on, so "
+        "the scale \u2014 and the product that will operate the trigger \u2014 is the first thing to agree with each "
+        "partner. The GloFAS triggers at Manafwa (IFRC, FAO T2, CRS window 2) activate in the same four years, "
+        "so harmonising them is a matter of agreeing one threshold; the question is whether that point is worth "
+        "harmonising on at all, given how weakly it tracks flooding in the sub-region.</p>"
+    )
+    return out
+
+
 def page(priv: dict) -> str:
     fws = priv["frameworks"]
     BUILD.mkdir(exist_ok=True)
@@ -116,6 +160,7 @@ def page(priv: dict) -> str:
             tags=priv.get("tag", {}),
             notes=priv.get("harmonisation_notes", {}),
         ),
+        *partner_trigger_section(),
         "<h2>Research notes</h2>",
         markdown.markdown(priv["research_notes_4a"], extensions=["tables"]),
         bp.FOOT.format(today=bp.TODAY).replace(

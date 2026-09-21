@@ -78,7 +78,6 @@ td.rate-weak { box-shadow: inset 4px 0 0 #c0392b; }
 h2 .sw { display: inline-block; width: 14px; height: 14px; border-radius: 3px; margin-right: 9px; vertical-align: -1px; }
 .trig-sum td, .trig-zone td, .trig-over td { vertical-align: top; }
 .trig-sum td.num, .trig-zone td.num { text-align: right; white-space: nowrap; }
-.trig-sum .fn, .trig-zone .fn { display: block; }
 .trig-over table, .trig-zone table { min-width: 0; }
 .trig-over td, .trig-over th { text-align: center; padding: 4px 8px; }
 .trig-over td.fn { text-align: left; }
@@ -100,3 +99,11 @@ td.any { color: #1a1a1a; font-size: 15px; }
 .trig-sum th:nth-child(7) { width: 9%; }
 .trig-zone th, .trig-zone td { white-space: normal; }
 .trig-zone td.act, .trig-zone td.num { white-space: nowrap; }
+/* trigger tables: cell-level fixes (a td must never be display:block) */
+.trig-zone td.src { white-space: normal; font-size: 12px; color: #555; min-width: 110px; }
+.trig-zone td.yr .fn, .trig-zone td.num .fn, .trig-sum td .fn { display: block; font-size: 11.5px; color: #666; }
+.trig-over td.fn { display: table-cell; }
+.trig-cmp table { min-width: 0; }
+.trig-cmp td.num { text-align: right; }
+ul.ext-notes { font-size: 13px; color: #444; margin-top: 4px; }
+ul.ext-notes li { margin-bottom: 4px; }
