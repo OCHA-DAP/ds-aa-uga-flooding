@@ -44,6 +44,7 @@ FLAT_ZERO_SHARE = (
     0.95  # above this share of exactly-zero days there is barely a distribution to threshold
 )
 EVENT_TOP_PCTL = 80  # "reaches the district's own top fifth"
+MIN_LIFT = 0.10  # events must beat the window chance rate by this much
 ZONE_COL = {
     "teso_kyoga": "#2a78d6",
     "elgon": "#e34948",
@@ -138,8 +139,31 @@ def event_percentiles(fs: pd.DataFrame, adm: pd.Series) -> pd.DataFrame:
 
 def event_top_share(evp: pd.DataFrame) -> pd.Series:
     """Per district: share of dated events whose window reaches the district's own 80th
-    percentile. Chance is 0.20, so values near or below that mean no usable signal."""
+    percentile. Compare with `window_chance`, not with 0.20 — see there."""
     return evp.groupby("district").sfed_pctl.apply(lambda x: float((x >= EVENT_TOP_PCTL).mean()))
+
+
+def window_chance(fs: pd.DataFrame, adm: pd.Series) -> pd.Series:
+    """Per district: the chance that an ARBITRARY [-3, +7] day window reaches the 80th percentile.
+
+    The event test takes the maximum over an 11-day window, and the maximum of many days is
+    naturally high, so the chance rate is not 0.20. How far above 0.20 depends on how
+    persistent the series is (a sticky flood-extent series has few independent days in a
+    window; a flashy one has many): 0.01-0.65 across the zone districts, median ~0.36.
+    Measured empirically from every window in the record rather than assumed.
+    """
+    out = {}
+    for pcode, name in adm.items():
+        s = fs[fs.pcode == pcode].set_index("date")["mean"].sort_index().dropna()
+        if s.empty:
+            continue
+        r = s.rank(pct=True)
+        fwd = r[::-1].rolling(8, min_periods=1).max()[::-1]  # today + 7 days
+        back = r.rolling(4, min_periods=1).max()  # 3 days before + today
+        out[name] = float(
+            (pd.concat([fwd, back], axis=1).max(axis=1) >= EVENT_TOP_PCTL / 100).mean()
+        )
+    return pd.Series(out)
 
 
 def main() -> None:
@@ -158,7 +182,11 @@ def main() -> None:
     top = event_top_share(evp)
     sc["events_in_top_fifth"] = sc.district.map(top)
     sc["n_dated_events"] = sc.district.map(evp.groupby("district").size())
-    sc["usable"] = (sc.events_in_top_fifth >= 0.30) & ~sc.flat
+    sc["window_chance"] = sc.district.map(window_chance(fs, adm))
+    sc["lift"] = sc.events_in_top_fifth - sc.window_chance
+    # usable: events reach the top fifth at least 10 points more often than arbitrary windows
+    # do, on at least three dated events, and the series is not flat
+    sc["usable"] = (sc.lift >= MIN_LIFT) & (sc.n_dated_events >= 3) & ~sc.flat
     sc.to_csv(OUT / "floodscan_vs_impact_district.csv", index=False)
 
     pd.set_option("display.width", 200)

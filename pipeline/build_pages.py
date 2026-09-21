@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "20"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "21"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -92,7 +92,7 @@ ZONE_STATUS = [
         "GloFAS G5196 return-period exceedance, 3–14 d lead (IFRC EAP form)",
         "good",
         "yes",
-        "all 3 districts usable; 79 % of events reach the district's top fifth. Rainfall OR-leg adds nothing (slow riverine)",
+        "all 3 districts usable; 79 % of events reach the district's top fifth, against 42 % of arbitrary windows. Rainfall OR-leg adds nothing (slow riverine)",
         "Relationship drifted after 2013; needs a gauge or Flood Hub cross-check.",
         "2007 Teso floods (CERF), 2010, 2014",
     ),
@@ -103,7 +103,7 @@ ZONE_STATUS = [
         "Same G5196 signal 3–4 weeks later, or observed extent",
         "promising",
         "yes",
-        "all 3 districts usable; 68 % of events in the top fifth",
+        "all 3 districts usable; 68 % of events in the top fifth, against 36 % by chance",
         "Lagged link is weaker; may end up observation-led.",
         "2007, 2012 Soroti",
     ),
@@ -114,7 +114,7 @@ ZONE_STATUS = [
         "Rainfall forecast + antecedent wetness, 1–5 d lead",
         "weak",
         "partial",
-        "mixed: 5 of 9 districts usable (Bulambuli, Kapchorwa, Manafwa, Mbale, Namisindwa). Bududa, Bukwo and Kween are always zero and Sironko's floods do not land high. Needs the observed-rainfall OR-leg (+17 pts) and gauges where the satellite fails",
+        "mixed: 4 of 9 districts usable (Bulambuli, Kapchorwa, Manafwa, Mbale). Bududa, Bukwo and Kween are always zero, Sironko's floods do not land high, and Namisindwa has one dated event. Needs the observed-rainfall OR-leg (+17 pts) and gauges where the satellite fails",
         "Precision under 15 % at any threshold; readiness-tier only. A partner plan for the sub-region is in draft "
         "\u2014 coordinate rather than duplicate.",
         "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
@@ -126,7 +126,7 @@ ZONE_STATUS = [
         "Lagged Elgon rainfall, or observation-led; GloFAS Manafwa point fails",
         "promising",
         "yes",
-        "all 6 districts usable; 72 % of events in the top fifth, exposure AUC 0.92. Rainfall OR-leg adds +18 pts on major events",
+        "4 of 6 districts usable (Budaka and Kumi sit at chance); 72 % of events in the top fifth against 41 %, exposure AUC 0.92. Rainfall OR-leg adds +18 pts on major events",
         "Forecast leg untested; observation is the strong leg.",
         "2018 Butaleja, 2025 Pallisa, 2007",
     ),
@@ -137,7 +137,7 @@ ZONE_STATUS = [
         "Rainfall forecast + antecedent wetness, 1–5 d lead; sub-zone by basin",
         "weak",
         "partial",
-        "6 of 9 districts usable and 50 % of events in the top fifth, but year-level AUC near chance; for major events the observed-rainfall OR-leg is the leg that works (+31 pts)",
+        "4 of 9 districts usable (Abim, Amudat, Kotido, Nakapiripirit); across the zone 50 % of events reach the top fifth against 43 % by chance, and year-level AUC is near chance; for major events the observed-rainfall OR-leg is the leg that works (+31 pts)",
         "Same limits as the Elgon slopes; DRC covers Moroto, Napak, Amudat.",
         "2007 (CERF), 2008, 2018 Napak",
     ),
@@ -148,7 +148,7 @@ ZONE_STATUS = [
         "Lake Victoria → Kyoga → Albert level chain (months of lead); rainfall for the flash regime",
         "promising",
         "no",
-        "0 of 3 districts usable: 3 % of events reach the top fifth against 20 % by chance. Needs a river gauge (Pakwach, Laropi) or reports",
+        "0 of 3 districts usable: 3 % of events reach the top fifth, against 29 % of arbitrary windows. Needs a river gauge (Pakwach, Laropi) or reports",
         "Three lake-driven events on record; Albert altimetry starts 2016.",
         "2020 Obongi, Oct–Nov 2023 Moyo, 2007",
     ),
@@ -159,7 +159,7 @@ ZONE_STATUS = [
         "Lake Albert level, same upstream chain",
         "promising",
         "no",
-        "0 of 3 districts usable: 10 % of events reach the top fifth. CEMS confirms lakeshore floods are invisible to FloodScan",
+        "0 of 3 districts usable: 10 % of events reach the top fifth, against 29 % by chance. CEMS confirms lakeshore floods are invisible to FloodScan",
         "Cleanest lake-level case, few events to validate on.",
         "2020 Pakwach (100k), 2009 Nebbi",
     ),
@@ -223,7 +223,7 @@ def district_flags() -> dict[str, list[str]]:
         f = []
         if bool(d.flat.get(dd, False)):
             f.append("flat satellite series")
-        elif float(d.events_in_top_fifth.get(dd, 1.0)) < 0.30:
+        elif float(d.lift.get(dd, 1.0)) < 0.10:
             f.append("floods not visible to the satellite")
         if float(d.n_impact_years.get(dd, 0)) < 3:
             f.append("thin record")
@@ -290,7 +290,7 @@ def zone_district_list() -> str:
         f"<p class='fn'>{total} districts in total, of Uganda's 135. Names follow the CODAB admin-2 vintage used "
         "throughout (FieldMaps). Markers flag districts where the evidence is thinner than their neighbours\u2019, so "
         "they warrant care in targeting \u2014 <sup class='mk'>*</sup> recorded floods there do not reach the district\u2019s "
-        "own top fifth of FloodScan days (chance is a fifth), or the series is too flat to threshold at all, so the "
+        "own top fifth of FloodScan days any more often than arbitrary windows do, or the series is too flat to threshold at all, so the "
         "observational backstop has little to work with; <sup class='mk'>\u2020</sup> fewer than three years carry a "
         "recorded impact, so nothing can be validated either way; <sup class='mk'>\u2021</sup> in Teso only, G5196 "
         "discharge correlates under 0.30 with that district\u2019s observed flooding. Computed from the results-page "
@@ -733,6 +733,9 @@ def floodscan_impact_table() -> str:
                 "events in the top fifth": f"{(ez.sfed_pctl >= 80).mean():.0%}"
                 if len(ez)
                 else "\u2014",
+                "arbitrary windows (chance)": f"{dz.window_chance.median():.0%}"
+                if len(dz)
+                else "\u2014",
                 "median AUC": round(dz.auc.median(), 2) if len(dz) else float("nan"),
             }
         )
@@ -862,23 +865,29 @@ def results_page() -> str:
         "where FloodScan only ever reaches half a percent is perfectly usable if those small peaks land on the days people "
         "flooded. Two tests: at year level the AUC, the probability that a random impact year has a higher annual maximum "
         "than a random non-impact year; and at event level whether each dated event reaches the district\u2019s own top "
-        "fifth of days, against the fifth expected by chance. A district counts as usable when at least 30 % of its events "
-        "reach that top fifth and its series is not so flat (over 95 % exactly-zero days) that there is nothing to "
-        "threshold.</p>"
+        "fifth of days. The comparison for that second test is not one in five: each event is judged on the highest day in "
+        "an 11-day window around it, and the highest of 11 days is naturally high, so the page measures, district by "
+        "district, how often an arbitrary window in the record reaches the top fifth \u2014 anywhere from 1 % to 65 %, "
+        "median 36 %, depending on how persistent the series is. A district counts as usable when its events reach the top "
+        "fifth at least 10 points more often than arbitrary windows do, on at least three dated events, and its series is "
+        "not so flat (over 95 % exactly-zero days) that there is nothing to threshold.</p>"
         "<p class='fn'>An earlier version of this page gated on absolute extent \u2014 a 2-year level under 1 % was called "
         "\u2018blind\u2019 \u2014 and wrongly wrote off districts whose relative signal is fine. Kapchorwa, Manafwa, Mbale "
-        "and most of Karamoja were casualties of that error; the numbers below are the corrected, rank-based ones.</p>"
+        "and most of Karamoja were casualties of that error. A second correction followed: the event test was first compared "
+        "with a fixed one-in-five chance rate, which flattered Budaka, Kumi, Kaabong and Napak. The numbers below use the "
+        "measured, per-district chance rate.</p>"
         '<figure><img src="floodscan_vs_impact.png" alt="Map of AUC per district and a histogram of event percentiles by zone"></figure>',
         floodscan_impact_table(),
-        "<p><strong>Reading:</strong> the satellite is a good witness across both Teso tiers (79 % and 68 % of events in the "
-        "district\u2019s top fifth, all six districts usable) and across the whole Elgon lowland tier (72 %, six of six). "
-        "On the Elgon slopes it is mixed rather than absent: five of nine districts are usable \u2014 Bulambuli, Kapchorwa, "
-        "Manafwa, Mbale and Namisindwa \u2014 while Bududa, Bukwo and Kween have series that are essentially always zero "
-        "and Sironko\u2019s floods do not land high in its own record. Karamoja is better than an absolute reading "
-        "suggested: six of nine districts are usable, though the year-level AUC stays near chance, so it detects events "
-        "better than it ranks years. Adjumani is the one clear failure and it survives the rank-based test: 3 % and 10 % of "
-        "events reach the top fifth, against the 20 % expected by chance, so the Albert Nile really is invisible and the "
-        "backstop there has to be a river gauge or reports.</p>"
+        "<p><strong>Reading:</strong> the satellite is a good witness across both Teso tiers: 79 % and 68 % of events reach the "
+        "district\u2019s top fifth, against 42 % and 36 % of arbitrary windows, and all six districts are usable. In the Elgon "
+        "lowlands four of six are usable (Bukedea, Butaleja, Kibuku, Pallisa); Budaka and Kumi sit at chance. On the Elgon "
+        "slopes it is mixed rather than absent: Bulambuli, Kapchorwa, Manafwa and Mbale are usable, Bududa, Bukwo and Kween "
+        "have series that are essentially always zero, Sironko\u2019s floods do not land high in its own record, and "
+        "Namisindwa has a single dated event. Karamoja is weaker than the first rank-based pass suggested: four of nine "
+        "districts are usable (Abim, Amudat, Kotido, Nakapiripirit), and across the zone events beat chance only narrowly, "
+        "50 % against 43 %. Adjumani is the one clear failure: 3 % and 10 % of events reach the top fifth, below the 29 % "
+        "an arbitrary window manages, so the Albert Nile really is invisible and the backstop there has to be a river gauge "
+        "or reports.</p>"
         "<h2>Exposure, not just extent</h2>",
         "<p>Extent answers \u201cis there water\u201d; exposure answers \u201cis there water where people are\u201d, which is what an "
         "observational trigger should key on. Uganda is not one of the countries in the team\u2019s flood-exposure pipeline, so exposure was "
