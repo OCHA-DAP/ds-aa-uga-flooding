@@ -109,8 +109,10 @@ ul.keypts li { margin-bottom: 7px; }
 .trig-alloc tr.tot td { border-top: 2px solid #ccc; font-weight: 500; }
 .trig-over td.src { white-space: normal; font-size: 12px; color: #555; text-align: left; }
 pre { background: #f5f5f5; padding: 10px 12px; border-radius: 4px; font-size: 12.5px; overflow-x: auto; }
-.trig-sum th:nth-child(1) { width: 9%; }  .trig-sum th:nth-child(2) { width: 29%; }
-.trig-sum th:nth-child(3) { width: 14%; } .trig-sum th:nth-child(4) { width: 8%; }
-.trig-sum th:nth-child(5) { width: 8%; }  .trig-sum th:nth-child(6) { width: 12%; }
-.trig-sum th:nth-child(7) { width: 9%; }  .trig-sum th:nth-child(8) { width: 11%; }
+.trig-sum table { min-width: 1080px; }
+.trig-sum th:nth-child(1) { width: 8%; }  .trig-sum th:nth-child(2) { width: 24%; }
+.trig-sum th:nth-child(3) { width: 12%; } .trig-sum th:nth-child(4) { width: 9%; }
+.trig-sum th:nth-child(5) { width: 8%; }  .trig-sum th:nth-child(6) { width: 15%; }
+.trig-sum th:nth-child(7) { width: 6%; }  .trig-sum th:nth-child(8) { width: 7%; }
+.trig-sum th:nth-child(9) { width: 6%; }  .trig-sum th:nth-child(10) { width: 6%; }
 .trig-sum td.num .fn { white-space: normal; }

@@ -100,18 +100,20 @@ def parse_datacards(zip_bytes: bytes) -> pd.DataFrame:
         "relocated",
     ):
         df[c] = pd.to_numeric(df[c], errors="coerce")
-    df["date"] = pd.to_datetime(
-        {
-            "year": df.year,
-            "month": df.month.fillna(1).clip(1, 12),
-            "day": df.day.fillna(1).clip(1, 28),
-        },
-        errors="coerce",
+    # DesInventar writes 0 for an unknown day or month. An earlier version treated day 0 as the
+    # 1st and called it day-precise — a quarter of all cards, and most of the deaths — and
+    # clamped days 29-31 to the 28th. Unknown parts now lower the precision instead, and real
+    # days are kept as they are (clipped only to the length of their month).
+    month = df.month.where(df.month.between(1, 12))
+    day = df.day.where(df.day >= 1)
+    first = pd.to_datetime({"year": df.year, "month": month.fillna(1), "day": 1}, errors="coerce")
+    df["date"] = first + pd.to_timedelta(
+        day.fillna(1).clip(upper=first.dt.days_in_month) - 1, unit="D"
     )
     df["date_precision"] = (
         pd.Series("day", index=df.index)
-        .where(df.day.notna(), "month")
-        .where(df.month.notna(), "year")
+        .where(day.notna() & month.notna(), "month")
+        .where(month.notna(), "year")
     )
     df["district_di"] = df["district_di"].str.strip().str.upper()
     lookup = {n.upper(): n for n in load_adm2().ADM2_EN}

@@ -41,11 +41,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import ocha_stratus as stratus
 from flash_flood_antecedent import api_index, pctl
 from trigger_draft import (
-    FIRST_YEAR,
+    FIRST_SEASON,
     GLOFAS_DIR,
-    complete_years,
     gumbel_fit,
     gumbel_level,
+    in_season,
+    match,
+    season_bounds,
+    season_label,
+    season_max,
+    season_of,
+    zone_events,
 )
 
 from src.constants import GLOFAS_PIXEL_LONLAT, PROJECT_PREFIX
@@ -56,7 +62,7 @@ from src.zones import load_adm2
 ROOT = Path(__file__).resolve().parent.parent
 OUT_PUBLIC = ROOT / "outputs" / "triggers" / "existing_public.csv"
 OUT_PRIVATE = ROOT / "site_private" / "existing_private.csv"
-CAL_LAST = 2025 if (GLOFAS_DIR / "2025.nc").exists() else 2024  # same years as trigger_draft
+CAL_LAST = 2024  # last calibration SEASON (2024/25), matching trigger_draft
 
 PUBLIC_SPECS = [
     dict(
@@ -128,13 +134,13 @@ def activation_days(spec: dict, d: Data) -> pd.Series:
     t = spec["type"]
     if t == "glofas_rp":
         q = d.glofas(spec["lat"], spec["lon"])
-        am = q.groupby(q.index.year).max()
-        level = gumbel_level(spec["rp"], *gumbel_fit(am.loc[FIRST_YEAR:CAL_LAST]))
-        return complete_years(q) >= level
+        am = season_max(q)
+        level = gumbel_level(spec["rp"], *gumbel_fit(am.loc[FIRST_SEASON:CAL_LAST]))
+        return in_season(q) >= level
     pcs = [d.adm[x] for x in spec["districts"]]
     if t == "rain_forecast":  # CHIRPS-GEFS 5-day accumulation, district mean or wettest pixel
         w = d.chirps_gefs(spec.get("stat", "mean"))[pcs]
-        return (w >= spec["mm"]).any(axis=1)[w.notna().any(axis=1)].pipe(complete_years)
+        return (w >= spec["mm"]).any(axis=1)[w.notna().any(axis=1)].pipe(in_season)
     if (
         t == "rain_observed"
     ):  # IMERG n-day sum (district mean, or the wettest pixel), optional wet soils
@@ -145,26 +151,36 @@ def activation_days(spec: dict, d: Data) -> pd.Series:
         if spec.get("antecedent_pctl") is not None:
             ante = pd.DataFrame({c: pctl(api_index(mean[c]).shift(spec["window"])) for c in pcs})
             cond &= ante >= spec["antecedent_pctl"]
-        return cond.any(axis=1).pipe(complete_years)
+        return cond.any(axis=1).pipe(in_season)
     raise ValueError(f"unknown trigger type {t}")
 
 
-def yearly(spec: dict, days: pd.Series) -> pd.DataFrame:
-    years = range(FIRST_YEAR, 2026)
-    have = set(days.index.year)
+def seasonal(spec: dict, days: pd.Series, events: dict) -> pd.DataFrame:
+    """One row per season: did this trigger activate inside the funding window, and did that
+    activation catch a major event, judged exactly as our own drafts are (same events, same
+    lead windows — GloFAS-style triggers get the GloFAS window, rain triggers the rain one)."""
+    leg = "glofas" if spec["type"] == "glofas_rp" else "rain"
+    ev = events[spec["zone"]]
+    have = {season_of(t) for t in days.index}
     rows = []
-    for y in years:
-        x = days[(days.index.year == y) & days]
+    for y in range(FIRST_SEASON, 2026):
+        lo, hi = season_bounds(y)
+        x = days[(days.index >= lo) & (days.index <= hi) & days]
+        a0 = x.index[0] if len(x) else None
+        m = match(a0, leg, ev) if a0 is not None else ev.iloc[0:0]
         rows.append(
             dict(
                 zone=spec["zone"],
                 key=spec["key"],
                 short=spec["short"],
                 label=spec["label"],
-                year=y,
+                season=y,
+                label_season=season_label(y),
                 data=y in have,
-                activated=bool(len(x)),
-                first_date=x.index[0].date().isoformat() if len(x) else "",
+                activated=a0 is not None,
+                first_date=a0.date().isoformat() if a0 is not None else "",
+                caught=bool(len(m)),
+                lead_days=int(m.lead_days.max()) if len(m) else float("nan"),
             )
         )
     return pd.DataFrame(rows)
@@ -173,15 +189,18 @@ def yearly(spec: dict, days: pd.Series) -> pd.DataFrame:
 def run(specs: list[dict], d: Data, out: Path) -> pd.DataFrame | None:
     if not specs:
         return None
-    df = pd.concat([yearly(s, activation_days(s, d)) for s in specs], ignore_index=True)
+    events = {z: zone_events(z) for z in {sp["zone"] for sp in specs}}
+    df = pd.concat(
+        [seasonal(sp, activation_days(sp, d), events) for sp in specs], ignore_index=True
+    )
     out.parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(out, index=False)
-    cal = df[df.year.between(FIRST_YEAR, CAL_LAST) & df.data]
+    cal = df[df.season.between(FIRST_SEASON, CAL_LAST) & df.data]
     print(f"\n{out.relative_to(ROOT)}")
     print(
         cal.groupby(["zone", "short"])
-        .agg(activation_years=("activated", "sum"), years=("data", "size"))
-        .assign(rp=lambda x: ((x.years + 1) / x.activation_years.replace(0, np.nan)).round(1))
+        .agg(activations=("activated", "sum"), caught=("caught", "sum"), seasons=("data", "size"))
+        .assign(rp=lambda x: ((x.seasons + 1) / x.activations.replace(0, np.nan)).round(1))
         .to_string()
     )
     return df

@@ -27,7 +27,9 @@ report per-trigger and combined return periods.
   carries partner triggers). Zones trigger independently: each zone's RP = frequency of its
   own major-impact years, floored at 1-in-3 (the user's call, 22 Sep 2026; a shared overall
   1-in-3 budget was the earlier design and was dropped). Do not pick RPs by maximising backtest
-  skill — 26 years is noise. Zones with legs (Adjumani: lake / rain) split their share equally
+  skill — 25 seasons is noise. Season window is 1 Sep to end Feb (funding does not run past
+  March, user 22 Sep 2026), and every activation is matched to a DATED event within a lead
+  window (14 d rain / 30 d GloFAS / 120 d lake) — never score by calendar year. Zones with legs (Adjumani: lake / rain) split their share equally
   between legs. Existing triggers are reproduced in `analysis/existing_triggers.py` — published
   ones in `PUBLIC_SPECS`, unpublished ones in the gitignored config. `pipeline/encrypt.py` is the
   only path to a restricted page.
@@ -57,6 +59,10 @@ report per-trigger and combined return periods.
   thresholds are percentiles of each district's own record, so a tiny-but-informative series
   is fine. An earlier absolute gate ("2-yr extent < 1 % = blind") wrongly wrote off Kapchorwa,
   Manafwa, Mbale and most of Karamoja — see docs/research-notes.md section 6.
+- DesInventar encodes an unknown day as 0; the loader used to date those to the 1st and call
+  them day-precise (a quarter of cards, most of the deaths). Fixed 22 Sep 2026 — they are now
+  month-precision. Analyses that use dated events (floodscan_vs_impact, exposure_vs_impact,
+  backstop_options, flash_flood_*) predate the fix and should be rerun.
 - Event percentiles use midrank; with many tied zeros, "share strictly below" understates.
 - `analysis/impact_coverage.py` is the accounting of recorded impact by coverage class
   (zone core / tier 2 / partner-only / uncovered) — rerun it after any zone change.

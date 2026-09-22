@@ -1,34 +1,47 @@
-"""Draft trigger mechanisms, one per zone, balanced to an overall 3-year return period.
+"""Draft trigger mechanisms, one per zone, backtested season by season against dated impact.
 
-One all-in trigger per zone (any activation releases the zone's whole envelope):
+One all-in trigger per zone; zones trigger independently of each other.
 
   teso_kyoga  GloFAS G5196 (Akokoro) daily discharge. REANALYSIS as a stand-in for the
-              forecast until the reforecast is complete, so the backtest has no lead time
-              and no forecast error in it — it is an upper bound on what the forecast
-              trigger could do.
+              forecast until the reforecast is complete, so the backtest has no forecast
+              error in it — an upper bound on what the forecast trigger could do.
   elgon       CHIRPS-GEFS 5-day forecast accumulation, mean over the zone's 15 districts
               (slopes and lowlands: every lowland flood year is also a slope flood year).
-  karamoja    CHIRPS-GEFS 5-day forecast per district, each district against its own
-              threshold at a common rarity; the zone activates when any district does.
-              Karamoja is the size of a small country and flash floods are local, so a
-              zone mean would dilute exactly the storms that matter.
-  adjumani    Two legs, either activates. (1) The Nile high-stand: Lake Kyoga's rise over
-              180 days (NASA GWM altimetry since 1992; Kyoga tracks Lake Albert at r = 0.96
-              month to month, and Albert's own record only starts in 2016). Months of lead.
-              (2) Flash floods on the tributaries: CHIRPS-GEFS 5-day forecast per district,
-              as in Karamoja. The record shows both regimes; neither leg alone covers it.
+  karamoja    CHIRPS-GEFS 5-day forecast per district, each against its own threshold at a
+              common rarity; the zone activates when any district does. Karamoja is the size
+              of a small country and flash floods are local, so a zone mean would dilute the
+              storms that matter.
+  adjumani    Two legs, either activates. (1) The Nile high stand: Lake Kyoga's rise over 180
+              days (NASA GWM altimetry since 1992; Kyoga tracks Lake Albert at r = 0.96 month to
+              month, and Albert's own record only starts in 2016). Months of lead. (2) Flash
+              floods on the tributaries: the CHIRPS-GEFS forecast per district, as in Karamoja.
+              Each leg takes half the zone's rate and is calibrated on its own, so the single
+              lake series is not outvoted by six rain series.
 
-Balancing. Every zone gets the same number of activation years over the calibration period,
-so the same individual return period; that number is the one whose OVERALL return period —
-the years in which at least one zone activates — is closest to 3. Thresholds are then the
-values that give exactly that many activation years per zone (per leg or per district where
-a zone has several, at a common rarity chosen so the zone's own count comes out right).
-Weibull throughout: RP = (n + 1) / activations.
+Season. Triggers can activate only from 1 September to the end of February — the window the
+funding covers (it does not extend into March). A "season" is labelled by its start year:
+season 2019 is 1 Sep 2019 to 29 Feb 2020. Indicators and impact outside the window are ignored.
 
-Outputs (outputs/triggers/): one CSV per zone, a year per row, plus summary.csv and
-thresholds.csv. The page is built by pipeline/build_pages.py.
+Return period. Each zone activates about as often as it has a major-impact season (at least 5
+deaths or 5,000 people affected recorded in a single event in the zone), and never more often
+than 1-in-RP_FLOOR. Frequency-matching rather than choosing the return period that scores best
+in the backtest, because with ~25 seasons the best score is noise.
+
+Event matching. A season's first activation releases the envelope. It counts as catching a
+major event when the event starts within the trigger's lead window after the activation
+(LEAD_DAYS: 14 for the rain forecasts, 30 for GloFAS, 120 for the lake leg), or is still going
+on when the activation comes (negative lead). Otherwise the activation is a false alarm, and a
+major-impact season with no matching activation is a miss.
+
+Outputs (outputs/triggers/): one CSV per zone (a season per row), events_<zone>.csv (the dated
+impact events matched against), summary.csv, thresholds.csv, rp_sensitivity.csv. The page is
+built by pipeline/build_trigger_page.py.
 
 Run:  uv run python analysis/trigger_draft.py
+
+History: an earlier draft shared one overall 1-in-3 budget across the four zones (tilted by
+recorded people affected) and was scored by calendar year; both were replaced in Sep 2026 —
+see the git history and docs/research-notes.md.
 """
 
 from __future__ import annotations
@@ -44,35 +57,88 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import ocha_stratus as stratus
-from impact_maps import CERF_YEARS, district_year_table
+from impact_maps import CERF_YEARS, IMPLAUSIBLE_AFFECTED
 
 from src.constants import GLOFAS_PIXEL_LONLAT, PROJECT_PREFIX, ZONES
+from src.datasources import desinventar as di
+from src.datasources import impact as imp
 from src.zones import load_adm2
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "triggers"
 GLOFAS_DIR = ROOT / "data" / "glofas" / "raw" / "reanalysis_uga_v4"
-TARGET_OVERALL_RP = 3.0
-# Zones trigger independently (ALLOCATION = "independent"): each zone's return period matches
-# the frequency of its own major-impact years, floored at RP_FLOOR. The shared-budget variants
-# below (one overall 1-in-3 budget split across zones) were the earlier design and are still
-# computed into allocations.csv for reference.
-#
-# Earlier shared-budget design, kept for reference — how the overall budget was shared (see allocate): half equally, half in
-# proportion to recorded people affected — a tilt towards the zones with more historical
-# impact that does not push the smallest zones out to extreme return periods (a pure
-# people-affected split put Karamoja near 1-in-20). The allocations table also carries the
-# alternatives, including one that requires the years in MUST_CATCH (see must_catch); that
-# one was tried and not chosen, since catching 2007 needed Teso at ~1-in-6 and Karamoja ~1-in-34.
-MUST_CATCH = [2007]  # the largest flood year on record and a CERF year
-ALLOCATION = "independent"
-RP_FLOOR = 3.0  # no zone activates more often than once in three years
-FIRST_YEAR = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
+
+SEASON_MONTHS = (9, 10, 11, 12, 1, 2)  # 1 Sep - end Feb: the window the funding covers
+FIRST_SEASON = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
+MIN_COVERAGE = 0.6  # a series' season counts when at least this share of its days has data
+RP_FLOOR = 3.0  # no zone activates more often than once in three seasons
 LAKE_RISE_DAYS = 180
-MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # the repo's "major event" bar, applied to a zone-year
+MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # a major event, per event, zone share
+LEAD_DAYS = {"glofas": 30, "rain": 14, "lake": 120}  # how far ahead an activation may be
+TOLERANCE_DAYS = 3  # an activation up to this long after an event ends still counts (date noise)
+
+# Series -> leg (which lead window applies). Anything not listed is a rain forecast.
+SERIES_LEG = {"GloFAS G5196": "glofas", "Kyoga rise": "lake"}
+# Zones whose trigger has separate legs for separate flood regimes (see module docstring).
+LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every other series
 
 
-# --- indicators -------------------------------------------------------------------------
+# --- seasons -------------------------------------------------------------------------------
+
+
+def season_of(ts: pd.Timestamp) -> int | None:
+    if ts.month >= 9:
+        return ts.year
+    if ts.month in (1, 2):
+        return ts.year - 1
+    return None
+
+
+def season_bounds(season: int) -> tuple[pd.Timestamp, pd.Timestamp]:
+    return pd.Timestamp(season, 9, 1), pd.Timestamp(season + 1, 3, 1) - pd.Timedelta(days=1)
+
+
+def season_label(season: int) -> str:
+    return f"{season}/{(season + 1) % 100:02d}"
+
+
+def in_season(s: pd.Series) -> pd.Series:
+    """Keep only in-season days, in seasons the series covers well enough."""
+    s = s.dropna()
+    s = s[s.index.month.isin(SEASON_MONTHS)]
+    seasons = pd.Series([season_of(t) for t in s.index], index=s.index)
+    days = seasons.value_counts()
+    ok = {
+        y
+        for y, n in days.items()
+        if n / ((season_bounds(y)[1] - season_bounds(y)[0]).days + 1) >= MIN_COVERAGE
+    }
+    return s[seasons.isin(ok)]
+
+
+def coverage(s: pd.Series) -> pd.Series:
+    """Share of each season's days that the series has data for."""
+    s = s.dropna()
+    s = s[s.index.month.isin(SEASON_MONTHS)]
+    seasons = pd.Series([season_of(t) for t in s.index], index=s.index)
+    return (
+        seasons.value_counts()
+        .sort_index()
+        .rename_axis("season")
+        .pipe(
+            lambda c: (
+                c / c.index.map(lambda y: (season_bounds(y)[1] - season_bounds(y)[0]).days + 1)
+            )
+        )
+    )
+
+
+def season_max(s: pd.Series) -> pd.Series:
+    s = in_season(s)
+    return s.groupby([season_of(t) for t in s.index]).max()
+
+
+# --- indicators ----------------------------------------------------------------------------
 
 
 def load(path: str) -> pd.DataFrame:
@@ -80,8 +146,7 @@ def load(path: str) -> pd.DataFrame:
 
 
 def glofas_g5196() -> pd.Series:
-    files = sorted(GLOFAS_DIR.glob("*.nc"))
-    ds = xr.open_mfdataset(files, combine="by_coords")
+    ds = xr.open_mfdataset(sorted(GLOFAS_DIR.glob("*.nc")), combine="by_coords")
     var = next(v for v in ds.data_vars if "dis" in v)
     s = (
         ds[var]
@@ -104,421 +169,323 @@ def kyoga_rise() -> pd.Series:
     return (kyd - kyd.shift(LAKE_RISE_DAYS)).dropna().rename("kyoga_rise_m")
 
 
-def complete_years(s: pd.Series, min_share: float = 0.9) -> pd.Series:
-    """Drop days in years the series covers less than `min_share` of.
-
-    CHIRPS-GEFS has no issues from 1 Jan to 4 Oct 2020 (the gap between the GEFS v12
-    reforecast and the operational feed); an annual maximum over the remaining weeks would
-    read as a quiet year. Such years are left out of calibration and shown as "no data".
-    Lake levels come every ~10 days, so they are judged on the daily-interpolated series.
-    """
-    s = s.dropna()
-    days = s.groupby(s.index.year).size()
-    expected = pd.Series(
-        {y: 366 if pd.Timestamp(y, 12, 31).dayofyear == 366 else 365 for y in days.index}
-    )
-    ok = days.index[(days / expected) >= min_share]
-    return s[s.index.year.isin(ok)]
-
-
-def annual_max(s: pd.Series) -> pd.Series:
-    return s.groupby(s.index.year).max()
+def zone_series() -> dict[str, dict[str, pd.Series]]:
+    adm = load_adm2().set_index("ADM2_EN").ADM2_PCODE
+    name_of = {v: k for k, v in adm.items()}
+    zd = {z: list(ZONES[z].core) + list(ZONES[z].tier2) for z in ZONES}
+    series: dict[str, dict[str, pd.Series]] = {"teso_kyoga": {"GloFAS G5196": glofas_g5196()}}
+    series["elgon"] = {
+        "zone-mean 5-day forecast": chirps_gefs_wide([adm[d] for d in zd["elgon"]]).mean(axis=1)
+    }
+    kar = chirps_gefs_wide([adm[d] for d in ZONES["karamoja"].core])
+    series["karamoja"] = {name_of[c]: kar[c].dropna() for c in kar.columns}
+    adj = chirps_gefs_wide([adm[d] for d in zd["adjumani"]])
+    series["adjumani"] = {"Kyoga rise": kyoga_rise()} | {
+        name_of[c]: adj[c].dropna() for c in adj.columns
+    }
+    return series
 
 
-def first_day_at_or_above(s: pd.Series, thr: float, year: int) -> pd.Timestamp | None:
-    x = s[(s.index.year == year) & (s >= thr)]
-    return x.index[0] if len(x) else None
-
-
-# --- calibration ------------------------------------------------------------------------
+# --- calibration ---------------------------------------------------------------------------
 
 
 def gumbel_fit(am: pd.Series) -> tuple[float, float]:
-    """Method-of-moments Gumbel fit to annual maxima: (location, scale)."""
+    """Method-of-moments Gumbel fit to block maxima: (location, scale)."""
     beta = float(np.sqrt(6) * am.std() / np.pi)
     return float(am.mean() - 0.5772 * beta), beta
 
 
 def gumbel_rp(x, mu: float, beta: float):
-    """Return period of value x under the fitted Gumbel."""
-    # survival 1 - exp(-exp(-z)) via expm1, so extreme values keep distinct return periods
-    # instead of all underflowing to the same cap (which created ties in the ranking)
+    """Return period of value x under the fitted Gumbel. Survival via expm1, so extreme values
+    keep distinct return periods instead of underflowing to the same cap."""
     z = (np.asarray(x, dtype=float) - mu) / beta
     return 1.0 / -np.expm1(-np.exp(-z))
 
 
 def gumbel_level(rp: float, mu: float, beta: float) -> float:
-    """Value with return period rp under the fitted Gumbel."""
     return float(mu - beta * np.log(-np.log(1.0 - 1.0 / rp)))
 
 
-def zone_statistic(cal_ams: dict[str, pd.Series]) -> tuple[pd.Series, dict]:
-    """Per calibration year, the rarest value any of the zone's series reached, as a return
-    period on that series' own Gumbel fit. Putting every series on its own RP scale holds a
-    wet district and a dry one to the same rarity; for a single series it is a monotone
-    transform of the annual maximum, so rankings are unchanged."""
-    fits = {key: gumbel_fit(a.dropna()) for key, a in cal_ams.items()}
-    rp_year = pd.concat(
-        {key: pd.Series(gumbel_rp(a, *fits[key]), index=a.index) for key, a in cal_ams.items()},
+def zone_statistic(cal_ms: dict[str, pd.Series]) -> tuple[pd.Series, dict]:
+    """Per calibration season, the rarest value any of the zone's series reached, as a return
+    period on that series' own Gumbel fit — so a wet district and a dry one are held to the same
+    rarity. For a single series this is a monotone transform of the seasonal maximum."""
+    fits = {key: gumbel_fit(a.dropna()) for key, a in cal_ms.items()}
+    rp = pd.concat(
+        {key: pd.Series(gumbel_rp(a, *fits[key]), index=a.index) for key, a in cal_ms.items()},
         axis=1,
-    ).max(axis=1)
-    return rp_year.dropna(), fits
+    )
+    return rp.max(axis=1).dropna(), fits
 
 
 def calibrate_zone(
-    cal_ams: dict[str, pd.Series], k: float
+    cal_ms: dict[str, pd.Series], k: float
 ) -> tuple[dict[str, float], set[int], float]:
-    """Thresholds so the zone activates in about k calibration years (k may be fractional).
-
-    The zone statistics, sorted, give the threshold for exactly 1, 2, 3 ... activation years.
-    For a fractional target the threshold is interpolated (log scale) at rank k + 0.5, between
-    the order statistics, so the backtest shows round(k) activations while the threshold itself
-    sits where the target rate puts it rather than jumping in whole-year steps. Below one
-    expected activation the threshold is extrapolated above the record's largest value.
-    Per-series thresholds are each series' Gumbel return level at the resulting RP.
-    """
-    rp_year, fits = zone_statistic(cal_ams)
-    v = np.log(rp_year.sort_values(ascending=False).to_numpy())
-    pos = k + 0.5  # 1-based rank position
+    """Thresholds so the zone activates in about k calibration seasons (k may be fractional).
+    The threshold is interpolated (log scale) at rank k + 0.5 between the order statistics, so
+    the backtest shows round(k) activations while the threshold sits where the target rate puts
+    it. Per-series thresholds are each series' Gumbel return level at the resulting RP."""
+    rp_season, fits = zone_statistic(cal_ms)
+    v = np.log(rp_season.sort_values(ascending=False).to_numpy())
+    pos = k + 0.5
     if pos <= 1:
-        slope = v[0] - v[1] if len(v) > 1 else 0.5
-        log_star = v[0] + (1 - pos) * slope
+        log_star = v[0] + (1 - pos) * ((v[0] - v[1]) if len(v) > 1 else 0.5)
     elif pos >= len(v):
         log_star = v[-1]
     else:
         i = int(np.floor(pos)) - 1
         log_star = v[i] + (pos - np.floor(pos)) * (v[i + 1] - v[i])
     rp_star = float(np.exp(log_star))
-    years = {int(y) for y in rp_year[rp_year >= rp_star].index}
-    thr = {key: gumbel_level(rp_star, *fits[key]) for key in cal_ams}
-    return thr, years, rp_star
+    seasons = {int(y) for y in rp_season[rp_season >= rp_star].index}
+    return {key: gumbel_level(rp_star, *fits[key]) for key in cal_ms}, seasons, rp_star
 
 
-# Zones whose trigger has separate legs for separate flood regimes. Each leg gets an equal
-# part of the zone's share and is calibrated on its own, so a leg with one series (the lake)
-# is not outvoted by a leg with six (the district rain forecasts). Without this, Adjumani's
-# lake leg lost 2020 — its largest flood year — to rain extremes in years with nothing recorded.
-LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every other series
-
-
-def calibrate_zone_legs(z: str, cal_ams: dict[str, pd.Series], k: float):
+def calibrate_zone_legs(z: str, cal_ms: dict[str, pd.Series], k: float):
     if z not in LEGS:
-        return calibrate_zone(cal_ams, k)
+        return calibrate_zone(cal_ms, k)
     named = {x for v in LEGS[z].values() if v for x in v}
-    thr, years, rps = {}, set(), {}
+    thr, seasons, rps = {}, set(), {}
     for leg, keys in LEGS[z].items():
-        keys = keys or [x for x in cal_ams if x not in named]
-        t, y, rp = calibrate_zone({x: cal_ams[x] for x in keys}, k / len(LEGS[z]))
+        keys = keys or [x for x in cal_ms if x not in named]
+        t, y, rp = calibrate_zone({x: cal_ms[x] for x in keys}, k / len(LEGS[z]))
         thr |= t
-        years |= y
+        seasons |= y
         rps[leg] = rp
-    return thr, years, rps
+    return thr, seasons, rps
 
 
-def impact_weights(impact: dict[str, pd.DataFrame], cal: list[int]) -> pd.DataFrame:
-    """Each zone's share of recorded impact over the calibration years."""
-    w = pd.DataFrame(
-        {
-            z: {"affected": g.loc[cal].affected.sum(), "deaths": g.loc[cal].deaths.sum()}
-            for z, g in impact.items()
-        }
-    ).T
-    return w / w.sum()
+# --- impact --------------------------------------------------------------------------------
 
 
-def allocate(
-    weights: pd.Series, n_years: dict[str, int], cal_ams, n: int, floors: dict | None = None
-):
-    """Scale annual probabilities proportional to `weights` until the backtest's OVERALL return
-    period — years with at least one zone activating — is as close to TARGET_OVERALL_RP as the
-    whole-year counts allow (ties go to the rarer option). Returns (per-zone results, overall
-    activation years, overall RP, per-zone design annual probability)."""
-    best = None
-    for scale in np.linspace(0.02, 1.2, 600):
-        p = (weights * scale).clip(upper=0.9)
-        for z, f in (floors or {}).items():
-            p[z] = max(p[z], f)
-        res = {z: calibrate_zone_legs(z, cal_ams[z], p[z] * n_years[z]) for z in cal_ams}
-        union = set().union(*(y for _, y, _ in res.values()))
-        rp = (n + 1) / max(1, len(union))
-        key = (abs(rp - TARGET_OVERALL_RP), -rp)
-        if best is None or key < best[0]:
-            best = (key, res, len(union), rp, p)
-    _, res, n_union, rp, p = best
-    return res, n_union, rp, p
-
-
-def must_catch(year: int, weights: pd.Series, n_years, cal_ams, n: int, worst: dict[str, set[int]]):
-    """Meet a must-catch year at the least cost to the rest of the mechanism.
-
-    For each zone, find the smallest annual probability at which that zone's trigger would
-    activate in `year`, give the zone at least that, and re-scale the others (still in
-    proportion to `weights`) so the overall return period stays on target. Of the zones that
-    can catch the year, keep the option that catches the most of the zones' five worst years
-    in total. Returns (floors, options table)."""
-    rows, best = [], None
-    for z in cal_ams:
-        need = next(
-            (
-                p
-                for p in np.linspace(0.005, 0.6, 1200)
-                if year in calibrate_zone_legs(z, cal_ams[z], p * n_years[z])[1]
-            ),
-            None,
+def zone_events(z: str) -> pd.DataFrame:
+    """Dated impact events in the zone: start, end, affected and deaths (the zone's share),
+    source. EM-DAT, press and DTM events naming several districts are split evenly across them,
+    and only the zone's part counts; DesInventar cards are summed per day. National totals
+    mis-filed against one district (>= 100,000 on a card) are dropped, as elsewhere."""
+    ds = set(ZONES[z].core) | set(ZONES[z].tier2)
+    ev = imp.events_by_district(include_dtm=True)
+    n_named = ev.groupby("event_id").district.transform("nunique")
+    ev = ev.assign(share=1.0 / n_named)[ev.district.isin(ds)]
+    a = (
+        ev.groupby("event_id")
+        .agg(
+            start=("start", "first"),
+            end=("end", "first"),
+            source=("source", "first"),
+            share=("share", "sum"),
+            affected=("affected", "first"),
+            deaths=("deaths", "first"),
         )
-        if need is None:
-            rows.append(dict(zone=z, can_catch=False))
-            continue
-        res, nu, rp, _p = allocate(weights, n_years, cal_ams, n, floors={z: need})
-        caught = sum(len(worst[zz] & res[zz][1]) for zz in cal_ams)
-        rows.append(
-            dict(
-                zone=z,
-                can_catch=True,
-                needed_rp=1 / need,
-                overall_years=nu,
-                overall_rp=rp,
-                worst5_caught=caught,
-            )
+        .assign(
+            affected=lambda x: x.affected.fillna(0) * x.share,
+            deaths=lambda x: x.deaths.fillna(0).astype(float) * x.share,
         )
-        if best is None or caught > best[0]:
-            best = (caught, {z: need})
-    return (best[1] if best else {}), pd.DataFrame(rows)
+        .drop(columns="share")
+    )
+    d = di.load_datacards()
+    d = d[d.district.isin(ds) & d.date_precision.isin(("day", "month"))].copy()
+    d.loc[d.affected >= IMPLAUSIBLE_AFFECTED, "affected"] = np.nan
+    # month-precision cards (the export gives no day) span their whole month, so an activation
+    # anywhere in that month can match them; day-precision cards are single days
+    d["end_"] = np.where(d.date_precision.eq("month"), d.date + pd.offsets.MonthEnd(0), d.date)
+    b = (
+        d.groupby([d.date.dt.normalize().rename("start"), "end_"])
+        .agg(affected=("affected", "sum"), deaths=("deaths", "sum"))
+        .reset_index()
+        .rename(columns={"end_": "end"})
+        .assign(source="DesInventar")
+    )
+    out = pd.concat([a.reset_index(drop=True), b], ignore_index=True)
+    out["end"] = out.end.fillna(out.start)
+    out["major"] = (out.deaths >= MAJOR_DEATHS) | (out.affected >= MAJOR_AFFECTED)
+    return out.sort_values("start").reset_index(drop=True)
 
 
-def rp_sensitivity(cal_ams, n_years, impact, cal, rps=(3, 4, 5, 6, 8, 10)) -> pd.DataFrame:
-    """For each zone and candidate return period: activations, how many fall in major-impact
-    years, false activations, and the zone's five worst years caught. The evidence for the
-    choice of return period, not the thing it is chosen from."""
-    rows = []
-    for z in cal_ams:
-        have = [y for y in cal if any(pd.notna(a.get(y)) for a in cal_ams[z].values())]
-        g = impact[z].loc[have]
-        major, worst = set(g[g.major].index), set(g.affected.nlargest(5).index)
-        for rp in rps:
-            _, yrs, _ = calibrate_zone_legs(z, cal_ams[z], n_years[z] / rp)
-            rows.append(
-                dict(
-                    zone=z,
-                    rp=rp,
-                    activations=len(yrs),
-                    in_major=len(yrs & major),
-                    false=len(yrs - major),
-                    worst5=len(yrs & worst),
-                    major_years=len(major),
-                    n=len(have),
-                )
-            )
-    return pd.DataFrame(rows)
+def events_in_season(ev: pd.DataFrame, season: int) -> pd.DataFrame:
+    lo, hi = season_bounds(season)
+    return ev[(ev.end >= lo) & (ev.start <= hi)]
 
 
-# --- impact -----------------------------------------------------------------------------
+def season_impact(ev: pd.DataFrame, season: int) -> dict:
+    e = events_in_season(ev, season)
+    di_ = e[e.source == "DesInventar"]
+    other = e[e.source != "DesInventar"]
+    # EM-DAT/press/DTM and DesInventar are independent in scope: take the larger magnitude,
+    # and deaths from EM-DAT/press where they exist (DesInventar double-counts across cards)
+    return dict(
+        affected=max(other.affected.sum(), di_.affected.sum()),
+        deaths=other.deaths.sum() if other.deaths.sum() > 0 else di_.deaths.sum(),
+        n_events=len(e),
+        major=bool(e.major.any()),
+        sources="|".join(sorted({s[:10] for s in e.source})),
+    )
 
 
-def zone_year_impact(years: list[int]) -> dict[str, pd.DataFrame]:
-    t = district_year_table()
-    out = {}
-    for key, z in ZONES.items():
-        ds = list(z.core) + list(z.tier2)
-        x = t[t.district.isin(ds)]
-        g = (
-            x.groupby("year")
-            .agg(
-                affected=("affected_any", "sum"),
-                deaths=("deaths_any", "sum"),
-                districts=("any_record", "sum"),
-                sources=(
-                    "sources",
-                    lambda s: "|".join(sorted({v for x in s.dropna() for v in x.split("|")})),
-                ),
-                cards=("n_cards", "sum"),
-            )
-            .reindex(years)
-        )
-        g[["affected", "deaths", "districts", "cards"]] = g[
-            ["affected", "deaths", "districts", "cards"]
-        ].fillna(0)
-        g["sources"] = g.sources.fillna("")
-        g.loc[g.cards > 0, "sources"] = g.loc[g.cards > 0, "sources"].map(
-            lambda s: "|".join(filter(None, [s, "DesInventar"]))
-        )
-        g["major"] = (g.deaths >= MAJOR_DEATHS) | (g.affected >= MAJOR_AFFECTED)
-        out[key] = g
+def match(activation: pd.Timestamp, leg: str, ev: pd.DataFrame) -> pd.DataFrame:
+    """Major events this activation counts as catching: starting within the leg's lead window
+    after it, or still under way when it comes."""
+    lead = LEAD_DAYS[leg]
+    m = ev[
+        ev.major
+        & (ev.start - pd.Timedelta(days=lead) <= activation)
+        & (activation <= ev.end + pd.Timedelta(days=TOLERANCE_DAYS))
+    ]
+    return m.assign(lead_days=(m.start - activation).dt.days)
+
+
+# --- per-zone backtest ---------------------------------------------------------------------
+
+
+def activation_episodes(series: dict[str, pd.Series], thr: dict[str, float], season: int):
+    """Every in-season activation, as (date, series names). Consecutive days above a threshold
+    are one episode, dated by its first day. The first episode releases an all-in envelope; the
+    later ones are kept because they show what the all-in rule costs — a season whose first
+    activation is a false start can still have a later one that would have caught the flood."""
+    lo, hi = season_bounds(season)
+    hit: dict[pd.Timestamp, list[str]] = {}
+    for key, s in series.items():
+        x = s[(s.index >= lo) & (s.index <= hi) & (s >= thr[key])]
+        for d0 in x.index:
+            hit.setdefault(d0, []).append(key)
+    out, prev = [], None
+    for d0 in sorted(hit):
+        if prev is None or (d0 - prev).days > 1:
+            out.append((d0, hit[d0]))
+        prev = d0
     return out
 
 
-def weibull_rp(am: pd.Series, cal: list[int]) -> pd.Series:
-    """Return period of each year's peak, ranked within the calibration years."""
-    ref = am.reindex(cal).dropna().sort_values(ascending=False).to_numpy()
-    n = len(ref)
-    return am.map(lambda v: (n + 1) / max(1, int((ref >= v).sum())) if pd.notna(v) else np.nan)
+def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
+    rows = []
+    sms = {k: season_max(s) for k, s in series.items()}
+    fits = {k: gumbel_fit(sms[k].reindex(cal).dropna()) for k in series}
+    cov = pd.concat({k: coverage(s) for k, s in series.items()}, axis=1).max(axis=1)
+    for y in seasons:
+        have = [k for k in series if y in sms[k].index]
+        eps = activation_episodes({k: in_season(series[k]) for k in have}, thr, y) if have else []
+        a, via = eps[0] if eps else (None, [])
+        leg = SERIES_LEG.get(via[0], "rain") if via else None
+        m = match(a, leg, ev) if a is not None else ev.iloc[0:0]
+        later = [(d0, match(d0, SERIES_LEG.get(v[0], "rain"), ev)) for d0, v in eps[1:]]
+        later = [(d0, mm) for d0, mm in later if len(mm)]
+        peaks = {k: float(gumbel_rp(sms[k].get(y, np.nan), *fits[k])) for k in have}
+        where = max(peaks, key=peaks.get) if peaks else ""
+        imp_ = season_impact(ev, y)
+        first_major = events_in_season(ev, y).query("major").start.min()
+        rows.append(
+            dict(
+                season=y,
+                label=season_label(y),
+                in_calibration=y in cal,
+                data=bool(have),
+                coverage=round(float(cov.get(y, 0.0)), 2),
+                activated=a is not None,
+                first_date=a.date().isoformat() if a is not None else "",
+                via=", ".join(via),
+                leg=leg or "",
+                window_days=LEAD_DAYS.get(leg, np.nan),
+                n_activations=len(eps),
+                later_catch=(later[0][0].date().isoformat() if later else ""),
+                later_lead=(int(later[0][1].lead_days.max()) if later else np.nan),
+                caught=bool(len(m)),
+                lead_days=int(m.lead_days.max()) if len(m) else np.nan,
+                caught_event=(
+                    m.sort_values("start").iloc[0].start.date().isoformat() if len(m) else ""
+                ),
+                first_major=first_major.date().isoformat() if pd.notna(first_major) else "",
+                peak_rp=peaks.get(where, np.nan),
+                peak_where=where,
+                **imp_,
+                cerf=CERF_YEARS.get(y, ""),
+            )
+        )
+    t = pd.DataFrame(rows).set_index("season")
+    t["outcome"] = np.select(
+        [~t.data, t.activated & t.caught, t.activated & ~t.caught, ~t.activated & t.major],
+        ["no data", "caught", "false alarm", "missed"],
+        default="",
+    )
+    return t
 
 
-# --- main -------------------------------------------------------------------------------
+def scores(t: pd.DataFrame) -> dict:
+    c = t[t.in_calibration & t.data]
+    caught = c[c.outcome == "caught"]
+    return dict(
+        seasons_with_data=len(c),
+        activations=int(c.activated.sum()),
+        caught=len(caught),
+        false_alarms=int((c.outcome == "false alarm").sum()),
+        # a major season counts as missed unless an activation actually caught an event in it —
+        # the same definition the page uses for every trigger, ours and the partners'
+        missed=int((c.major & ~c.caught).sum()),
+        no_activation=int((c.outcome == "missed").sum()),
+        major_seasons=int(c.major.sum()),
+        median_lead_days=float(caught.lead_days.median()) if len(caught) else np.nan,
+        caught_by_later=int(((c.outcome != "caught") & c.later_catch.astype(bool)).sum()),
+    )
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
-    adm = load_adm2().set_index("ADM2_EN").ADM2_PCODE
-    name_of = {v: k for k, v in adm.items()}
-
-    q = glofas_g5196()
-    # calibrate on years every indicator covers in full
-    last = min(q.index.max().year if q.index.max().month == 12 else q.index.max().year - 1, 2025)
-    cal = list(range(FIRST_YEAR, last + 1))
-    show = list(range(FIRST_YEAR, 2026))
+    series = zone_series()
+    q = series["teso_kyoga"]["GloFAS G5196"]
+    last = min(season_of(q.index.max()) - (0 if q.index.max().month in (2,) else 1), 2024)
+    cal = list(range(FIRST_SEASON, last + 1))
+    show = list(range(FIRST_SEASON, 2026))
     n = len(cal)
 
-    series: dict[str, dict[str, pd.Series]] = {}
-    series["teso_kyoga"] = {"GloFAS G5196": q}
-    elgon_pc = [adm[d] for d in list(ZONES["elgon"].core) + list(ZONES["elgon"].tier2)]
-    series["elgon"] = {"zone-mean 5-day forecast": chirps_gefs_wide(elgon_pc).mean(axis=1)}
-    kar = chirps_gefs_wide([adm[d] for d in ZONES["karamoja"].core])
-    series["karamoja"] = {name_of[c]: kar[c].dropna() for c in kar.columns}
-    adj = chirps_gefs_wide(
-        [adm[d] for d in list(ZONES["adjumani"].core) + list(ZONES["adjumani"].tier2)]
-    )
-    series["adjumani"] = {"Kyoga rise": kyoga_rise()} | {
-        name_of[c]: adj[c].dropna() for c in adj.columns
-    }
+    sms = {z: {k: season_max(s) for k, s in d.items()} for z, d in series.items()}
+    cal_ms = {z: {k: a.reindex(cal) for k, a in d.items()} for z, d in sms.items()}
+    events = {z: zone_events(z) for z in ZONES}
 
-    series = {z: {k: complete_years(s) for k, s in d.items()} for z, d in series.items()}
-    ams = {z: {k: annual_max(s) for k, s in d.items()} for z, d in series.items()}
-    cal_ams = {z: {k: a.reindex(cal) for k, a in d.items()} for z, d in ams.items()}
-
-    impact = zone_year_impact(show)
-    n_years = {z: int(max(a.notna().sum() for a in d.values())) for z, d in cal_ams.items()}
-    w = impact_weights(impact, cal)
-    allocations = {
-        "equal shares": pd.Series(0.25, index=w.index),
-        "people affected": w.affected,
-        "deaths": w.deaths,
-        "half equal, half people affected": 0.5 * 0.25 + 0.5 * w.affected,
-    }
-    worst = {z: set(impact[z].loc[cal].affected.nlargest(5).index) for z in cal_ams}
-    floors_by = {name: {} for name in allocations}
-    for yr in MUST_CATCH:
-        fl, opts = must_catch(yr, w.affected, n_years, cal_ams, n, worst)
-        opts.to_csv(OUT / f"must_catch_{yr}.csv", index=False)
-        name = f"people affected, {yr} required"
-        allocations[name] = w.affected
-        floors_by[name] = fl
-        print(f"must-catch {yr}: " + ", ".join(f"{z} 1-in-{1 / f:.1f}" for z, f in fl.items()))
-    alt_rows = []
-    for name, wt in allocations.items():
-        r, nu, rp, p = allocate(wt, n_years, cal_ams, n, floors_by[name])
-        for z in cal_ams:
-            alt_rows.append(
-                dict(
-                    allocation=name,
-                    zone=z,
-                    weight=wt[z],
-                    design_rp=1 / p[z],
-                    activation_years=len(r[z][1]),
-                    overall_years=nu,
-                    overall_rp=rp,
-                )
-            )
-    pd.DataFrame(alt_rows).to_csv(OUT / "allocations.csv", index=False)
-    if ALLOCATION == "independent":
-        # Each zone triggers on its own. Its return period matches how often the zone has a
-        # major-impact year, but never more often than 1-in-RP_FLOOR.
-        p, major_rp = {}, {}
-        for z, zams in cal_ams.items():
-            have = [y for y in cal if any(pd.notna(a.get(y)) for a in zams.values())]
-            n_major = int(impact[z].loc[have].major.sum())
-            major_rp[z] = (len(have) + 1) / max(1, n_major)
-            p[z] = 1 / max(RP_FLOOR, major_rp[z])
-        res = {z: calibrate_zone_legs(z, cal_ams[z], p[z] * n_years[z]) for z in cal_ams}
-        union = set().union(*(y for _, y, _ in res.values()))
-        n_union, overall = len(union), (n + 1) / max(1, len(union))
-        rp_sensitivity(cal_ams, n_years, impact, cal).to_csv(
-            OUT / "rp_sensitivity.csv", index=False
-        )
-    else:
-        res, n_union, overall, p = allocate(
-            allocations[ALLOCATION], n_years, cal_ams, n, floors_by[ALLOCATION]
-        )
-        major_rp = {z: np.nan for z in cal_ams}
-    print(
-        f"calibration {cal[0]}-{cal[-1]} (n={n}); {ALLOCATION}; years with any activation {n_union} (1-in-{overall:.2f})"
-    )
-    for z in cal_ams:
-        print(f"   {z:11s} design RP {1 / p[z]:5.1f}  activation years {len(res[z][1])}")
-
-    summary, thr_rows = [], []
-    for z, (thr, _, rp_star) in res.items():
-        rows = []
-        for y in show:
-            fired, first, via = False, None, []
-            for key, s in series[z].items():
-                t = thr.get(key, np.inf)
-                d0 = first_day_at_or_above(s, t, y)
-                if d0 is not None:
-                    fired = True
-                    via.append(key)
-                    first = d0 if first is None or d0 < first else first
-            peak_rp = {
-                key: float(
-                    gumbel_rp(ams[z][key].get(y, np.nan), *gumbel_fit(cal_ams[z][key].dropna()))
-                )
-                for key in series[z]
-            }
-            best_key = max(peak_rp, key=lambda kk: peak_rp[kk] if pd.notna(peak_rp[kk]) else -1)
-            have = [kk for kk in series[z] if y in ams[z][kk].index and pd.notna(ams[z][kk].get(y))]
-            rows.append(
-                dict(
-                    year=y,
-                    in_calibration=y in cal,
-                    data=bool(have),
-                    activated=fired,
-                    first_date=first.date().isoformat() if first is not None else "",
-                    via=", ".join(via),
-                    peak_rp=peak_rp[best_key],
-                    peak_where=best_key,
-                )
-            )
-        tab = pd.DataFrame(rows).set_index("year").join(impact[z])
-        tab["cerf"] = tab.index.map(lambda y: CERF_YEARS.get(y, ""))
-        tab.sort_index(ascending=False).to_csv(OUT / f"{z}.csv")
-        c = tab[tab.in_calibration]
-        act = c[c.activated]
-        worst = set(c.affected.nlargest(5).index)
+    summary, thr_rows, sens = [], [], []
+    for z in ZONES:
+        have = [y for y in cal if any(pd.notna(a.get(y)) for a in cal_ms[z].values())]
+        n_major = sum(season_impact(events[z], y)["major"] for y in have)
+        major_rp = (len(have) + 1) / max(1, n_major)
+        design_rp = max(RP_FLOOR, major_rp)
+        thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / design_rp)
+        t = backtest_zone(z, series[z], thr, events[z], show, cal)
+        t.sort_index(ascending=False).to_csv(OUT / f"{z}.csv")
+        events[z].to_csv(OUT / f"events_{z}.csv", index=False)
+        sc = scores(t)
         summary.append(
             dict(
                 zone=z,
-                activation_years=int(c.activated.sum()),
-                years_with_data=int(c.data.sum()),
-                individual_rp=round((int(c.data.sum()) + 1) / max(1, int(c.activated.sum())), 1),
-                activations_in_major_years=int(act.major.sum()),
-                major_years=int(c.major.sum()),
-                base_rate_major=round(c.major.mean(), 2),
-                worst5_caught=len(worst & set(act.index)),
-                worst5=", ".join(str(y) for y in sorted(worst, reverse=True)),
-                activated_years=", ".join(str(y) for y in sorted(act.index, reverse=True)),
+                major_rp=major_rp,
+                design_rp=design_rp,
+                individual_rp=(sc["seasons_with_data"] + 1) / max(1, sc["activations"]),
+                activated_seasons=", ".join(t[t.activated & t.in_calibration].label),
+                **sc,
             )
         )
-        for key, t in thr.items():
-            if isinstance(rp_star, dict):  # zone with legs: each leg has its own rarity
-                leg = next((lg for lg, ks in LEGS[z].items() if ks and key in ks), "rain")
-                thr_rows.append(
-                    dict(zone=z, series=key, threshold=t, series_rp=rp_star[leg], leg=leg)
+        for key, v in thr.items():
+            leg = SERIES_LEG.get(key, "rain")
+            thr_rows.append(
+                dict(
+                    zone=z,
+                    series=key,
+                    leg=leg,
+                    threshold=v,
+                    series_rp=rp_star[leg] if isinstance(rp_star, dict) else rp_star,
                 )
-            else:
-                thr_rows.append(dict(zone=z, series=key, threshold=t, series_rp=rp_star, leg=""))
+            )
+        for rp in (3, 4, 5, 6, 8, 10):
+            th, _, _ = calibrate_zone_legs(z, cal_ms[z], len(have) / rp)
+            sens.append(
+                dict(zone=z, rp=rp, **scores(backtest_zone(z, series[z], th, events[z], cal, cal)))
+            )
     s = pd.DataFrame(summary)
-    s["calibration"] = f"{cal[0]}-{cal[-1]}"
-    s["allocation"] = ALLOCATION
-    s["weight"] = s.zone.map(allocations[ALLOCATION]) if ALLOCATION in allocations else np.nan
-    s["major_rp"] = s.zone.map(lambda z: round(major_rp[z], 1))
-    s["design_rp"] = s.zone.map(lambda z: round(1 / p[z], 1))
-    s["overall_years"] = n_union
-    s["overall_rp"] = round(overall, 2)
+    s["calibration"] = f"{season_label(cal[0])}–{season_label(cal[-1])}"
     s.to_csv(OUT / "summary.csv", index=False)
     pd.DataFrame(thr_rows).to_csv(OUT / "thresholds.csv", index=False)
+    pd.DataFrame(sens).to_csv(OUT / "rp_sensitivity.csv", index=False)
     pd.set_option("display.width", 220)
-    print(s.to_string(index=False))
-    print(pd.DataFrame(thr_rows).round(2).to_string(index=False))
+    print(
+        f"calibration seasons {s.calibration.iloc[0]} (n={n}); window Sep-Feb; RP floor {RP_FLOOR}"
+    )
+    print(s.drop(columns=["calibration"]).round(1).to_string(index=False))
 
 
 if __name__ == "__main__":
