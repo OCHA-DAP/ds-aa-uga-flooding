@@ -53,7 +53,10 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "triggers"
 GLOFAS_DIR = ROOT / "data" / "glofas" / "raw" / "reanalysis_uga_v4"
 TARGET_OVERALL_RP = 3.0
-ALLOCATION = "people affected"  # how the overall budget is shared across zones; see allocate()
+# How the overall budget is shared across zones (see allocate): in proportion to recorded
+# people affected, with the years in MUST_CATCH required of the mechanism (see must_catch).
+MUST_CATCH = [2007]  # the largest flood year on record and a CERF year
+ALLOCATION = "people affected, 2007 required"
 FIRST_YEAR = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # the repo's "major event" bar, applied to a zone-year
@@ -213,7 +216,9 @@ def impact_weights(impact: dict[str, pd.DataFrame], cal: list[int]) -> pd.DataFr
     return w / w.sum()
 
 
-def allocate(weights: pd.Series, n_years: dict[str, int], cal_ams, n: int):
+def allocate(
+    weights: pd.Series, n_years: dict[str, int], cal_ams, n: int, floors: dict | None = None
+):
     """Scale annual probabilities proportional to `weights` until the backtest's OVERALL return
     period — years with at least one zone activating — is as close to TARGET_OVERALL_RP as the
     whole-year counts allow (ties go to the rarer option). Returns (per-zone results, overall
@@ -221,6 +226,8 @@ def allocate(weights: pd.Series, n_years: dict[str, int], cal_ams, n: int):
     best = None
     for scale in np.linspace(0.02, 1.2, 600):
         p = (weights * scale).clip(upper=0.9)
+        for z, f in (floors or {}).items():
+            p[z] = max(p[z], f)
         res = {z: calibrate_zone_legs(z, cal_ams[z], p[z] * n_years[z]) for z in cal_ams}
         union = set().union(*(y for _, y, _ in res.values()))
         rp = (n + 1) / max(1, len(union))
@@ -229,6 +236,44 @@ def allocate(weights: pd.Series, n_years: dict[str, int], cal_ams, n: int):
             best = (key, res, len(union), rp, p)
     _, res, n_union, rp, p = best
     return res, n_union, rp, p
+
+
+def must_catch(year: int, weights: pd.Series, n_years, cal_ams, n: int, worst: dict[str, set[int]]):
+    """Meet a must-catch year at the least cost to the rest of the mechanism.
+
+    For each zone, find the smallest annual probability at which that zone's trigger would
+    activate in `year`, give the zone at least that, and re-scale the others (still in
+    proportion to `weights`) so the overall return period stays on target. Of the zones that
+    can catch the year, keep the option that catches the most of the zones' five worst years
+    in total. Returns (floors, options table)."""
+    rows, best = [], None
+    for z in cal_ams:
+        need = next(
+            (
+                p
+                for p in np.linspace(0.005, 0.6, 1200)
+                if year in calibrate_zone_legs(z, cal_ams[z], p * n_years[z])[1]
+            ),
+            None,
+        )
+        if need is None:
+            rows.append(dict(zone=z, can_catch=False))
+            continue
+        res, nu, rp, _p = allocate(weights, n_years, cal_ams, n, floors={z: need})
+        caught = sum(len(worst[zz] & res[zz][1]) for zz in cal_ams)
+        rows.append(
+            dict(
+                zone=z,
+                can_catch=True,
+                needed_rp=1 / need,
+                overall_years=nu,
+                overall_rp=rp,
+                worst5_caught=caught,
+            )
+        )
+        if best is None or caught > best[0]:
+            best = (caught, {z: need})
+    return (best[1] if best else {}), pd.DataFrame(rows)
 
 
 # --- impact -----------------------------------------------------------------------------
@@ -314,9 +359,18 @@ def main() -> None:
         "deaths": w.deaths,
         "half equal, half people affected": 0.5 * 0.25 + 0.5 * w.affected,
     }
+    worst = {z: set(impact[z].loc[cal].affected.nlargest(5).index) for z in cal_ams}
+    floors_by = {name: {} for name in allocations}
+    for yr in MUST_CATCH:
+        fl, opts = must_catch(yr, w.affected, n_years, cal_ams, n, worst)
+        opts.to_csv(OUT / f"must_catch_{yr}.csv", index=False)
+        name = f"people affected, {yr} required"
+        allocations[name] = w.affected
+        floors_by[name] = fl
+        print(f"must-catch {yr}: " + ", ".join(f"{z} 1-in-{1 / f:.1f}" for z, f in fl.items()))
     alt_rows = []
     for name, wt in allocations.items():
-        r, nu, rp, p = allocate(wt, n_years, cal_ams, n)
+        r, nu, rp, p = allocate(wt, n_years, cal_ams, n, floors_by[name])
         for z in cal_ams:
             alt_rows.append(
                 dict(
@@ -330,7 +384,9 @@ def main() -> None:
                 )
             )
     pd.DataFrame(alt_rows).to_csv(OUT / "allocations.csv", index=False)
-    res, n_union, overall, p = allocate(allocations[ALLOCATION], n_years, cal_ams, n)
+    res, n_union, overall, p = allocate(
+        allocations[ALLOCATION], n_years, cal_ams, n, floors_by[ALLOCATION]
+    )
     print(
         f"calibration {cal[0]}-{cal[-1]} (n={n}); allocation by {ALLOCATION}; overall {n_union} years -> RP {overall:.2f}"
     )

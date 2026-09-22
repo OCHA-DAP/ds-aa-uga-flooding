@@ -231,7 +231,13 @@ def summary_table(inp: Inputs) -> str:
 
 def allocation_table(inp: Inputs) -> str:
     a = inp.alloc
-    order = ["equal shares", "people affected", "half equal, half people affected", "deaths"]
+    order = [
+        "equal shares",
+        "people affected",
+        "people affected, 2007 required",
+        "half equal, half people affected",
+        "deaths",
+    ]
     rows = []
     for z in ZONE_ORDER:
         cells = []
@@ -393,25 +399,44 @@ def zone_note(z: str, inp: Inputs) -> str:
     return f"{base} {extra}".strip()
 
 
+def teso_ifrc_sentence(inp: Inputs) -> str:
+    """Whether our Teso draft and the IFRC stand-in at the same point pick the same years."""
+    ours = set(inp.activated("teso_kyoga"))
+    for short, _, h in inp.existing.get("teso_kyoga", []):
+        if short.startswith("IFRC"):
+            cal = h[
+                h.index.isin(inp.tabs["teso_kyoga"][inp.tabs["teso_kyoga"].in_calibration].index)
+            ]
+            if set(cal[cal.activated & cal.data].index) == ours:
+                return (
+                    " At this share it activates in exactly the same years as the IFRC stand-in at the same point "
+                    "— in effect the IFRC/URCS trigger, as the country team asked for alignment."
+                )
+    return ""
+
+
 def _zone_note(z: str, inp: Inputs) -> str:
     act = inp.activated(z)
     if z == "teso_kyoga":
         return (
             "Aligned with the IFRC/URCS early action protocol’s instrument — GloFAS at a reporting point — on "
             "the one point in the sub-region that passes both skill checks, as the country team asked. The reanalysis "
-            f"stands in for the forecast until the reforecast download finishes, so this is an upper bound. At its share "
-            f"of the budget it activates in {years_txt(act)}. Neither is one of Teso’s worst recorded years, and "
-            "that is the known weakness: the model’s biggest years (2020 by far, then 2013) are not the years "
-            "people flooded (2007, 2010, 2012, 2014), because G5196 tracks observed flooding well in 2006–2013 and "
-            "poorly since. That needs a third opinion — a DWRM gauge or Google Flood Hub — before a Teso "
-            "trigger is proposed. The IFRC stand-in, at the lower 5-year bar, activates more often and catches more."
+            f"stands in for the forecast until the reforecast download finishes, so this is an upper bound. Teso "
+            f"carries the requirement to catch 2007 (see How the budget is shared), which sets it at "
+            f"{rp_txt(inp.s.loc[z].design_rp)}; it activates in {years_txt(act)}, "
+            f"{int(inp.s.loc[z].worst5_caught)} of them among Teso’s five worst years. The two that are not, 2020 and "
+            "2013, are the known weakness: they are the model’s biggest years but ordinary ones on the satellite "
+            "record, because G5196 tracks observed flooding well in 2006–2013 and poorly since. That needs a third "
+            "opinion — a DWRM gauge or Google Flood Hub — before a Teso trigger is proposed."
+            + teso_ifrc_sentence(inp)
         )
     if z == "elgon":
         return (
             "One zone-wide trigger: every lowland flood year in the record is also a slope flood year, and the forecast "
             "moves together across the 15 districts (median rank correlation of annual peaks 0.74). Elgon carries "
-            "nearly half the recorded people affected and three quarters of the deaths, so it gets the largest share "
-            f"of the budget and activates in {years_txt(act)}. Some impact is recorded in Elgon every year, so the "
+            "nearly half the recorded people affected and three quarters of the deaths, so it has the largest weight; "
+            f"after Teso takes on 2007 it sits at {rp_txt(inp.s.loc[z].design_rp)} and activates in {years_txt(act)}. "
+            "Some impact is recorded in Elgon every year, so the "
             "useful test is whether activations land in the worst years: 2019 (a CERF year) and 2018 do; 2022, 2011 and "
             "2007 are missed."
         )
@@ -438,6 +463,41 @@ def _zone_note(z: str, inp: Inputs) -> str:
     )
 
 
+def must_catch_text(inp: Inputs) -> str:
+    """The must-catch requirement and what each zone would have cost, from the options table."""
+    path = TRIG / "must_catch_2007.csv"
+    if not path.exists():
+        return ""
+    o = pd.read_csv(path).set_index("zone")
+    rows = []
+    for z in ZONE_ORDER:
+        r = o.loc[z]
+        if not r.can_catch:
+            rows.append(
+                f"<tr><td>{SHORT[z]}</td><td colspan='3'>cannot catch 2007 at any level</td></tr>"
+            )
+            continue
+        chosen = abs(inp.s.loc[z].design_rp - r.needed_rp) < 0.05
+        cell = lambda x, c=chosen: f"<strong>{x}</strong>" if c else x
+        rows.append(
+            f"<tr><td>{cell(SHORT[z])}</td><td class='num'>{cell(rp_txt(r.needed_rp))}</td>"
+            f"<td class='num'>{cell(rp_txt(r.overall_rp))}</td><td class='num'>{cell(int(r.worst5_caught))} of 20</td></tr>"
+        )
+    head = (
+        "<tr><th>Catch 2007 with</th><th>That zone at least</th><th>Overall return period</th>"
+        "<th>Zone-worst years caught, all zones</th></tr>"
+    )
+    return (
+        "<p><strong>A must-catch year.</strong> Shared by people affected alone, the mechanism missed 2007 in every "
+        "zone \u2014 the largest flood year on record and a CERF year. The design therefore requires it, as a "
+        "trigger specification would: for each zone, the smallest share that would make that zone activate in "
+        "2007 is found, the other zones are re-scaled to keep the overall return period on target, and the "
+        "option that catches the most of the zones\u2019 five worst years overall is kept. Teso wins clearly; "
+        "Elgon could only catch 2007 by activating nearly every year, and Adjumani would starve every other zone.</p>"
+        f"<div class='tw trig-alloc'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+    )
+
+
 def key_points(inp: Inputs) -> str:
     s = inp.s
     over_rp = float(s.overall_rp.iloc[0])
@@ -447,15 +507,20 @@ def key_points(inp: Inputs) -> str:
         f"Four triggers, one per zone, each all-in. Across the four, <strong>{over_n} of the {cal} years would have "
         f"seen at least one activation — an overall return period of {rp_txt(over_rp)}</strong>, the closest the "
         "backtest allows to the 1-in-3 target.",
-        "The budget is shared in proportion to each zone’s recorded <strong>people affected</strong>, so Elgon "
-        f"(about half) activates most often ({rp_txt(s.loc['elgon'].design_rp)}) and Karamoja least "
-        f"({rp_txt(s.loc['karamoja'].design_rp)}). Other ways of sharing it are compared below.",
-        "None of the four separates bad years from ordinary ones convincingly. Elgon\u2019s catches two of its "
-        "five worst years (2019, a CERF year, and 2018). Teso\u2019s GloFAS trigger is the strongest instrument on "
-        "paper but picks the model\u2019s big years, which since 2013 are not the years people flooded. Karamoja "
-        "and Adjumani are weak; Adjumani\u2019s lake leg does catch 2020, its largest flood.",
-        "2007, the largest flood year on record and a CERF year, activates nowhere: a long wet season, not one "
-        "extreme week.",
+        "The budget is shared in proportion to each zone\u2019s recorded <strong>people affected</strong>, with one "
+        "requirement on top: the mechanism must catch <strong>2007</strong>, the largest flood year on record and a "
+        "CERF year, which the plain tilt missed everywhere. Teso is the cheapest zone to catch it with, so it runs at "
+        f"{rp_txt(s.loc['teso_kyoga'].design_rp)}, Elgon at {rp_txt(s.loc['elgon'].design_rp)}, Adjumani at "
+        f"{rp_txt(s.loc['adjumani'].design_rp)} and Karamoja at {rp_txt(s.loc['karamoja'].design_rp)}. Other ways "
+        "of sharing the budget are compared below.",
+        f"Across the four, {int(s.worst5_caught.sum())} of the zones\u2019 20 worst years are caught (Teso "
+        f"{int(s.loc['teso_kyoga'].worst5_caught)}, Elgon {int(s.loc['elgon'].worst5_caught)}, Adjumani "
+        f"{int(s.loc['adjumani'].worst5_caught)}, Karamoja {int(s.loc['karamoja'].worst5_caught)}), against 3 "
+        "without the 2007 requirement. None of the four separates bad years from ordinary ones convincingly; "
+        "Teso\u2019s two false years, 2020 and 2013, are the model\u2019s big years since its record and the "
+        "satellite\u2019s parted ways after 2013.",
+        "Tuning to one year is a choice made in the open: 2007 is written into the design as a must-catch event, "
+        "the way a trigger specification would list it, and the table below shows what each zone would have cost.",
         "Existing triggers are reproduced alongside ours, where the data allows.",
     ]
     if inp.ptext.get("key_point"):
@@ -492,7 +557,8 @@ def page(inp: Inputs) -> str:
         "people affected recorded in each over the calibration years, so a zone with more historical impact is more "
         "likely to activate. Concretely, each zone’s annual activation probability is set proportional to its "
         "share, and the shares are scaled together until the backtest’s overall return period is as close to 3 "
-        "as whole years allow: 9 activation years out of 25 is 1-in-2.9, 8 would be 1-in-3.25. Thresholds for "
+        f"as whole years allow: {int(inp.s.overall_years.iloc[0])} activation years out of "
+        f"{int(inp.s.years_with_data.max())} is {rp_txt(float(inp.s.overall_rp.iloc[0]))}. Thresholds for "
         "fractional targets are interpolated between the backtest’s order statistics, so they do not jump in "
         "whole-year steps.</p>",
         "<p>People affected was chosen over deaths because it is what an anticipatory envelope is sized on, and "
@@ -500,6 +566,7 @@ def page(inp: Inputs) -> str:
         "— and would leave Adjumani, with almost none, effectively never activating. The table shows the "
         "alternatives: each cell is the zone’s share, its design return period and its activation years in "
         "the backtest.</p>",
+        must_catch_text(inp),
         allocation_table(inp),
         "<p class='fn'>Shares use the zone-year impact record described under Data and methods. They are recorded "
         "impact, so they inherit its gaps: West Nile is thinly recorded before 2004, and years after 2021 rest on "
@@ -508,8 +575,7 @@ def page(inp: Inputs) -> str:
         overview_table(inp, years),
         "<p class='fn'>“No data”: CHIRPS-GEFS has no forecasts from 1 January to 4 October 2020, the gap between "
         "the GEFS v12 reforecast and the operational feed, so the rain-based triggers cannot be judged that year; "
-        "Adjumani’s lake leg can. 2025 is shown but not used to calibrate; Teso has no 2025 yet because the "
-        "GloFAS 2025 reanalysis is still queued.</p>",
+        "Adjumani’s lake leg can.</p>",
         near_miss_2007(inp),
     ]
     for z in ZONE_ORDER:

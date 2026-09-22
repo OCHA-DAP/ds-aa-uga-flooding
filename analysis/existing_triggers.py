@@ -56,7 +56,7 @@ from src.zones import load_adm2
 ROOT = Path(__file__).resolve().parent.parent
 OUT_PUBLIC = ROOT / "outputs" / "triggers" / "existing_public.csv"
 OUT_PRIVATE = ROOT / "site_private" / "existing_private.csv"
-CAL_LAST = 2024
+CAL_LAST = 2025 if (GLOFAS_DIR / "2025.nc").exists() else 2024  # same years as trigger_draft
 
 PUBLIC_SPECS = [
     dict(
