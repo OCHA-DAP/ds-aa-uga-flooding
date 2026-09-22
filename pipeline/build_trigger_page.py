@@ -1,9 +1,19 @@
-"""Build pages/triggers/index.html — the draft trigger mechanisms and their year-by-year backtest.
+"""Build pages/triggers/index.html — the draft trigger mechanisms, restricted.
 
-Reads outputs/triggers/ (written by analysis/trigger_draft.py) and the zone definitions.
-Public: everything here is our own analysis of public data.
+One page holds the whole trigger analysis: our four draft triggers, how the budget is shared
+between zones, the year-by-year backtest per zone, and other organisations' existing
+triggers reproduced alongside ours. Some of those come from partner documents that are not
+published, so the page is built in plaintext into the gitignored site_private/ and only an
+encrypted copy (staticrypt, team review password) is written to pages/triggers/.
 
-  uv run python analysis/trigger_draft.py && uv run python pipeline/build_trigger_page.py
+Inputs:
+  outputs/triggers/            analysis/trigger_draft.py      our drafts, per-zone years, allocations
+  outputs/triggers/existing_public.csv   analysis/existing_triggers.py  published triggers (IFRC EAP)
+  site_private/existing_private.csv      analysis/existing_triggers.py  unpublished partner triggers
+
+  uv run python analysis/trigger_draft.py
+  uv run python analysis/existing_triggers.py
+  uv run python pipeline/build_trigger_page.py
 """
 
 from __future__ import annotations
@@ -18,13 +28,19 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import build_pages as bp
+from encrypt import encrypt_page
 
 from src.constants import ZONES
+from src.frameworks import load_private
 
 TRIG = bp.OUT / "triggers"
+PRIVATE = bp.ROOT / "site_private"
 ZONE_ORDER = ["teso_kyoga", "elgon", "karamoja", "adjumani"]
 EXT_COL = "#5b5b5b"  # existing (other organisations') triggers: one neutral colour
 SHORT = {"teso_kyoga": "Teso", "elgon": "Elgon", "karamoja": "Karamoja", "adjumani": "Adjumani"}
+
+
+# --- small formatting helpers --------------------------------------------------------------
 
 
 def ramp(t: float, lo=(253, 236, 230), hi=(165, 15, 21)) -> str:
@@ -34,98 +50,26 @@ def ramp(t: float, lo=(253, 236, 230), hi=(165, 15, 21)) -> str:
 
 
 def impact_cell(v: float, top: float, floor: float) -> str:
-    """Log shading from `floor` (palest) to the largest value in any zone (darkest), so a few
-    thousand people affected reads light and a hundred thousand reads dark."""
-    # EM-DAT figures are split evenly across the districts an event names, so values can be
-    # fractional; anything that rounds to zero is shown as nothing recorded
+    """Log shading from `floor` (palest) to the largest value in any zone (darkest). EM-DAT
+    figures are split evenly across the districts an event names, so values can be fractional;
+    anything that rounds to zero is shown as nothing recorded."""
     if pd.isna(v) or round(v) <= 0:
         return "<td class='num'></td>"
     t = (math.log10(max(v, floor)) - math.log10(floor)) / (math.log10(top) - math.log10(floor))
-    t = 0.08 + 0.92 * t  # keep even the smallest recorded value visibly tinted
+    t = 0.08 + 0.92 * t
     fg = "#fff" if t > 0.55 else "#1a1a1a"
     return f"<td class='num' style='background:{ramp(t)};color:{fg}'>{v:,.0f}</td>"
 
 
-def trigger_text(zone: str, thr: pd.DataFrame) -> tuple[str, str]:
-    """Plain description of the trigger and its lead time."""
-    t = thr[thr.zone == zone].set_index("series")
-    rp = float(t.series_rp.iloc[0])
-    if zone == "teso_kyoga":
-        v = t.threshold.iloc[0]
-        return (
-            f"GloFAS daily discharge at G5196 (Akokoro) reaches <strong>{v:,.0f} m³/s</strong>, in model space "
-            f"(the model runs about 1.7× wet, so this is not a gauged flow)",
-            "3–14 days once run on the forecast; <strong>none in this backtest</strong>, which uses the reanalysis",
-        )
-    if zone == "elgon":
-        v = t.threshold.iloc[0]
-        return (
-            f"The 5-day forecast rainfall, averaged over all 15 districts, reaches <strong>{v:,.0f} mm</strong>",
-            "1–5 days",
-        )
-    rain = t.drop(index="Kyoga rise", errors="ignore").threshold
-    rain_txt = (
-        f"the 5-day forecast rainfall in any one district reaches that district’s own 1-in-{rp:.0f}-year level "
-        f"(<strong>{rain.min():,.0f}–{rain.max():,.0f} mm</strong> depending on the district)"
-    )
-    if zone == "karamoja":
-        return rain_txt[0].upper() + rain_txt[1:], "1–5 days"
-    lake = t.loc["Kyoga rise", "threshold"]
-    return (
-        f"<em>Either</em> Lake Kyoga rises <strong>{lake:.2f} m</strong> over 180 days — the Nile high-stand "
-        f"leg — <em>or</em> {rain_txt}",
-        "months for the lake leg; 1–5 days for the rain leg",
-    )
+def rp_txt(rp: float) -> str:
+    return f"1-in-{rp:.0f}" if rp >= 10 else f"1-in-{rp:.1f}"
 
 
-def summary_table(s: pd.DataFrame, thr: pd.DataFrame) -> str:
-    rows = []
-    for z in ZONE_ORDER:
-        r = s.set_index("zone").loc[z]
-        what, lead = trigger_text(z, thr)
-        rows.append(
-            "<tr>"
-            f"<td class='zn'><span class='sw' style='background:{bp.ZONE_COL[z]}'></span><strong>{SHORT[z]}</strong></td>"
-            f"<td>{what}</td><td>{lead}</td>"
-            f"<td class='num'>{int(r.activation_years)} of {int(r.years_with_data)}</td>"
-            f"<td class='num'><strong>1-in-{r.individual_rp:.1f}</strong></td>"
-            f"<td class='num'>{int(r.worst5_caught)} of 5</td>"
-            f"<td class='num'>{int(r.activations_in_major_years)} of {int(r.activation_years)}"
-            f"<span class='fn'>base rate {r.base_rate_major:.0%}</span></td>"
-            "</tr>"
-        )
-    head = (
-        "<tr><th>Zone</th><th>Activates when</th><th>Lead time</th><th>Activation years</th>"
-        "<th>Individual RP</th><th>Five worst years caught</th><th>Activations in a major-impact year</th></tr>"
-    )
-    return f"<div class='tw trig-sum'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
-
-
-def overview_table(tabs: dict[str, pd.DataFrame], years: list[int]) -> str:
-    rows = []
-    for y in years:
-        cells, anyz = [], False
-        for z in ZONE_ORDER:
-            r = tabs[z].loc[y]
-            if not r.data:
-                cells.append("<td class='nodata'>no data</td>")
-            elif r.activated:
-                anyz = True
-                cells.append(f"<td class='act' style='background:{bp.ZONE_COL[z]}'>activated</td>")
-            else:
-                cells.append("<td></td>")
-        cerf = tabs["teso_kyoga"].loc[y].cerf
-        rows.append(
-            f"<tr><td class='yr'>{y}</td>{''.join(cells)}"
-            f"<td class='any'>{'●' if anyz else ''}</td>"
-            f"<td class='fn'>{bp.e(cerf) if isinstance(cerf, str) else ''}</td></tr>"
-        )
-    head = (
-        "<tr><th>Year</th>"
-        + "".join(f"<th>{SHORT[z]}</th>" for z in ZONE_ORDER)
-        + "<th>Any zone</th><th>CERF flood allocation (national)</th></tr>"
-    )
-    return f"<div class='tw trig-over'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+def years_txt(years) -> str:
+    ys = sorted(years, reverse=True)
+    if not ys:
+        return "no year"
+    return ", ".join(str(y) for y in ys[:-1]) + (" and " if len(ys) > 1 else "") + str(ys[-1])
 
 
 def source_labels(raw: str) -> str:
@@ -144,6 +88,35 @@ def source_labels(raw: str) -> str:
         if lab not in out:
             out.append(lab)
     return ", ".join(out)
+
+
+# --- inputs --------------------------------------------------------------------------------
+
+
+class Inputs:
+    def __init__(self):
+        self.s = pd.read_csv(TRIG / "summary.csv").set_index("zone")
+        self.thr = pd.read_csv(TRIG / "thresholds.csv")
+        self.alloc = pd.read_csv(TRIG / "allocations.csv")
+        self.tabs = {z: pd.read_csv(TRIG / f"{z}.csv").set_index("year") for z in ZONE_ORDER}
+        self.existing = merge_existing(
+            load_existing(TRIG / "existing_public.csv"),
+            load_existing(PRIVATE / "existing_private.csv"),
+        )
+        self.top_aff = max(float(t.affected.max()) for t in self.tabs.values())
+        self.top_d = max(float(t.deaths.max()) for t in self.tabs.values())
+        # narrative about unpublished partner triggers: gitignored config, never this source
+        self.ptext = load_private().get("trigger_page_text", {})
+
+    def series_rp(self, z: str, leg: str | None = None) -> float:
+        t = self.thr[self.thr.zone == z]
+        if leg:
+            t = t[t.leg == leg]
+        return float(t.series_rp.iloc[0])
+
+    def activated(self, z: str) -> list[int]:
+        t = self.tabs[z]
+        return sorted(t[t.activated & t.in_calibration].index, reverse=True)
 
 
 def load_existing(path) -> dict[str, list[tuple[str, str, pd.DataFrame]]]:
@@ -196,6 +169,117 @@ def rates(activated: pd.Series, data: pd.Series, tab: pd.DataFrame) -> dict:
     )
 
 
+# --- tables --------------------------------------------------------------------------------
+
+
+def trigger_text(z: str, inp: Inputs) -> tuple[str, str]:
+    """Plain description of the trigger and its lead time."""
+    t = inp.thr[inp.thr.zone == z].set_index("series")
+    if z == "teso_kyoga":
+        return (
+            f"GloFAS daily discharge at G5196 (Akokoro) reaches <strong>{t.threshold.iloc[0]:,.0f} m³/s</strong>, "
+            "in model space (the model runs about 1.7× wet, so this is not a gauged flow)",
+            "3–14 days once run on the forecast; <strong>none in this backtest</strong>, which uses the reanalysis",
+        )
+    if z == "elgon":
+        return (
+            f"the 5-day forecast rainfall, averaged over all 15 districts, reaches <strong>{t.threshold.iloc[0]:,.0f} mm</strong>",
+            "1–5 days",
+        )
+    rain = t[t.leg != "lake"] if "leg" in t else t
+    rain = rain.drop(index="Kyoga rise", errors="ignore")
+    rain_rp = float(rain.series_rp.iloc[0])
+    rain_txt = (
+        f"the 5-day forecast rainfall in any one district reaches that district’s own {rp_txt(rain_rp)}-year "
+        f"level (<strong>{rain.threshold.min():,.0f}–{rain.threshold.max():,.0f} mm</strong> depending on the district)"
+    )
+    if z == "karamoja":
+        return rain_txt, "1–5 days"
+    lake = t.loc["Kyoga rise"]
+    return (
+        f"<em>either</em> Lake Kyoga rises <strong>{lake.threshold:.2f} m</strong> over 180 days (a {rp_txt(lake.series_rp)}-"
+        f"year rise; the Nile high-stand leg) <em>or</em> {rain_txt}",
+        "months for the lake leg; 1–5 days for the rain leg",
+    )
+
+
+def summary_table(inp: Inputs) -> str:
+    rows = []
+    for z in ZONE_ORDER:
+        r = inp.s.loc[z]
+        what, lead = trigger_text(z, inp)
+        rows.append(
+            "<tr>"
+            f"<td class='zn'><span class='sw' style='background:{bp.ZONE_COL[z]}'></span><strong>{SHORT[z]}</strong></td>"
+            f"<td>{what[0].upper() + what[1:]}</td><td>{lead}</td>"
+            f"<td class='num'>{r.weight:.0%}</td>"
+            f"<td class='num'><strong>{rp_txt(r.design_rp)}</strong></td>"
+            f"<td class='num'>{int(r.activation_years)} of {int(r.years_with_data)}"
+            f"<span class='fn'>{years_txt(inp.activated(z))}</span></td>"
+            f"<td class='num'>{int(r.worst5_caught)} of 5</td>"
+            f"<td class='num'>{int(r.activations_in_major_years)} of {int(r.activation_years)}"
+            f"<span class='fn'>base rate {r.base_rate_major:.0%}</span></td>"
+            "</tr>"
+        )
+    head = (
+        "<tr><th>Zone</th><th>Activates when</th><th>Lead time</th><th>Share of people affected</th>"
+        "<th>Design return period</th><th>Activation years in the backtest</th><th>Five worst years caught</th>"
+        "<th>Activations in a major-impact year</th></tr>"
+    )
+    return f"<div class='tw trig-sum'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+
+
+def allocation_table(inp: Inputs) -> str:
+    a = inp.alloc
+    order = ["equal shares", "people affected", "half equal, half people affected", "deaths"]
+    rows = []
+    for z in ZONE_ORDER:
+        cells = []
+        for name in order:
+            r = a[(a.allocation == name) & (a.zone == z)].iloc[0]
+            bold = name == inp.s.allocation.iloc[0]
+            txt = f"{r.weight:.0%} · {rp_txt(r.design_rp)} · {int(r.activation_years)} yr"
+            cells.append(f"<td class='num'>{'<strong>' + txt + '</strong>' if bold else txt}</td>")
+        rows.append(
+            f"<tr><td><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{SHORT[z]}</td>{''.join(cells)}</tr>"
+        )
+    over = "".join(
+        f"<td class='num'>{int(a[a.allocation == n].overall_years.iloc[0])} yr · "
+        f"{rp_txt(a[a.allocation == n].overall_rp.iloc[0])}</td>"
+        for n in order
+    )
+    rows.append(f"<tr class='tot'><td>Any zone</td>{over}</tr>")
+    head = "<tr><th>Zone</th>" + "".join(f"<th>Shared by {n}</th>" for n in order) + "</tr>"
+    return f"<div class='tw trig-alloc'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+
+
+def overview_table(inp: Inputs, years: list[int]) -> str:
+    rows = []
+    for y in years:
+        cells, anyz = [], False
+        for z in ZONE_ORDER:
+            r = inp.tabs[z].loc[y]
+            if not r.data:
+                cells.append("<td class='nodata'>no data</td>")
+            elif r.activated:
+                anyz = True
+                cells.append(f"<td class='act' style='background:{bp.ZONE_COL[z]}'>activated</td>")
+            else:
+                cells.append("<td></td>")
+        cerf = inp.tabs["teso_kyoga"].loc[y].cerf
+        rows.append(
+            f"<tr><td class='yr'>{y}</td>{''.join(cells)}"
+            f"<td class='any'>{'●' if anyz else ''}</td>"
+            f"<td class='src'>{bp.e(cerf) if isinstance(cerf, str) else ''}</td></tr>"
+        )
+    head = (
+        "<tr><th>Year</th>"
+        + "".join(f"<th>{SHORT[z]}</th>" for z in ZONE_ORDER)
+        + "<th>Any zone</th><th>CERF flood allocation (national)</th></tr>"
+    )
+    return f"<div class='tw trig-over'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+
+
 def compare_table(z: str, tab: pd.DataFrame, cols) -> str:
     """Our draft and each existing trigger over the same calibration years."""
     items = [("Our draft", tab.activated, tab.data, bp.ZONE_COL[z])]
@@ -204,7 +288,7 @@ def compare_table(z: str, tab: pd.DataFrame, cols) -> str:
     rows = []
     for name, act, dat, col in items:
         r = rates(act, dat, tab)
-        rp = f"1-in-{r['rp']:.1f}" if r["n"] else "never"
+        rp = rp_txt(r["rp"]) if r["n"] else "never"
         rows.append(
             f"<tr><td><span class='sw' style='background:{col}'></span>{bp.e(name)}</td>"
             f"<td class='num'>{r['n']} of {r['years']}</td><td class='num'><strong>{rp}</strong></td>"
@@ -233,7 +317,8 @@ def existing_cell(h: pd.DataFrame, y: int) -> str:
     return "<td></td>"
 
 
-def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float, cols=()) -> str:
+def zone_table(z: str, inp: Inputs, cols=()) -> str:
+    tab = inp.tabs[z]
     rows = []
     for y, r in tab.sort_index(ascending=False).iterrows():
         if not r.data:
@@ -248,7 +333,7 @@ def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float, cols=())
         else:
             act = "<td></td>"
         if pd.notna(r.peak_rp) and r.data:
-            peak = f"1-in-{r.peak_rp:.0f}" if r.peak_rp >= 2 else "below 1-in-2"
+            peak = rp_txt(r.peak_rp) if r.peak_rp >= 2 else "below 1-in-2"
             if isinstance(r.peak_where, str) and z in ("karamoja", "adjumani"):
                 peak += f"<span class='fn'>{bp.e(r.peak_where)}</span>"
         else:
@@ -258,7 +343,7 @@ def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float, cols=())
         rows.append(
             f"<tr><td class='yr'>{yr}</td>{act}<td class='num'>{peak}</td>"
             + "".join(existing_cell(h, y) for _, _, h in cols)
-            + f"{impact_cell(r.affected, top_aff, 500)}{impact_cell(r.deaths, top_d, 1)}"
+            + f"{impact_cell(r.affected, inp.top_aff, 500)}{impact_cell(r.deaths, inp.top_d, 1)}"
             f"<td class='num'>{int(r.districts) if r.districts else ''}</td>"
             f"<td class='src'>{bp.e(source_labels(src))}</td>"
             f"<td class='src'>{bp.e(r.cerf) if isinstance(r.cerf, str) else ''}</td></tr>"
@@ -272,166 +357,253 @@ def zone_table(z: str, tab: pd.DataFrame, top_aff: float, top_d: float, cols=())
     return f"<div class='tw trig-zone'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
 
-ZONE_NOTE = {
-    "teso_kyoga": (
-        "Aligned with the IFRC/URCS early action protocol’s instrument (GloFAS at a reporting point), on the one "
-        "point in the sub-region that passes both skill checks. The reanalysis is a stand-in until the reforecast "
-        "download finishes: it has no forecast error in it, so this is an upper bound. Two known weaknesses show "
-        "in the table. The biggest recorded years — 2007, 2010, 2012, 2014 — are not the model’s biggest "
-        "years; and 2020, the model’s record by far, was an ordinary season on the satellite record. That is "
-        "the non-stationarity found in the coverage work (G5196 tracks observed flooding well in 2006–2013 and "
-        "poorly since), and it needs a third opinion — a DWRM gauge or Flood Hub — before this is proposed."
-    ),
-    "elgon": (
-        "One zone-wide trigger: every lowland flood year in the record is also a slope flood year, and the forecast "
-        "moves together across the 15 districts (median rank correlation of annual peaks 0.74). Elgon has some "
-        "recorded impact every year, so the useful test is whether activations land in the worst years: "
-        "2019 and 2018 do, and 2019 is a CERF year. At year level the forecast does not rank Elgon’s years "
-        "well overall (AUC about 0.5 against the worst third), which is the same limit the event-level work found."
-    ),
-    "karamoja": (
-        "Per district, as suggested: each of the nine districts is held to the same rarity, and the zone activates "
-        "when any one reaches it. To keep the zone at 1-in-8.7, each district has to be much rarer — about "
-        "1-in-22 — because nine districts give nine chances. The first-activation date and the district that "
-        "activated are shown in the trigger cell. Whether an activation in one district releases the whole Karamoja "
-        "envelope or that district’s share is a funding decision; this draft assumes all-in."
-    ),
-    "adjumani": (
-        "Two legs, because the record shows two regimes. The lake leg covers Nile high-stand floods — 2020 above "
-        "all, when the Albert Nile rose from June and displaced 123,000 people across Pakwach, Obongi and "
-        "Adjumani — using Lake Kyoga’s rise over six months: Kyoga tracks Lake Albert at r = 0.96 month to "
-        "month and has a record from 1992, where Albert’s starts in 2016. A threshold on the lake level itself "
-        "would not work: the lakes rose about 3 m in 2020 and have stayed up, so it would activate every year since. "
-        "The rain leg covers the tributary and settlement flash floods that make up most of the record. Both legs "
-        "sit at the same rarity, about 1-in-{rp} each on a fitted Gumbel, so that the zone as a whole lands on its "
-        "share. The rain leg activates in 2011, the September floods in Obongi and Moyo (about 4,000 people, below the "
-        "major bar), and in 2000 in Moyo with nothing recorded \u2014 the West Nile record is thin before 2004, so "
-        "treat that one as unverified rather than a false alarm. The lake leg does not reach 2023 or 2024: 2024 was "
-        "a 1-in-10 rise, short of the threshold, and 2023\u2019s floods were rain-driven in a year the lake fell."
-    ),
-}
+# --- narrative -----------------------------------------------------------------------------
 
 
-# Where an existing trigger operates in the zone but is not shown on this public page
-EXISTING_NOTE = {
-    "elgon": (
-        "Two partner plans also trigger here \u2014 a draft FAO plan and the CRS/Caritas Tororo protocol. Neither is "
-        'published, so their backtests sit on the <a href="../partner/">restricted partner page</a>.'
-    ),
-    "karamoja": (
-        "The IFRC EAP lists Nabilatuk, but there is no GloFAS reporting point in Karamoja to reproduce it with. DRC\u2019s "
-        "Karamoja plan covers Moroto, Napak and Amudat; it is not published, so its backtest sits on the "
-        '<a href="../partner/">restricted partner page</a>.'
-    ),
-    "adjumani": (
-        "The IFRC EAP lists Moyo, but there is no GloFAS reporting point on the Albert Nile to reproduce it with. No "
-        "other organisation has a flood trigger in the zone."
-    ),
-}
+def near_miss_2007(inp: Inputs) -> str:
+    """Where each zone stood in 2007 against its own threshold rarity, written from the data."""
+    bits, fired = [], []
+    for z in ZONE_ORDER:
+        r = inp.tabs[z].loc[2007]
+        if r.activated:
+            fired.append(SHORT[z])
+            continue
+        leg = (
+            "lake"
+            if (z == "adjumani" and r.peak_where == "Kyoga rise")
+            else ("rain" if z == "adjumani" else None)
+        )
+        bar = inp.series_rp(z, leg)
+        where = f" ({r.peak_where})" if z in ("karamoja", "adjumani") else ""
+        bits.append(f"{SHORT[z]} reached {rp_txt(r.peak_rp)}{where} against a {rp_txt(bar)} bar")
+    if fired:
+        return f"<p><strong>2007</strong>, the largest flood year on record and a CERF year, activates in {', '.join(fired)}.</p>"
+    return (
+        "<p><strong>2007 activates nowhere,</strong> although it is the largest flood year in the record and a CERF "
+        f"year: {'; '.join(bits)}. 2007 was a long wet season, August to October, rather than one extreme week, which "
+        "a 5-day peak cannot see. A longer accumulation window alongside the 5-day one is the obvious thing to test.</p>"
+    )
 
 
-def page() -> str:
-    s = pd.read_csv(TRIG / "summary.csv")
-    thr = pd.read_csv(TRIG / "thresholds.csv")
-    tabs = {z: pd.read_csv(TRIG / f"{z}.csv").set_index("year") for z in ZONE_ORDER}
-    existing = merge_existing(load_existing(TRIG / "existing_public.csv"))
-    years = sorted(tabs["teso_kyoga"].index, reverse=True)
-    top_aff = max(float(t.affected.max()) for t in tabs.values())
-    top_d = max(float(t.deaths.max()) for t in tabs.values())
-    r0 = s.iloc[0]
+def zone_note(z: str, inp: Inputs) -> str:
+    """The zone's narrative. Sentences about unpublished partner triggers are not kept in this
+    (public) source: they come from the gitignored config and are appended when present."""
+    base = _zone_note(z, inp)
+    extra = inp.ptext.get(z, "")
+    return f"{base} {extra}".strip()
+
+
+def _zone_note(z: str, inp: Inputs) -> str:
+    act = inp.activated(z)
+    if z == "teso_kyoga":
+        return (
+            "Aligned with the IFRC/URCS early action protocol’s instrument — GloFAS at a reporting point — on "
+            "the one point in the sub-region that passes both skill checks, as the country team asked. The reanalysis "
+            f"stands in for the forecast until the reforecast download finishes, so this is an upper bound. At its share "
+            f"of the budget it activates in {years_txt(act)}. Neither is one of Teso’s worst recorded years, and "
+            "that is the known weakness: the model’s biggest years (2020 by far, then 2013) are not the years "
+            "people flooded (2007, 2010, 2012, 2014), because G5196 tracks observed flooding well in 2006–2013 and "
+            "poorly since. That needs a third opinion — a DWRM gauge or Google Flood Hub — before a Teso "
+            "trigger is proposed. The IFRC stand-in, at the lower 5-year bar, activates more often and catches more."
+        )
+    if z == "elgon":
+        return (
+            "One zone-wide trigger: every lowland flood year in the record is also a slope flood year, and the forecast "
+            "moves together across the 15 districts (median rank correlation of annual peaks 0.74). Elgon carries "
+            "nearly half the recorded people affected and three quarters of the deaths, so it gets the largest share "
+            f"of the budget and activates in {years_txt(act)}. Some impact is recorded in Elgon every year, so the "
+            "useful test is whether activations land in the worst years: 2019 (a CERF year) and 2018 do; 2022, 2011 and "
+            "2007 are missed."
+        )
+    if z == "karamoja":
+        return (
+            "Per district: each of the nine districts is held to the same rarity, and the zone activates when any one "
+            f"reaches it. Karamoja’s share of recorded people affected is the smallest of the four, and nine "
+            f"districts give nine chances, so each district is held to about a {rp_txt(inp.series_rp(z))}-year level "
+            f"and the zone activates in {years_txt(act)} only. Whether an activation in one district releases the whole "
+            "Karamoja envelope or that district’s share is a funding decision; this draft assumes all-in."
+        )
+    return (
+        "Two legs, because the record shows two flood regimes. Nile high-stand floods — 2020 above all, when "
+        "the Albert Nile rose from June and displaced 123,000 people across Pakwach, Obongi and Adjumani, and "
+        "earlier 2002, 2004, late 2019 and 2024 — are covered by Lake Kyoga’s rise over six months: Kyoga "
+        "tracks Lake Albert at r = 0.96 month to month and has a record from 1992, where Albert’s starts in 2016. "
+        "A threshold on the lake level itself would not work: the lakes rose about 3 m in 2020 and have stayed up, "
+        "so it would activate every year since. Tributary and settlement flash floods, most of the record, are "
+        "covered by the rain forecast per district. Each leg gets half the zone’s share and is calibrated on "
+        "its own, so the single lake series is not outvoted by six rain series (an earlier version did that and lost "
+        f"2020). The zone activates in {years_txt(act)}. The rain-leg year, 2000, has nothing recorded; the West "
+        "Nile record is thin before 2004, so treat it as unverified rather than a false alarm. The IFRC EAP lists "
+        "Moyo, but there is no GloFAS reporting point on the Albert Nile to reproduce it with."
+    )
+
+
+def key_points(inp: Inputs) -> str:
+    s = inp.s
+    over_rp = float(s.overall_rp.iloc[0])
+    over_n = int(s.overall_years.iloc[0])
+    cal = s.calibration.iloc[0]
+    items = [
+        f"Four triggers, one per zone, each all-in. Across the four, <strong>{over_n} of the {cal} years would have "
+        f"seen at least one activation — an overall return period of {rp_txt(over_rp)}</strong>, the closest the "
+        "backtest allows to the 1-in-3 target.",
+        "The budget is shared in proportion to each zone’s recorded <strong>people affected</strong>, so Elgon "
+        f"(about half) activates most often ({rp_txt(s.loc['elgon'].design_rp)}) and Karamoja least "
+        f"({rp_txt(s.loc['karamoja'].design_rp)}). Other ways of sharing it are compared below.",
+        "None of the four separates bad years from ordinary ones convincingly. Elgon\u2019s catches two of its "
+        "five worst years (2019, a CERF year, and 2018). Teso\u2019s GloFAS trigger is the strongest instrument on "
+        "paper but picks the model\u2019s big years, which since 2013 are not the years people flooded. Karamoja "
+        "and Adjumani are weak; Adjumani\u2019s lake leg does catch 2020, its largest flood.",
+        "2007, the largest flood year on record and a CERF year, activates nowhere: a long wet season, not one "
+        "extreme week.",
+        "Existing triggers are reproduced alongside ours, where the data allows.",
+    ]
+    if inp.ptext.get("key_point"):
+        items[-1] = inp.ptext["key_point"]
+    return "<ul class='keypts'>" + "".join(f"<li>{x}</li>" for x in items) + "</ul>"
+
+
+def page(inp: Inputs) -> str:
+    years = sorted(inp.tabs["teso_kyoga"].index, reverse=True)
+    cal = inp.s.calibration.iloc[0]
     parts = [
         bp.HEAD.format(
             v=bp.ASSET_VERSION,
             title="Draft triggers",
-            sub="One trigger per zone, balanced to an overall return period of about three years. First draft for discussion.",
+            sub="One trigger per zone, the budget shared by historical impact, backtested year by year against the "
+            "recorded impact and alongside the triggers other organisations already run. First draft for discussion.",
         ),
-        "<p class='callout'><strong>Status: first draft.</strong> Thresholds are calibrated on "
-        f"{r0.calibration} and will move as data is added. Teso runs on the GloFAS reanalysis until the reforecast "
-        "download completes. Nothing here is endorsed.</p>",
-        "<h2>How the four triggers are balanced</h2>",
-        f"<p>Each zone has one all-in trigger: any activation releases that zone’s whole envelope. The budget is set "
-        f"on the <strong>overall</strong> return period — the years in which at least one zone activates — and "
-        f"shared equally, so every zone gets the same number of activation years. Three each gives "
-        f"<strong>{int(r0.overall_years)} years out of 25 with at least one activation, an overall return period of "
-        f"1-in-{r0.overall_rp:.2f}</strong>. That is the closest achievable to 3: four each gives 12 years and 1-in-2.2. "
-        "Each zone on its own therefore activates about once in nine years. Zones mostly activate in different "
-        "years, so the individual rarity has to be close to four times the overall one.</p>",
-        summary_table(s, thr),
-        "<p class='fn'>Return periods are Weibull, (n + 1) / activations, over the calibration years with data for "
-        "that zone. “Major-impact year”: at least 5 deaths or 5,000 people affected recorded in the zone "
-        "that year; the base rate beside it is how often that happens anyway, which is the bar an activation has "
-        "to beat. “Five worst years”: by people affected in the calibration period.</p>",
+        "<p class='callout'><strong>Restricted.</strong> This page includes material from partner plans that are not "
+        "published (FAO’s draft Mt Elgon plan, the CRS/Caritas Tororo protocol, DRC’s Karamoja plan). Please "
+        f"do not forward it outside the team. <strong>Status:</strong> first draft, calibrated on {cal}; Teso runs on "
+        "the GloFAS reanalysis until the reforecast is complete. Nothing here is endorsed.</p>",
+        "<h2>In brief</h2>",
+        key_points(inp),
+        "<h2>The four triggers</h2>",
+        summary_table(inp),
+        "<p class='fn'>Design return period: the rarity each zone’s threshold is set to. Activation years: what the "
+        "threshold would have done over the calibration years with data for that zone. “Major-impact year”: "
+        "at least 5 deaths or 5,000 people affected recorded in the zone that year; the base rate beside it is how "
+        "often that happens anyway, which is the bar an activation has to beat. “Five worst years”: by "
+        "people affected in the calibration period.</p>",
+        "<h2>How the budget is shared</h2>",
+        "<p>The target is set on the <strong>overall</strong> return period — the years in which at least one "
+        "zone activates — at about 1-in-3. That budget is then shared between the zones in proportion to the "
+        "people affected recorded in each over the calibration years, so a zone with more historical impact is more "
+        "likely to activate. Concretely, each zone’s annual activation probability is set proportional to its "
+        "share, and the shares are scaled together until the backtest’s overall return period is as close to 3 "
+        "as whole years allow: 9 activation years out of 25 is 1-in-2.9, 8 would be 1-in-3.25. Thresholds for "
+        "fractional targets are interpolated between the backtest’s order statistics, so they do not jump in "
+        "whole-year steps.</p>",
+        "<p>People affected was chosen over deaths because it is what an anticipatory envelope is sized on, and "
+        "because a deaths weighting is dominated by the Elgon landslides — three quarters of all recorded deaths "
+        "— and would leave Adjumani, with almost none, effectively never activating. The table shows the "
+        "alternatives: each cell is the zone’s share, its design return period and its activation years in "
+        "the backtest.</p>",
+        allocation_table(inp),
+        "<p class='fn'>Shares use the zone-year impact record described under Data and methods. They are recorded "
+        "impact, so they inherit its gaps: West Nile is thinly recorded before 2004, and years after 2021 rest on "
+        "EM-DAT, press and IOM DTM once DesInventar stops.</p>",
         "<h2>All zones, year by year</h2>",
-        overview_table(tabs, years),
+        overview_table(inp, years),
         "<p class='fn'>“No data”: CHIRPS-GEFS has no forecasts from 1 January to 4 October 2020, the gap between "
-        "the GEFS v12 reforecast and the operational feed, so the rain-based triggers cannot be judged that year. "
-        "Adjumani’s lake leg can, and activated. 2025 is shown but was not used to calibrate.</p>",
-        "<p><strong>2007 activates nowhere,</strong> although it is the largest flood year in the record and a CERF "
-        "year. Two zones came close — Karamoja’s Nakapiripirit reached a 1-in-32 level against its 1-in-35 bar, and "
-        "the Teso gauge 1-in-8 against about 1-in-11 — while Adjumani reached 1-in-14 against 1-in-48 and Elgon’s "
-        "forecast saw nothing unusual at all. 2007 was a long wet season, August to October, rather than one extreme "
-        "week, which is what a 5-day peak cannot see. A longer accumulation window, alongside the 5-day one, is the "
-        "obvious thing to test next.</p>",
+        "the GEFS v12 reforecast and the operational feed, so the rain-based triggers cannot be judged that year; "
+        "Adjumani’s lake leg can. 2025 is shown but not used to calibrate; Teso has no 2025 yet because the "
+        "GloFAS 2025 reanalysis is still queued.</p>",
+        near_miss_2007(inp),
     ]
     for z in ZONE_ORDER:
-        what, lead = trigger_text(z, thr)
-        zl = ZONES[z].label.split(" (")[0]
+        what, lead = trigger_text(z, inp)
+        cols = inp.existing.get(z, [])
         parts += [
-            f"<h2><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{bp.e(zl)}</h2>",
-            f"<p><strong>Activates when</strong> {what}. <strong>Lead time:</strong> {lead}.</p>",
-            f"<p>{ZONE_NOTE[z].format(rp=round(float(thr[thr.zone == z].series_rp.iloc[0])))}</p>",
+            f"<h2><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{bp.e(ZONES[z].label.split(' (')[0])}</h2>",
+            f"<p><strong>Activates when</strong> {what}. <strong>Lead time:</strong> {lead}. "
+            f"<strong>Design return period:</strong> {rp_txt(inp.s.loc[z].design_rp)}.</p>",
+            f"<p>{zone_note(z, inp)}</p>",
         ]
-        cols = existing.get(z, [])
         if cols:
             parts += [
-                "<p><strong>Alongside existing triggers.</strong></p>",
-                compare_table(z, tabs[z], cols),
+                "<p><strong>Alongside existing triggers</strong> (grey), over the same years:</p>",
+                compare_table(z, inp.tabs[z], cols),
                 existing_notes(cols),
             ]
-        if EXISTING_NOTE.get(z):
-            parts.append(f"<p class='fn'>{EXISTING_NOTE[z]}</p>")
-        parts.append(zone_table(z, tabs[z], top_aff, top_d, cols))
+        parts.append(zone_table(z, inp, cols))
     parts += [
         "<h2>Reading the tables</h2>",
         "<ul>"
+        "<li><strong>Our draft</strong> is shaded in the zone’s colour with the first activation date, and the "
+        "district or leg that activated where a zone has several.</li>"
         "<li><strong>Year’s peak</strong> is the rarest value the trigger indicator reached that year, as a return "
-        "period on that indicator’s own record, so near-misses are visible: a 1-in-7 year sat just under a "
-        "1-in-8.7 threshold.</li>"
+        "period on that indicator’s own record, so near-misses are visible.</li>"
+        "<li><strong>Existing triggers</strong> (grey) are other organisations’ triggers for the zone, reproduced as "
+        "closely as the data allows over the same years; each is described under its zone’s comparison table, "
+        "including what could not be reproduced. They were designed for their own coverage and budgets, so the "
+        "comparison is about which years each would have picked, not a ranking.</li>"
         "<li><strong>Impact</strong> is shaded by magnitude on one scale for every zone. It is what was recorded, "
-        "which is not the same as what happened: DesInventar ends in 2021, so later years rest on EM-DAT, press "
-        "reports and IOM DTM rounds, and quiet recent years are partly quiet reporting. EM-DAT events spanning many "
-        "districts are split evenly across them.</li>"
-        "<li><strong>Existing triggers</strong> (grey columns) are other organisations’ triggers for the same "
-        "zone, reproduced as closely as public data allows over the same years; each is described under its zone’s "
-        "comparison table. They were designed for their own coverage and return periods, not for this budget, so "
-        "the comparison is about which years each would have picked, not a ranking.</li>"
+        "which is not the same as what happened.</li>"
         "<li><strong>CERF</strong> marks the national flood allocations of October 2007 and January 2020 (for the "
         "late-2019 floods); they are not zone-specific.</li>"
         "</ul>",
-        "<h2>What this draft does not settle</h2>",
+        "<h2>Data and methods</h2>",
         "<ul>"
-        "<li>Teso needs the reforecast, and a third opinion on why the model and the satellite parted ways after 2013.</li>"
-        "<li>Prolonged wet seasons such as 2007 need a longer accumulation window than 5 days.</li>"
-        "<li>The rain-based triggers are weak at year level in every zone they are used in. They carry the lead time; "
-        "whether they should sit behind an observational confirmation (the FloodScan backstop where it works) is the "
-        "next design question.</li>"
-        "<li>Karamoja per-district activations raise a funding question: all-in for the zone, or per district.</li>"
-        "<li>Adjumani’s lake leg is calibrated on Lake Kyoga as a stand-in for Lake Albert; the operational trigger "
-        "would read Albert directly.</li>"
+        "<li><strong>GloFAS v4</strong> river discharge, reanalysis 1999–2024 for the Uganda box (EWDS), at G5196 "
+        "“Akokorio at Uganda” (the local Akokoro river, 33.875°E 1.775°N) and G5220 Manafwa at Butaleja. "
+        "Thresholds are in model space: the model runs about 1.7× wet at G5196.</li>"
+        "<li><strong>CHIRPS-GEFS v12</strong> 5-day rainfall forecasts, 2000 to July 2026, as district means (and "
+        "the wettest pixel where stated). The CHC archive has no issues for January–September 2020.</li>"
+        "<li><strong>IMERG</strong> daily rainfall for the observed-rain partner triggers, with an antecedent "
+        "precipitation index (k = 0.9) standing in for soil moisture.</li>"
+        "<li><strong>Lake Kyoga</strong> altimetry (NASA Global Water Monitor, 10-day since 1992), as a stand-in for "
+        "Lake Albert (from 2016 only).</li>"
+        "<li><strong>Impact</strong>: EM-DAT, DesInventar (to 2021), press and ReliefWeb reports curated in the repo, "
+        "and IOM DTM rounds from the country team, matched to districts and summed per zone and year. Events naming "
+        "several districts are split evenly across them.</li>"
+        "<li><strong>Calibration</strong>: each series’ annual maxima get a Gumbel fit; a zone’s statistic for a "
+        "year is the rarest value any of its series reached on its own fit, so districts with wet and dry climates "
+        "are held to the same rarity. Thresholds are set on that statistic to meet the zone’s share (above), and "
+        "reported back as return levels per series. Return periods quoted for the backtest are Weibull, (n + 1) / "
+        "activations.</li>"
         "</ul>",
+        "<h2>Open questions and next steps</h2>",
+        "<ul>"
+        "<li><strong>Teso:</strong> run on the GloFAS reforecast (download in progress), and get a third opinion — "
+        "a DWRM gauge or Flood Hub — on why the model and the satellite record parted ways after 2013.</li>"
+        "<li><strong>Longer windows:</strong> test a 15- or 30-day accumulation alongside the 5-day one for prolonged "
+        "seasons such as 2007.</li>"
+        "<li><strong>Observational confirmation:</strong> whether the rain-forecast triggers should sit behind the "
+        "FloodScan backstop where it works (Teso, the Elgon lowlands, four Elgon slope districts, four in Karamoja).</li>"
+        "<li><strong>Karamoja funding:</strong> all-in for the zone, or per district.</li>"
+        "<li><strong>Adjumani:</strong> read Lake Albert directly once its record is long enough; ask FAO/OPM about the "
+        "new station data on the Nile.</li>"
+        + inp.ptext.get("next_step", "")
+        + "<li><strong>Budget sharing:</strong> people affected is a choice; the allocation table shows the alternatives.</li>"
+        "</ul>",
+        "<h2>Reproducing this page</h2>",
+        "<p>In <code>OCHA-DAP/ds-aa-uga-flooding</code>, with the partner config in place (see the README):</p>"
+        "<pre>uv run python analysis/trigger_draft.py\nuv run python analysis/existing_triggers.py\n"
+        "uv run python pipeline/build_trigger_page.py</pre>",
         bp.FOOT.format(today=bp.TODAY).replace(
             "<code>pipeline/build_pages.py</code>",
-            "<code>analysis/trigger_draft.py</code> and <code>pipeline/build_trigger_page.py</code>",
+            "<code>analysis/trigger_draft.py</code>, <code>analysis/existing_triggers.py</code> and "
+            "<code>pipeline/build_trigger_page.py</code>",
         ),
     ]
     return bp.add_heading_anchors("\n".join(parts))
 
 
 def main() -> None:
-    out = bp.PAGES / "triggers" / "index.html"
-    out.parent.mkdir(exist_ok=True)
-    out.write_text(page())
-    print(f"wrote {out.relative_to(bp.ROOT)}")
+    inp = Inputs()
+    plain = PRIVATE / "triggers.html"
+    plain.parent.mkdir(exist_ok=True)
+    plain.write_text(page(inp))
+    encrypt_page(
+        plain,
+        bp.PAGES / "triggers" / "index.html",
+        title="Uganda flood AA — draft triggers",
+        instructions="Restricted: includes unpublished partner material. Password shared internally.",
+        probes=[v[:40] for v in inp.ptext.values()]
+        + ["How the budget is shared", "Alongside existing triggers"],
+    )
 
 
 if __name__ == "__main__":

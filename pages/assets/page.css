@@ -93,10 +93,6 @@ td.any { color: #1a1a1a; font-size: 15px; }
 .oc-fa { color: #777; font-weight: 400; }
 .trig-sum table { table-layout: fixed; width: 100%; min-width: 760px; }
 .trig-sum th, .trig-sum td { white-space: normal; }
-.trig-sum th:nth-child(1) { width: 11%; } .trig-sum th:nth-child(2) { width: 37%; }
-.trig-sum th:nth-child(3) { width: 16%; } .trig-sum th:nth-child(4) { width: 9%; }
-.trig-sum th:nth-child(5) { width: 9%; }  .trig-sum th:nth-child(6) { width: 9%; }
-.trig-sum th:nth-child(7) { width: 9%; }
 .trig-zone th, .trig-zone td { white-space: normal; }
 .trig-zone td.act, .trig-zone td.num { white-space: nowrap; }
 /* trigger tables: cell-level fixes (a td must never be display:block) */
@@ -107,3 +103,14 @@ td.any { color: #1a1a1a; font-size: 15px; }
 .trig-cmp td.num { text-align: right; }
 ul.ext-notes { font-size: 13px; color: #444; margin-top: 4px; }
 ul.ext-notes li { margin-bottom: 4px; }
+ul.keypts li { margin-bottom: 7px; }
+.trig-alloc table { min-width: 0; }
+.trig-alloc td.num { text-align: right; white-space: nowrap; }
+.trig-alloc tr.tot td { border-top: 2px solid #ccc; font-weight: 500; }
+.trig-over td.src { white-space: normal; font-size: 12px; color: #555; text-align: left; }
+pre { background: #f5f5f5; padding: 10px 12px; border-radius: 4px; font-size: 12.5px; overflow-x: auto; }
+.trig-sum th:nth-child(1) { width: 9%; }  .trig-sum th:nth-child(2) { width: 29%; }
+.trig-sum th:nth-child(3) { width: 14%; } .trig-sum th:nth-child(4) { width: 8%; }
+.trig-sum th:nth-child(5) { width: 8%; }  .trig-sum th:nth-child(6) { width: 12%; }
+.trig-sum th:nth-child(7) { width: 9%; }  .trig-sum th:nth-child(8) { width: 11%; }
+.trig-sum td.num .fn { white-space: normal; }

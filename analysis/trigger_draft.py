@@ -53,6 +53,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "triggers"
 GLOFAS_DIR = ROOT / "data" / "glofas" / "raw" / "reanalysis_uga_v4"
 TARGET_OVERALL_RP = 3.0
+ALLOCATION = "people affected"  # how the overall budget is shared across zones; see allocate()
 FIRST_YEAR = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # the repo's "major event" bar, applied to a zone-year
@@ -138,30 +139,96 @@ def gumbel_level(rp: float, mu: float, beta: float) -> float:
     return float(mu - beta * np.log(-np.log(1.0 - 1.0 / rp)))
 
 
-def calibrate_zone(
-    cal_ams: dict[str, pd.Series], k: int
-) -> tuple[dict[str, float], set[int], float]:
-    """One return period common to every series in the zone (districts, or legs), chosen so
-    the years in which ANY series reaches its own return level number k.
-
-    Each series' annual maxima are put on a return-period scale by its own Gumbel fit, so a
-    district with a wet climate and one with a dry climate are held to the same rarity. The
-    zone statistic for a year is the rarest value any series reached; the threshold RP is the
-    k-th largest of those, so exactly k calibration years activate (barring ties). Per-series
-    thresholds are the return levels at that RP. For a single series this reduces to the k-th
-    largest annual maximum.
-    """
+def zone_statistic(cal_ams: dict[str, pd.Series]) -> tuple[pd.Series, dict]:
+    """Per calibration year, the rarest value any of the zone's series reached, as a return
+    period on that series' own Gumbel fit. Putting every series on its own RP scale holds a
+    wet district and a dry one to the same rarity; for a single series it is a monotone
+    transform of the annual maximum, so rankings are unchanged."""
     fits = {key: gumbel_fit(a.dropna()) for key, a in cal_ams.items()}
     rp_year = pd.concat(
         {key: pd.Series(gumbel_rp(a, *fits[key]), index=a.index) for key, a in cal_ams.items()},
         axis=1,
     ).max(axis=1)
-    rp_star = float(rp_year.sort_values(ascending=False).iloc[k - 1])
+    return rp_year.dropna(), fits
+
+
+def calibrate_zone(
+    cal_ams: dict[str, pd.Series], k: float
+) -> tuple[dict[str, float], set[int], float]:
+    """Thresholds so the zone activates in about k calibration years (k may be fractional).
+
+    The zone statistics, sorted, give the threshold for exactly 1, 2, 3 ... activation years.
+    For a fractional target the threshold is interpolated (log scale) at rank k + 0.5, between
+    the order statistics, so the backtest shows round(k) activations while the threshold itself
+    sits where the target rate puts it rather than jumping in whole-year steps. Below one
+    expected activation the threshold is extrapolated above the record's largest value.
+    Per-series thresholds are each series' Gumbel return level at the resulting RP.
+    """
+    rp_year, fits = zone_statistic(cal_ams)
+    v = np.log(rp_year.sort_values(ascending=False).to_numpy())
+    pos = k + 0.5  # 1-based rank position
+    if pos <= 1:
+        slope = v[0] - v[1] if len(v) > 1 else 0.5
+        log_star = v[0] + (1 - pos) * slope
+    elif pos >= len(v):
+        log_star = v[-1]
+    else:
+        i = int(np.floor(pos)) - 1
+        log_star = v[i] + (pos - np.floor(pos)) * (v[i + 1] - v[i])
+    rp_star = float(np.exp(log_star))
     years = {int(y) for y in rp_year[rp_year >= rp_star].index}
-    # the k-th year's own peak defines rp_star; inverting back to a value can land a hair above
-    # that peak through round-off, so shave a relative 1e-9 to keep the year it came from
-    thr = {key: gumbel_level(rp_star, *fits[key]) * (1 - 1e-9) for key in cal_ams}
+    thr = {key: gumbel_level(rp_star, *fits[key]) for key in cal_ams}
     return thr, years, rp_star
+
+
+# Zones whose trigger has separate legs for separate flood regimes. Each leg gets an equal
+# part of the zone's share and is calibrated on its own, so a leg with one series (the lake)
+# is not outvoted by a leg with six (the district rain forecasts). Without this, Adjumani's
+# lake leg lost 2020 — its largest flood year — to rain extremes in years with nothing recorded.
+LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every other series
+
+
+def calibrate_zone_legs(z: str, cal_ams: dict[str, pd.Series], k: float):
+    if z not in LEGS:
+        return calibrate_zone(cal_ams, k)
+    named = {x for v in LEGS[z].values() if v for x in v}
+    thr, years, rps = {}, set(), {}
+    for leg, keys in LEGS[z].items():
+        keys = keys or [x for x in cal_ams if x not in named]
+        t, y, rp = calibrate_zone({x: cal_ams[x] for x in keys}, k / len(LEGS[z]))
+        thr |= t
+        years |= y
+        rps[leg] = rp
+    return thr, years, rps
+
+
+def impact_weights(impact: dict[str, pd.DataFrame], cal: list[int]) -> pd.DataFrame:
+    """Each zone's share of recorded impact over the calibration years."""
+    w = pd.DataFrame(
+        {
+            z: {"affected": g.loc[cal].affected.sum(), "deaths": g.loc[cal].deaths.sum()}
+            for z, g in impact.items()
+        }
+    ).T
+    return w / w.sum()
+
+
+def allocate(weights: pd.Series, n_years: dict[str, int], cal_ams, n: int):
+    """Scale annual probabilities proportional to `weights` until the backtest's OVERALL return
+    period — years with at least one zone activating — is as close to TARGET_OVERALL_RP as the
+    whole-year counts allow (ties go to the rarer option). Returns (per-zone results, overall
+    activation years, overall RP, per-zone design annual probability)."""
+    best = None
+    for scale in np.linspace(0.02, 1.2, 600):
+        p = (weights * scale).clip(upper=0.9)
+        res = {z: calibrate_zone_legs(z, cal_ams[z], p[z] * n_years[z]) for z in cal_ams}
+        union = set().union(*(y for _, y, _ in res.values()))
+        rp = (n + 1) / max(1, len(union))
+        key = (abs(rp - TARGET_OVERALL_RP), -rp)
+        if best is None or key < best[0]:
+            best = (key, res, len(union), rp, p)
+    _, res, n_union, rp, p = best
+    return res, n_union, rp, p
 
 
 # --- impact -----------------------------------------------------------------------------
@@ -238,22 +305,40 @@ def main() -> None:
     ams = {z: {k: annual_max(s) for k, s in d.items()} for z, d in series.items()}
     cal_ams = {z: {k: a.reindex(cal) for k, a in d.items()} for z, d in ams.items()}
 
-    def calibrate(k: int) -> dict[str, tuple[dict[str, float], set[int], float]]:
-        return {z: calibrate_zone(d, k) for z, d in cal_ams.items()}
-
-    options = []
-    for k in range(1, 8):
-        res = calibrate(k)
-        union = set().union(*(y for _, y, _ in res.values()))
-        options.append((k, res, len(union), (n + 1) / max(1, len(union))))
-    k, res, n_union, overall = min(options, key=lambda o: (abs(o[3] - TARGET_OVERALL_RP), -o[0]))
-    print(
-        f"calibration {cal[0]}-{cal[-1]} (n={n}); per zone k={k} -> individual RP {(n + 1) / k:.1f}; overall {n_union} years -> RP {overall:.2f}"
-    )
-    for kk, _, nu, rp in options:
-        print(f"   k={kk}: overall {nu} years, RP {rp:.2f}")
-
     impact = zone_year_impact(show)
+    n_years = {z: int(max(a.notna().sum() for a in d.values())) for z, d in cal_ams.items()}
+    w = impact_weights(impact, cal)
+    allocations = {
+        "equal shares": pd.Series(0.25, index=w.index),
+        "people affected": w.affected,
+        "deaths": w.deaths,
+        "half equal, half people affected": 0.5 * 0.25 + 0.5 * w.affected,
+    }
+    alt_rows = []
+    for name, wt in allocations.items():
+        r, nu, rp, p = allocate(wt, n_years, cal_ams, n)
+        for z in cal_ams:
+            alt_rows.append(
+                dict(
+                    allocation=name,
+                    zone=z,
+                    weight=wt[z],
+                    design_rp=1 / p[z],
+                    activation_years=len(r[z][1]),
+                    overall_years=nu,
+                    overall_rp=rp,
+                )
+            )
+    pd.DataFrame(alt_rows).to_csv(OUT / "allocations.csv", index=False)
+    res, n_union, overall, p = allocate(allocations[ALLOCATION], n_years, cal_ams, n)
+    print(
+        f"calibration {cal[0]}-{cal[-1]} (n={n}); allocation by {ALLOCATION}; overall {n_union} years -> RP {overall:.2f}"
+    )
+    for z in cal_ams:
+        print(
+            f"   {z:11s} weight {allocations[ALLOCATION][z]:.2f}  design RP {1 / p[z]:5.1f}  activation years {len(res[z][1])}"
+        )
+
     summary, thr_rows = [], []
     for z, (thr, _, rp_star) in res.items():
         rows = []
@@ -307,10 +392,18 @@ def main() -> None:
             )
         )
         for key, t in thr.items():
-            thr_rows.append(dict(zone=z, series=key, threshold=t, series_rp=rp_star))
+            if isinstance(rp_star, dict):  # zone with legs: each leg has its own rarity
+                leg = next((lg for lg, ks in LEGS[z].items() if ks and key in ks), "rain")
+                thr_rows.append(
+                    dict(zone=z, series=key, threshold=t, series_rp=rp_star[leg], leg=leg)
+                )
+            else:
+                thr_rows.append(dict(zone=z, series=key, threshold=t, series_rp=rp_star, leg=""))
     s = pd.DataFrame(summary)
     s["calibration"] = f"{cal[0]}-{cal[-1]}"
-    s["k"] = k
+    s["allocation"] = ALLOCATION
+    s["weight"] = s.zone.map(allocations[ALLOCATION])
+    s["design_rp"] = s.zone.map(lambda z: round(1 / p[z], 1))
     s["overall_years"] = n_union
     s["overall_rp"] = round(overall, 2)
     s.to_csv(OUT / "summary.csv", index=False)
