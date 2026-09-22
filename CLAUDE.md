@@ -24,11 +24,13 @@ report per-trigger and combined return periods.
   `pages/partner/index.html`, the only committed form. The public pages may say a draft exists
   and link to `/partner/`, nothing more. The script refuses to write if plaintext survives.
 - Draft triggers (Sep 2026): `analysis/trigger_draft.py` -> `/triggers/` (restricted, since it
-  carries partner triggers). The overall RP (any zone) targets 3; the budget is shared by each
-  zone's recorded people affected (`ALLOCATION`); zones with legs (Adjumani: lake / rain) split
-  their share equally between legs. Existing triggers are reproduced in
-  `analysis/existing_triggers.py` — published ones in `PUBLIC_SPECS`, unpublished ones in the
-  gitignored config. `pipeline/encrypt.py` is the only path to a restricted page.
+  carries partner triggers). Zones trigger independently: each zone's RP = frequency of its
+  own major-impact years, floored at 1-in-3 (the user's call, 22 Sep 2026; a shared overall
+  1-in-3 budget was the earlier design and was dropped). Do not pick RPs by maximising backtest
+  skill — 26 years is noise. Zones with legs (Adjumani: lake / rain) split their share equally
+  between legs. Existing triggers are reproduced in `analysis/existing_triggers.py` — published
+  ones in `PUBLIC_SPECS`, unpublished ones in the gitignored config. `pipeline/encrypt.py` is the
+  only path to a restricted page.
 - Severity 3+ scope decision on Teso/Kyoga districts is the working group's, not ours.
 - GloFAS G5196 vs FloodScan in Teso is NOT stationary (found 4 Sep 2026 once the reanalysis
   reached 2024): Katakwi anomaly corr by era 0.25 / 0.83 / 0.57 / 0.15 / 0.06 for 1999-2005,

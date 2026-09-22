@@ -53,14 +53,20 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "triggers"
 GLOFAS_DIR = ROOT / "data" / "glofas" / "raw" / "reanalysis_uga_v4"
 TARGET_OVERALL_RP = 3.0
-# How the overall budget is shared across zones (see allocate): half equally, half in
+# Zones trigger independently (ALLOCATION = "independent"): each zone's return period matches
+# the frequency of its own major-impact years, floored at RP_FLOOR. The shared-budget variants
+# below (one overall 1-in-3 budget split across zones) were the earlier design and are still
+# computed into allocations.csv for reference.
+#
+# Earlier shared-budget design, kept for reference — how the overall budget was shared (see allocate): half equally, half in
 # proportion to recorded people affected — a tilt towards the zones with more historical
 # impact that does not push the smallest zones out to extreme return periods (a pure
 # people-affected split put Karamoja near 1-in-20). The allocations table also carries the
 # alternatives, including one that requires the years in MUST_CATCH (see must_catch); that
 # one was tried and not chosen, since catching 2007 needed Teso at ~1-in-6 and Karamoja ~1-in-34.
 MUST_CATCH = [2007]  # the largest flood year on record and a CERF year
-ALLOCATION = "half equal, half people affected"
+ALLOCATION = "independent"
+RP_FLOOR = 3.0  # no zone activates more often than once in three years
 FIRST_YEAR = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # the repo's "major event" bar, applied to a zone-year
@@ -280,6 +286,32 @@ def must_catch(year: int, weights: pd.Series, n_years, cal_ams, n: int, worst: d
     return (best[1] if best else {}), pd.DataFrame(rows)
 
 
+def rp_sensitivity(cal_ams, n_years, impact, cal, rps=(3, 4, 5, 6, 8, 10)) -> pd.DataFrame:
+    """For each zone and candidate return period: activations, how many fall in major-impact
+    years, false activations, and the zone's five worst years caught. The evidence for the
+    choice of return period, not the thing it is chosen from."""
+    rows = []
+    for z in cal_ams:
+        have = [y for y in cal if any(pd.notna(a.get(y)) for a in cal_ams[z].values())]
+        g = impact[z].loc[have]
+        major, worst = set(g[g.major].index), set(g.affected.nlargest(5).index)
+        for rp in rps:
+            _, yrs, _ = calibrate_zone_legs(z, cal_ams[z], n_years[z] / rp)
+            rows.append(
+                dict(
+                    zone=z,
+                    rp=rp,
+                    activations=len(yrs),
+                    in_major=len(yrs & major),
+                    false=len(yrs - major),
+                    worst5=len(yrs & worst),
+                    major_years=len(major),
+                    n=len(have),
+                )
+            )
+    return pd.DataFrame(rows)
+
+
 # --- impact -----------------------------------------------------------------------------
 
 
@@ -388,16 +420,31 @@ def main() -> None:
                 )
             )
     pd.DataFrame(alt_rows).to_csv(OUT / "allocations.csv", index=False)
-    res, n_union, overall, p = allocate(
-        allocations[ALLOCATION], n_years, cal_ams, n, floors_by[ALLOCATION]
-    )
+    if ALLOCATION == "independent":
+        # Each zone triggers on its own. Its return period matches how often the zone has a
+        # major-impact year, but never more often than 1-in-RP_FLOOR.
+        p, major_rp = {}, {}
+        for z, zams in cal_ams.items():
+            have = [y for y in cal if any(pd.notna(a.get(y)) for a in zams.values())]
+            n_major = int(impact[z].loc[have].major.sum())
+            major_rp[z] = (len(have) + 1) / max(1, n_major)
+            p[z] = 1 / max(RP_FLOOR, major_rp[z])
+        res = {z: calibrate_zone_legs(z, cal_ams[z], p[z] * n_years[z]) for z in cal_ams}
+        union = set().union(*(y for _, y, _ in res.values()))
+        n_union, overall = len(union), (n + 1) / max(1, len(union))
+        rp_sensitivity(cal_ams, n_years, impact, cal).to_csv(
+            OUT / "rp_sensitivity.csv", index=False
+        )
+    else:
+        res, n_union, overall, p = allocate(
+            allocations[ALLOCATION], n_years, cal_ams, n, floors_by[ALLOCATION]
+        )
+        major_rp = {z: np.nan for z in cal_ams}
     print(
-        f"calibration {cal[0]}-{cal[-1]} (n={n}); allocation by {ALLOCATION}; overall {n_union} years -> RP {overall:.2f}"
+        f"calibration {cal[0]}-{cal[-1]} (n={n}); {ALLOCATION}; years with any activation {n_union} (1-in-{overall:.2f})"
     )
     for z in cal_ams:
-        print(
-            f"   {z:11s} weight {allocations[ALLOCATION][z]:.2f}  design RP {1 / p[z]:5.1f}  activation years {len(res[z][1])}"
-        )
+        print(f"   {z:11s} design RP {1 / p[z]:5.1f}  activation years {len(res[z][1])}")
 
     summary, thr_rows = [], []
     for z, (thr, _, rp_star) in res.items():
@@ -462,7 +509,8 @@ def main() -> None:
     s = pd.DataFrame(summary)
     s["calibration"] = f"{cal[0]}-{cal[-1]}"
     s["allocation"] = ALLOCATION
-    s["weight"] = s.zone.map(allocations[ALLOCATION])
+    s["weight"] = s.zone.map(allocations[ALLOCATION]) if ALLOCATION in allocations else np.nan
+    s["major_rp"] = s.zone.map(lambda z: round(major_rp[z], 1))
     s["design_rp"] = s.zone.map(lambda z: round(1 / p[z], 1))
     s["overall_years"] = n_union
     s["overall_rp"] = round(overall, 2)
