@@ -421,21 +421,24 @@ def _zone_note(z: str, inp: Inputs) -> str:
         return (
             "Aligned with the IFRC/URCS early action protocol’s instrument — GloFAS at a reporting point — on "
             "the one point in the sub-region that passes both skill checks, as the country team asked. The reanalysis "
-            f"stands in for the forecast until the reforecast download finishes, so this is an upper bound. Teso "
-            f"carries the requirement to catch 2007 (see How the budget is shared), which sets it at "
-            f"{rp_txt(inp.s.loc[z].design_rp)}; it activates in {years_txt(act)}, "
-            f"{int(inp.s.loc[z].worst5_caught)} of them among Teso’s five worst years. The two that are not, 2020 and "
-            "2013, are the known weakness: they are the model’s biggest years but ordinary ones on the satellite "
-            "record, because G5196 tracks observed flooding well in 2006–2013 and poorly since. That needs a third "
-            "opinion — a DWRM gauge or Google Flood Hub — before a Teso trigger is proposed."
+            "stands in for the forecast until the reforecast download finishes, so this is an upper bound. At "
+            f"{rp_txt(inp.s.loc[z].design_rp)} it activates in {years_txt(act)}, "
+            f"{int(inp.s.loc[z].worst5_caught)} of them among Teso’s five worst years (2018, 2014, 2012, 2010, 2007)."
+            + (
+                " 2020 and 2013 are the known weakness: they are the model’s biggest years but ordinary ones on the "
+                "satellite record, because G5196 tracks observed flooding well in 2006–2013 and poorly since."
+                if {2020, 2013} & set(act)
+                else ""
+            )
+            + " That needs a third opinion — a DWRM gauge or Google Flood Hub — before a Teso trigger is proposed."
             + teso_ifrc_sentence(inp)
         )
     if z == "elgon":
         return (
             "One zone-wide trigger: every lowland flood year in the record is also a slope flood year, and the forecast "
             "moves together across the 15 districts (median rank correlation of annual peaks 0.74). Elgon carries "
-            "nearly half the recorded people affected and three quarters of the deaths, so it has the largest weight; "
-            f"after Teso takes on 2007 it sits at {rp_txt(inp.s.loc[z].design_rp)} and activates in {years_txt(act)}. "
+            "nearly half the recorded people affected and three quarters of the deaths, so it has the largest weight: "
+            f"at {rp_txt(inp.s.loc[z].design_rp)} it activates in {years_txt(act)}. "
             "Some impact is recorded in Elgon every year, so the "
             "useful test is whether activations land in the worst years: 2019 (a CERF year) and 2018 do; 2022, 2011 and "
             "2007 are missed."
@@ -477,8 +480,7 @@ def must_catch_text(inp: Inputs) -> str:
                 f"<tr><td>{SHORT[z]}</td><td colspan='3'>cannot catch 2007 at any level</td></tr>"
             )
             continue
-        chosen = abs(inp.s.loc[z].design_rp - r.needed_rp) < 0.05
-        cell = lambda x, c=chosen: f"<strong>{x}</strong>" if c else x
+        cell = lambda x: x
         rows.append(
             f"<tr><td>{cell(SHORT[z])}</td><td class='num'>{cell(rp_txt(r.needed_rp))}</td>"
             f"<td class='num'>{cell(rp_txt(r.overall_rp))}</td><td class='num'>{cell(int(r.worst5_caught))} of 20</td></tr>"
@@ -488,12 +490,13 @@ def must_catch_text(inp: Inputs) -> str:
         "<th>Zone-worst years caught, all zones</th></tr>"
     )
     return (
-        "<p><strong>A must-catch year.</strong> Shared by people affected alone, the mechanism missed 2007 in every "
-        "zone \u2014 the largest flood year on record and a CERF year. The design therefore requires it, as a "
-        "trigger specification would: for each zone, the smallest share that would make that zone activate in "
-        "2007 is found, the other zones are re-scaled to keep the overall return period on target, and the "
-        "option that catches the most of the zones\u2019 five worst years overall is kept. Teso wins clearly; "
-        "Elgon could only catch 2007 by activating nearly every year, and Adjumani would starve every other zone.</p>"
+        "<p><strong>Tried and not chosen: requiring 2007.</strong> 2007 \u2014 the largest flood year on record and a "
+        "CERF year \u2014 activates in no zone (see below). One way to force it is to write it in as a must-catch year: "
+        "for each zone, find the smallest share that would make that zone activate in 2007, re-scale the others to "
+        "hold the overall return period, and keep the option that catches the most of the zones\u2019 worst years. "
+        "Teso would be the cheapest, at about 1-in-6, but the others would then have to be much rarer \u2014 "
+        "Karamoja about 1-in-34, Adjumani about 1-in-25 \u2014 which is too steep a price for one year. Elgon could "
+        "only catch 2007 by activating nearly every year.</p>"
         f"<div class='tw trig-alloc'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
     )
 
@@ -507,20 +510,20 @@ def key_points(inp: Inputs) -> str:
         f"Four triggers, one per zone, each all-in. Across the four, <strong>{over_n} of the {cal} years would have "
         f"seen at least one activation — an overall return period of {rp_txt(over_rp)}</strong>, the closest the "
         "backtest allows to the 1-in-3 target.",
-        "The budget is shared in proportion to each zone\u2019s recorded <strong>people affected</strong>, with one "
-        "requirement on top: the mechanism must catch <strong>2007</strong>, the largest flood year on record and a "
-        "CERF year, which the plain tilt missed everywhere. Teso is the cheapest zone to catch it with, so it runs at "
-        f"{rp_txt(s.loc['teso_kyoga'].design_rp)}, Elgon at {rp_txt(s.loc['elgon'].design_rp)}, Adjumani at "
-        f"{rp_txt(s.loc['adjumani'].design_rp)} and Karamoja at {rp_txt(s.loc['karamoja'].design_rp)}. Other ways "
-        "of sharing the budget are compared below.",
+        "The budget is split <strong>half equally between the four zones and half in proportion to each "
+        "zone\u2019s recorded people affected</strong>, so zones with more historical impact activate more often "
+        f"without the smaller ones being pushed out to extreme rarities: Elgon {rp_txt(s.loc['elgon'].design_rp)}, "
+        f"Teso {rp_txt(s.loc['teso_kyoga'].design_rp)}, Adjumani {rp_txt(s.loc['adjumani'].design_rp)}, Karamoja "
+        f"{rp_txt(s.loc['karamoja'].design_rp)}. Sharing purely by people affected would have put Karamoja near "
+        "1-in-20; the alternatives are compared below.",
         f"Across the four, {int(s.worst5_caught.sum())} of the zones\u2019 20 worst years are caught (Teso "
         f"{int(s.loc['teso_kyoga'].worst5_caught)}, Elgon {int(s.loc['elgon'].worst5_caught)}, Adjumani "
-        f"{int(s.loc['adjumani'].worst5_caught)}, Karamoja {int(s.loc['karamoja'].worst5_caught)}), against 3 "
-        "without the 2007 requirement. None of the four separates bad years from ordinary ones convincingly; "
-        "Teso\u2019s two false years, 2020 and 2013, are the model\u2019s big years since its record and the "
-        "satellite\u2019s parted ways after 2013.",
-        "Tuning to one year is a choice made in the open: 2007 is written into the design as a must-catch event, "
-        "the way a trigger specification would list it, and the table below shows what each zone would have cost.",
+        f"{int(s.loc['adjumani'].worst5_caught)}, Karamoja {int(s.loc['karamoja'].worst5_caught)}). None of the four "
+        "separates bad years from ordinary ones convincingly. Elgon\u2019s catches 2019, a CERF year, and 2018; "
+        "Adjumani\u2019s lake leg catches 2020, its largest flood; Teso\u2019s picks the model\u2019s big years, "
+        "which since 2013 are not the years people flooded.",
+        "2007, the largest flood year on record and a CERF year, activates nowhere: a long wet season rather than "
+        "one extreme week. Requiring it was tried and set aside \u2014 it would have cost the other zones too much.",
         "Existing triggers are reproduced alongside ours, where the data allows.",
     ]
     if inp.ptext.get("key_point"):
@@ -535,7 +538,7 @@ def page(inp: Inputs) -> str:
         bp.HEAD.format(
             v=bp.ASSET_VERSION,
             title="Draft triggers",
-            sub="One trigger per zone, the budget shared by historical impact, backtested year by year against the "
+            sub="One trigger per zone, the budget tilted towards historical impact, backtested year by year against the "
             "recorded impact and alongside the triggers other organisations already run. First draft for discussion.",
         ),
         "<p class='callout'><strong>Restricted.</strong> This page includes material from partner plans that are not "
@@ -553,21 +556,25 @@ def page(inp: Inputs) -> str:
         "people affected in the calibration period.</p>",
         "<h2>How the budget is shared</h2>",
         "<p>The target is set on the <strong>overall</strong> return period — the years in which at least one "
-        "zone activates — at about 1-in-3. That budget is then shared between the zones in proportion to the "
-        "people affected recorded in each over the calibration years, so a zone with more historical impact is more "
-        "likely to activate. Concretely, each zone’s annual activation probability is set proportional to its "
-        "share, and the shares are scaled together until the backtest’s overall return period is as close to 3 "
+        "zone activates — at about 1-in-3. That budget is then shared between the zones: half of it equally, "
+        "half in proportion to the people affected recorded in each over the calibration years, so a zone with "
+        "more historical impact is more likely to activate but no zone is starved. Concretely, each zone’s annual "
+        "activation probability is set proportional to its weight, and the weights are scaled together until the "
+        "backtest’s overall return period is as close to 3 "
         f"as whole years allow: {int(inp.s.overall_years.iloc[0])} activation years out of "
         f"{int(inp.s.years_with_data.max())} is {rp_txt(float(inp.s.overall_rp.iloc[0]))}. Thresholds for "
         "fractional targets are interpolated between the backtest’s order statistics, so they do not jump in "
         "whole-year steps.</p>",
-        "<p>People affected was chosen over deaths because it is what an anticipatory envelope is sized on, and "
-        "because a deaths weighting is dominated by the Elgon landslides — three quarters of all recorded deaths "
-        "— and would leave Adjumani, with almost none, effectively never activating. The table shows the "
-        "alternatives: each cell is the zone’s share, its design return period and its activation years in "
-        "the backtest.</p>",
-        must_catch_text(inp),
+        "<p>Why this split. Sharing purely by people affected tilts hard: Elgon has half the recorded affected, "
+        "and Karamoja, with an eighth, would sit near 1-in-20 \u2014 in practice a trigger that almost never "
+        "activates. Half-and-half keeps the ordering (Elgon most often, Karamoja least) while holding every zone "
+        "within roughly 1-in-5 to 1-in-11. People affected was preferred to deaths as the impact measure because "
+        "it is what an anticipatory envelope is sized on; a deaths weighting is dominated by the Elgon landslides "
+        "\u2014 three quarters of all recorded deaths \u2014 and would leave Adjumani, with almost none, never "
+        "activating. The table shows the alternatives: each cell is the zone\u2019s weight, its design return "
+        "period and its activation years in the backtest; the chosen split is in bold.</p>",
         allocation_table(inp),
+        must_catch_text(inp),
         "<p class='fn'>Shares use the zone-year impact record described under Data and methods. They are recorded "
         "impact, so they inherit its gaps: West Nile is thinly recorded before 2004, and years after 2021 rest on "
         "EM-DAT, press and IOM DTM once DesInventar stops.</p>",
@@ -642,7 +649,7 @@ def page(inp: Inputs) -> str:
         "<li><strong>Adjumani:</strong> read Lake Albert directly once its record is long enough; ask FAO/OPM about the "
         "new station data on the Nile.</li>"
         + inp.ptext.get("next_step", "")
-        + "<li><strong>Budget sharing:</strong> people affected is a choice; the allocation table shows the alternatives.</li>"
+        + "<li><strong>Budget sharing:</strong> half equal, half by people affected is a judgement; the allocation table shows the alternatives, including a pure people-affected split and a version that requires 2007.</li>"
         "</ul>",
         "<h2>Reproducing this page</h2>",
         "<p>In <code>OCHA-DAP/ds-aa-uga-flooding</code>, with the partner config in place (see the README):</p>"

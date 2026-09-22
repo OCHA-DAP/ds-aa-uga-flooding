@@ -27,20 +27,21 @@ draft of all four triggers exists, calibrated and backtested on 2000–2025 (`/t
 
 | zone | draft trigger | design RP | notes |
 |---|---|---|---|
-| Teso / Lake Kyoga | GloFAS G5196 discharge (reanalysis stand-in) | ~1-in-6 | carries the must-catch 2007; same years as the IFRC stand-in; model and satellite diverge after 2013 |
-| Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | ~1-in-8 | largest weight (about half the recorded people affected); catches 2019 and 2018 |
-| Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | ~1-in-34 | weak; funding per district vs all-in undecided |
-| Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | ~1-in-25 | two legs for two flood regimes; lake leg catches 2020 |
+| Teso / Lake Kyoga | GloFAS G5196 discharge (reanalysis stand-in) | ~1-in-9 | strongest instrument, but model and satellite records diverge after 2013 |
+| Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | ~1-in-5.5 | largest weight (about half the recorded people affected); catches 2019 and 2018 |
+| Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | ~1-in-11 | weak; funding per district vs all-in undecided |
+| Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | ~1-in-10 | two legs for two flood regimes; lake leg catches 2020 |
 
 The overall return period (any zone activating) is 1-in-3 by design (9 of 26 years,
-2000–2025). The budget is shared in proportion to each zone's recorded people affected, with
-2007 — the largest flood year and a CERF year — required as a must-catch event, met by the
-zone where it costs least (Teso). `ALLOCATION` and `MUST_CATCH` in `analysis/trigger_draft.py`;
-alternatives are tabulated on the page.
+2000–2025). The budget is split half equally between zones and half in proportion to each
+zone's recorded people affected (`ALLOCATION` in `analysis/trigger_draft.py`). A pure
+people-affected split pushed Karamoja near 1-in-20, and requiring 2007 as a must-catch year
+(`MUST_CATCH`) would have put Karamoja at ~1-in-34; both are tabulated on the page as
+alternatives, not chosen.
 
 **Open questions** (also at the foot of `/triggers/`): run Teso on the reforecast and get a
 third opinion (DWRM gauge / Flood Hub) on the post-2013 divergence; test longer rainfall
-windows (the rain zones miss 2007; only Teso catches it); decide whether rain-forecast triggers sit behind the
+windows (2007 activates nowhere); decide whether rain-forecast triggers sit behind the
 FloodScan backstop; Karamoja funding; agree spatial scale and rainfall product with FAO and
 DRC for their rain triggers; the country team's call on the Severity 3+ scope in Teso.
 

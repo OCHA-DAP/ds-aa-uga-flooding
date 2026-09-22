@@ -53,10 +53,14 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "triggers"
 GLOFAS_DIR = ROOT / "data" / "glofas" / "raw" / "reanalysis_uga_v4"
 TARGET_OVERALL_RP = 3.0
-# How the overall budget is shared across zones (see allocate): in proportion to recorded
-# people affected, with the years in MUST_CATCH required of the mechanism (see must_catch).
+# How the overall budget is shared across zones (see allocate): half equally, half in
+# proportion to recorded people affected — a tilt towards the zones with more historical
+# impact that does not push the smallest zones out to extreme return periods (a pure
+# people-affected split put Karamoja near 1-in-20). The allocations table also carries the
+# alternatives, including one that requires the years in MUST_CATCH (see must_catch); that
+# one was tried and not chosen, since catching 2007 needed Teso at ~1-in-6 and Karamoja ~1-in-34.
 MUST_CATCH = [2007]  # the largest flood year on record and a CERF year
-ALLOCATION = "people affected, 2007 required"
+ALLOCATION = "half equal, half people affected"
 FIRST_YEAR = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # the repo's "major event" bar, applied to a zone-year
