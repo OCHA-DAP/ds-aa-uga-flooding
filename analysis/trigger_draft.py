@@ -74,7 +74,11 @@ MIN_COVERAGE = 0.6  # a series' season counts when at least this share of its da
 RP_FLOOR = 3.0  # no zone activates more often than once in three seasons
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # a major event, per event, zone share
-LEAD_DAYS = {"glofas": 30, "rain": 14, "lake": 120}  # how far ahead an activation may be
+# How far ahead of a flood an activation may be and still count as catching it. Generous on
+# purpose: reported impact dates lag the flood, and rain that falls inside the forecast window
+# can pool for days before it floods. Widening them further barely adds catches while raising
+# what random timing would score — see window_sensitivity() and the page.
+LEAD_DAYS = {"glofas": 45, "rain": 30, "lake": 150}
 TOLERANCE_DAYS = 3  # an activation up to this long after an event ends still counts (date noise)
 
 # Series -> leg (which lead window applies). Anything not listed is a rain forecast.
@@ -426,6 +430,48 @@ def scores(t: pd.DataFrame) -> dict:
     )
 
 
+def window_sensitivity(
+    series, thr_by_zone, events, cal, draws: int = 300, seed: int = 0
+) -> pd.DataFrame:
+    """How the catch count depends on the matching window, against what random timing scores.
+
+    For each candidate window: the events our activations actually catch, and the average a
+    trigger activating on random in-window dates (the same number of seasons) would catch. The
+    gap between them is what the matching is really telling us."""
+    rng = np.random.default_rng(seed)
+    rows = []
+    for z, thr in thr_by_zone.items():
+        ev = events[z]
+        acts = {}
+        for y in cal:
+            eps = activation_episodes({k: in_season(v) for k, v in series[z].items()}, thr, y)
+            if eps:
+                acts[y] = (eps[0][0], SERIES_LEG.get(eps[0][1][0], "rain"))
+        for w in (7, 14, 21, 30, 45, 60, 90):
+            old = LEAD_DAYS.copy()
+            LEAD_DAYS.update({k: (max(w, old["lake"]) if k == "lake" else w) for k in LEAD_DAYS})
+            caught = sum(len(match(a, leg, ev)) > 0 for a, leg in acts.values())
+            exp = []
+            for _ in range(draws):
+                c = 0
+                for y, (_, leg) in acts.items():
+                    lo, hi = season_bounds(y)
+                    d = lo + pd.Timedelta(days=int(rng.integers(0, (hi - lo).days + 1)))
+                    c += len(match(d, leg, ev)) > 0
+                exp.append(c)
+            LEAD_DAYS.update(old)
+            rows.append(
+                dict(
+                    zone=z,
+                    window=w,
+                    activations=len(acts),
+                    caught=caught,
+                    chance=round(float(np.mean(exp)), 1),
+                )
+            )
+    return pd.DataFrame(rows)
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     series = zone_series()
@@ -439,13 +485,14 @@ def main() -> None:
     cal_ms = {z: {k: a.reindex(cal) for k, a in d.items()} for z, d in sms.items()}
     events = {z: zone_events(z) for z in ZONES}
 
-    summary, thr_rows, sens = [], [], []
+    summary, thr_rows, sens, thr_by_zone = [], [], [], {}
     for z in ZONES:
         have = [y for y in cal if any(pd.notna(a.get(y)) for a in cal_ms[z].values())]
         n_major = sum(season_impact(events[z], y)["major"] for y in have)
         major_rp = (len(have) + 1) / max(1, n_major)
         design_rp = max(RP_FLOOR, major_rp)
         thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / design_rp)
+        thr_by_zone[z] = thr
         t = backtest_zone(z, series[z], thr, events[z], show, cal)
         t.sort_index(ascending=False).to_csv(OUT / f"{z}.csv")
         events[z].to_csv(OUT / f"events_{z}.csv", index=False)
@@ -481,6 +528,9 @@ def main() -> None:
     s.to_csv(OUT / "summary.csv", index=False)
     pd.DataFrame(thr_rows).to_csv(OUT / "thresholds.csv", index=False)
     pd.DataFrame(sens).to_csv(OUT / "rp_sensitivity.csv", index=False)
+    window_sensitivity(series, thr_by_zone, events, cal).to_csv(
+        OUT / "window_sensitivity.csv", index=False
+    )
     pd.set_option("display.width", 220)
     print(
         f"calibration seasons {s.calibration.iloc[0]} (n={n}); window Sep-Feb; RP floor {RP_FLOOR}"

@@ -36,7 +36,7 @@ Zones trigger **independently**; there is no shared budget. Each zone's return p
 how often it has a major-impact season (one recorded event with at least 5 deaths or 5,000
 affected), floored at 1-in-3 (`RP_FLOOR`). Triggers may activate only **1 September to end
 February** — the window the funding covers. Every activation is **matched to a dated flood**
-(within 14 days for rain forecasts, 30 for GloFAS, 120 for the lake leg, or during the event);
+(within 30 days for rain forecasts, 45 for GloFAS, 150 for the lake leg, or during the event);
 matched to events rather than calendar years, the drafts catch 5 major events in 23 activations
 and miss 17 of 24. That is the honest headline and it is the main thing to improve.
 

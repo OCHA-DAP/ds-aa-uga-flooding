@@ -29,7 +29,7 @@ report per-trigger and combined return periods.
   1-in-3 budget was the earlier design and was dropped). Do not pick RPs by maximising backtest
   skill — 25 seasons is noise. Season window is 1 Sep to end Feb (funding does not run past
   March, user 22 Sep 2026), and every activation is matched to a DATED event within a lead
-  window (14 d rain / 30 d GloFAS / 120 d lake) — never score by calendar year. Zones with legs (Adjumani: lake / rain) split their share equally
+  window (30 d rain / 45 d GloFAS / 150 d lake) — never score by calendar year. Zones with legs (Adjumani: lake / rain) split their share equally
   between legs. Existing triggers are reproduced in `analysis/existing_triggers.py` — published
   ones in `PUBLIC_SPECS`, unpublished ones in the gitignored config. `pipeline/encrypt.py` is the
   only path to a restricted page.

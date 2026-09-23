@@ -233,6 +233,32 @@ def summary_table(inp: Inputs) -> str:
     return f"<div class='tw trig-sum'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
 
+def window_table(inp: Inputs) -> str:
+    """Catches against matching window, beside what random timing would score."""
+    path = TRIG / "window_sensitivity.csv"
+    if not path.exists():
+        return ""
+    d = pd.read_csv(path)
+    g = d.groupby("window")[["caught", "chance"]].sum()
+    head = "<tr><th></th>" + "".join(f"<th>{int(w)} d</th>" for w in g.index) + "</tr>"
+    r1 = "".join(f"<td class='num'>{int(v)}</td>" for v in g.caught)
+    r2 = "".join(f"<td class='num'>{v:.1f}</td>" for v in g.chance)
+    return (
+        "<p><strong>How generous is the matching?</strong> An activation counts as catching a flood if the flood "
+        "starts within the trigger\u2019s lead window \u2014 set at 30 days for the rain forecasts, 45 for GloFAS and "
+        "150 for the lake leg, deliberately loose, because reported impact dates lag the flood and rain that falls "
+        "inside a forecast window can pool for days before it floods. Widening the window further barely finds any "
+        "more floods, while it raises what sheer luck would score: below, the major events the four drafts catch at "
+        "each window, against the average a trigger activating on random dates in the same seasons would catch.</p>"
+        f"<div class='tw trig-alloc'><table><thead>{head}</thead><tbody>"
+        f"<tr><td>Caught by the drafts</td>{r1}</tr><tr><td>Caught by random timing</td>{r2}</tr>"
+        "</tbody></table></div>"
+        "<p class='fn'>So the drafts do beat chance, and the gap does not close as the window widens \u2014 the low "
+        "catch count is not an artefact of strict matching. At the chosen windows they catch 5 where random timing "
+        "would catch about 2.6.</p>"
+    )
+
+
 def sensitivity_table(inp: Inputs) -> str:
     """Per zone, what each candidate return period would have done, with the chosen one first."""
     d = pd.read_csv(TRIG / "rp_sensitivity.csv")
@@ -613,8 +639,8 @@ def page(inp: Inputs) -> str:
         "<p class='fn'>Major-impact season: a season in which one recorded event in the zone reached 5 deaths or "
         "5,000 people affected (the zone\u2019s share of events naming several districts). Activations, catches and "
         "misses count only the window 1 September to end February. An activation catches an event when the event "
-        "starts within the trigger\u2019s lead window after it \u2014 14 days for the rain forecasts, 30 for GloFAS, "
-        "120 for Adjumani\u2019s lake leg \u2014 or is already under way when it comes (negative lead).</p>",
+        "starts within the trigger\u2019s lead window after it \u2014 30 days for the rain forecasts, 45 for GloFAS, "
+        "150 for Adjumani\u2019s lake leg \u2014 or is already under way when it comes (negative lead).</p>",
         "<h2>How each zone\u2019s return period is set</h2>",
         "<p>Each zone has its own envelope and triggers on its own, so there is no shared budget to divide. A zone\u2019s "
         "return period is set to <strong>how often that zone has a major-impact season</strong>, so the trigger "
@@ -636,6 +662,7 @@ def page(inp: Inputs) -> str:
         "<p class='fn'>A cell says \u201ccaught\u201d where that season\u2019s first activation matched a major "
         "event. \u201cNo data\u201d: CHIRPS-GEFS has no forecasts from 1 January to 4 October 2020, so the "
         "rain-based triggers cannot be judged in the seasons that gap touches; Adjumani\u2019s lake leg can.</p>",
+        window_table(inp),
         season_2007(inp),
     ]
     for z in ZONE_ORDER:
@@ -689,7 +716,7 @@ def page(inp: Inputs) -> str:
         "several districts are split evenly across them.</li>"
         "<li><strong>Season and matching</strong>: the window is 1 September to end February, since the funding does "
         "not run past March. Thresholds are calibrated on in-window maxima only. An activation catches an event when "
-        "the event starts within the trigger\u2019s lead window after it (14 days rain, 30 GloFAS, 120 the lake leg) "
+        "the event starts within the trigger\u2019s lead window after it (30 days rain, 45 GloFAS, 150 the lake leg) "
         "or is already under way; three days of tolerance allow for reporting dates.</li>"
         "<li><strong>Impact events</strong> are dated: EM-DAT, press and IOM DTM events keep their start and end "
         "dates and are split evenly across the districts they name, with only the zone\u2019s share counted; "
