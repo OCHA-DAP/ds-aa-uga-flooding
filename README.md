@@ -25,20 +25,25 @@ Restricted pages use the team review password (ask Tristan). See *Private materi
 **Where it stands.** Zones are settled (`src/constants.py`, rationale on `/coverage/`). A first
 draft of all four triggers exists, calibrated and backtested on 2000–2025 (`/triggers/`):
 
-| zone | draft trigger | design RP | activations / caught / missed |
+| zone | draft trigger | return period | activations / caught / missed |
 |---|---|---|---|
-| Teso / Lake Kyoga | GloFAS G5196 discharge (reanalysis stand-in) | 1-in-5.2 | 5 / 2 / 4 of 5 — every false alarm is dated 1 Sep (river already high when the window opens) |
-| Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | 1-in-3.2 | 8 / 1 / 7 of 8 — catches Nov 2024 eight days ahead |
-| Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | 1-in-4.3 | 6 / 1 / 5 of 6 |
-| Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | 1-in-5.2 | 4 / 1 / 4 of 5 — the catch is 2020, already over threshold when the window opened |
+| Teso / Lake Kyoga | GloFAS G5196 discharge (reanalysis stand-in) | 1-in-17 (from 1-in-8.7) | 2 / 1 / 2 of 3 — catches Oct 2007 |
+| Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | 1-in-5.5 | 5 / 1 / 4 of 5 — catches Nov 2024, eight days ahead |
+| Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | 1-in-9.9 (from 1-in-5.2) | 3 / 1 / 4 of 5 |
+| Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | 1-in-17 (from 1-in-5.2) | 2 / 1 / 4 of 5 — lake leg catches 2020 |
 
-Zones trigger **independently**; there is no shared budget. Each zone's return period matches
-how often it has a major-impact season (one recorded event with at least 5 deaths or 5,000
-affected), floored at 1-in-3 (`RP_FLOOR`). Triggers may activate only **1 September to end
-February** — the window the funding covers. Every activation is **matched to a dated flood**
-(within 30 days for rain forecasts, 45 for GloFAS, 150 for the lake leg, or during the event);
-matched to events rather than calendar years, the drafts catch 5 major events in 23 activations
-and miss 17 of 24. That is the honest headline and it is the main thing to improve.
+Zones trigger **independently**. Triggers may activate only in **October, November and
+December** (planning runs into September; the funding does not run past March). Each zone's
+return period starts from how often it has a major-impact window (one event with 5+ deaths or
+5,000+ affected), floored at 1-in-3, and is then **raised as far as it can go without losing a
+big flood it already catches** (`raise_threshold`, `BIG_AFFECTED`). Every activation is
+**matched to a dated flood** (30 days for rain forecasts, 45 for GloFAS, 150 for the lake leg,
+or during the event).
+
+**The window is the binding constraint**: Oct–Dec holds only 16–29 % of each zone's recorded
+people affected, and the peak impact month is August in three of the four zones. The
+indicators peak earlier still (April for the rain forecasts in Karamoja and Adjumani, August
+for Teso's GloFAS). `outputs/triggers/monthly_profile.csv` and the page's month table show it.
 
 **Open questions** (also at the foot of `/triggers/`): run Teso on the reforecast and get a
 third opinion (DWRM gauge / Flood Hub) on the post-2013 divergence; test longer rainfall

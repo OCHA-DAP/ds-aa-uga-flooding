@@ -218,7 +218,9 @@ def summary_table(inp: Inputs) -> str:
             f"<td>{what[0].upper() + what[1:]}</td><td>{lead}</td>"
             f"<td class='num'>{int(r.major_seasons)} of {int(r.seasons_with_data)}"
             f"<span class='fn'>{rp_txt(r.major_rp)}</span></td>"
-            f"<td class='num'><strong>{rp_txt(r.design_rp)}</strong></td>"
+            f"<td class='num'><strong>{rp_txt(r.design_rp)}</strong>"
+            + (f"<span class='fn'>raised from {rp_txt(r.frequency_rp)}</span>" if r.raised else "")
+            + "</td>"
             f"<td class='num'>{int(r.activations)}<span class='fn'>{bp.e(r.activated_seasons)}</span></td>"
             f"<td class='num'>{int(r.caught)}</td><td class='num'>{int(r.false_alarms)}</td>"
             f"<td class='num'>{int(r.missed)} of {int(r.major_seasons)}</td>"
@@ -231,6 +233,64 @@ def summary_table(inp: Inputs) -> str:
         "<th>Missed</th><th>Median lead</th></tr>"
     )
     return f"<div class='tw trig-sum'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+
+
+MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+WINDOW_MONTHS = (10, 11, 12)
+
+
+def month_heat(v: float, top: float) -> str:
+    if top <= 0 or v <= 0:
+        return "<td class='num mo'></td>"
+    t = 0.08 + 0.92 * (v / top)
+    fg = "#fff" if t > 0.55 else "#1a1a1a"
+    return f"<td class='num mo' style='background:{ramp(t)};color:{fg}'>{v / top * 100 * (top / max(top, 1e-9)):.0f}</td>"
+
+
+def months_table(inp: Inputs) -> str:
+    """When floods actually happen in each zone, against when the trigger would fire if it ran
+    all year. Each row is a share of its own total, in per cent."""
+    path = TRIG / "monthly_profile.csv"
+    if not path.exists():
+        return ""
+    d = pd.read_csv(path)
+    rows = []
+    for z in ZONE_ORDER:
+        g = d[d.zone == z].set_index("month").reindex(range(1, 13)).fillna(0)
+        for lbl, col in (
+            ("flood events", "events"),
+            ("people affected", "affected"),
+            ("trigger would fire", "activations_all_year"),
+        ):
+            tot = g[col].sum()
+            share = (g[col] / tot * 100) if tot else g[col] * 0
+            cells = "".join(
+                f"<td class='num mo{' win' if m in WINDOW_MONTHS else ''}' "
+                f"style='background:{ramp(0.08 + 0.92 * (share[m] / max(share.max(), 1e-9)))};"
+                f"color:{'#fff' if share[m] / max(share.max(), 1e-9) > 0.55 else '#1a1a1a'}'>"
+                f"{share[m]:.0f}</td>"
+                if share[m] >= 0.5
+                else f"<td class='num mo{' win' if m in WINDOW_MONTHS else ''}'></td>"
+                for m in range(1, 13)
+            )
+            ond = share[list(WINDOW_MONTHS)].sum()
+            first = (
+                f"<td class='zn' rowspan='3'><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{SHORT[z]}</td>"
+                if col == "events"
+                else ""
+            )
+            rows.append(
+                f"<tr>{first}<td class='src'>{lbl}</td>{cells}<td class='num'><strong>{ond:.0f} %</strong></td></tr>"
+            )
+    head = (
+        "<tr><th>Zone</th><th></th>"
+        + "".join(
+            f"<th class='mo{' win' if i + 1 in WINDOW_MONTHS else ''}'>{m}</th>"
+            for i, m in enumerate(MONTHS)
+        )
+        + "<th>in Oct\u2013Dec</th></tr>"
+    )
+    return f"<div class='tw trig-months'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
 
 def window_table(inp: Inputs) -> str:
@@ -453,7 +513,7 @@ def zone_table(z: str, inp: Inputs, cols=()) -> str:
 
 
 def season_2007(inp: Inputs) -> str:
-    """What happened in 2007/08, the largest flood season on record and a CERF season."""
+    """What happened in the October-December window of 2007, the largest flood year on record."""
     bits = []
     for z in ZONE_ORDER:
         r = inp.tabs[z].loc[2007]
@@ -471,7 +531,7 @@ def season_2007(inp: Inputs) -> str:
                 f"{SHORT[z]} did not activate ({rp_txt(r.peak_rp)} against a {rp_txt(inp.series_rp(z, leg))} bar)"
             )
     return (
-        "<p><strong>2007/08</strong>, the largest flood season on record and a CERF season: "
+        "<p><strong>October\u2013December 2007</strong>, the largest flood year on record and a CERF year: "
         + "; ".join(bits)
         + ". The 2007 floods ran from August to October \u2014 a long wet season rather than one extreme week, which "
         "is what a 5-day forecast peak can see. A longer accumulation window is the obvious thing to test.</p>"
@@ -505,51 +565,53 @@ def teso_ifrc_sentence(inp: Inputs) -> str:
 def _zone_note(z: str, inp: Inputs) -> str:
     r = inp.s.loc[z]
     act, caught, missed = int(r.activations), int(r.caught), int(r.missed)
+    rp, freq = rp_txt(r.design_rp), rp_txt(r.frequency_rp)
+    raised = f" \u2014 raised from {freq} to shed false alarms" if r.raised else ""
     if z == "teso_kyoga":
         return (
             "Aligned with the IFRC/URCS early action protocol\u2019s instrument \u2014 GloFAS at a reporting point \u2014 "
             "on the one point in the sub-region that passes both skill checks, as the country team asked. The "
             "reanalysis stands in for the forecast until the reforecast download finishes, so this is an upper bound. "
-            f"It activates in {act} of the {int(r.seasons_with_data)} seasons and catches {caught}, including the 2007 "
-            f"floods, and misses {missed} of {int(r.major_seasons)} major seasons. Every false alarm is dated 1 "
-            "September: the Akokoro is often already above the threshold when the window opens, carried over from the "
-            "August peak. An operational rule has to say whether that counts, or whether the discharge must rise "
-            "through the threshold after 1 September. The other known weakness is unchanged: the model\u2019s biggest "
-            "seasons since 2013 are not the seasons people flooded." + teso_ifrc_sentence(inp)
+            f"At {rp}{raised} it activates in {act} of the {int(r.seasons_with_data)} windows and catches {caught}: "
+            "October 2007, the largest flood in the record, on the day. The other activation is October 2020, a "
+            f"season with nothing recorded, and it misses {missed} of {int(r.major_seasons)} major windows. Teso\u2019s "
+            "floods peak in August and September, so the October\u2013December window sees less than a third of its "
+            "recorded impact, and the model\u2019s own peak is in August \u2014 before the window opens."
+            + teso_ifrc_sentence(inp)
         )
     if z == "elgon":
         return (
             "One zone-wide trigger: every lowland flood year in the record is also a slope flood year, and the "
-            "forecast moves together across the 15 districts (median rank correlation of seasonal peaks 0.74). Elgon "
-            "carries nearly half the recorded people affected and three quarters of the deaths, and has a major-impact "
-            f"season in {int(r.major_seasons)} of {int(r.seasons_with_data)}, so it sits on the 1-in-3 floor. It "
-            f"activates in {act} seasons, catches {caught} \u2014 November 2024, eight days before the Bulambuli "
-            f"landslides \u2014 and misses {missed}. The misses are the record of the zone: the Bududa landslides of "
-            "2010 and 2012, the September 2011 floods, Bukalasi in October 2018 (the forecast crossed four days "
-            "after the landslide), and the CERF floods of late 2019, where the first activation came on 18 October "
-            "and the floods at the end of November. A later activation on 21 November would have caught them eight "
-            "days ahead, but an all-in envelope is released by the first activation."
+            "forecast moves together across the 15 districts. Elgon carries nearly half the recorded people affected "
+            "and three quarters of the deaths, and it is the one zone whose trigger peaks inside the window. At "
+            f"{rp}{raised} it activates in {act} windows, catches {caught} \u2014 November 2024, eight days before "
+            f"the Bulambuli landslides \u2014 and misses {missed}. It cannot be raised further without losing that "
+            "catch. Elgon\u2019s impact is concentrated in April to September, though, so the window holds only about "
+            "a sixth of its recorded people affected: the Bududa landslides of 2010 and 2012 and the September 2011 "
+            "floods are all outside it."
         )
     if z == "karamoja":
         return (
-            "Per district: each of the nine districts is held to the same rarity, and the zone activates when any one "
-            f"reaches it \u2014 about a {rp_txt(inp.series_rp(z))}-year level per district to keep the zone at "
-            f"{rp_txt(r.design_rp)}. It activates in {act} seasons, catches {caught} and misses {missed}, including "
-            "the 2007 floods and the November 2008 floods. Whether an activation in one district releases the whole "
-            "Karamoja envelope or that district\u2019s share is a funding decision; this draft assumes all-in."
+            "Per district: each of the nine districts is held to the same rarity, and the zone activates when any "
+            f"one reaches it \u2014 about a {rp_txt(inp.series_rp(z))}-year level per district to keep the zone at "
+            f"{rp}{raised}. It activates in {act} windows, catches {caught} and misses {missed}. Karamoja is the "
+            "worst fit for this window of the four: its floods peak in May and August, its rain forecast peaks in "
+            "April, and only a sixth of its recorded impact falls in October to December. Whether an activation in "
+            "one district releases the whole Karamoja envelope or that district\u2019s share is a funding decision; "
+            "this draft assumes all-in."
         )
     return (
         "Two legs, because the record shows two flood regimes. Nile high-stand floods \u2014 2020 above all, when the "
         "Albert Nile rose from June and displaced 123,000 people across Pakwach, Obongi and Adjumani \u2014 are "
         "covered by Lake Kyoga\u2019s rise over six months: Kyoga tracks Lake Albert at r = 0.96 month to month and "
         "has a record from 1992, where Albert\u2019s starts in 2016. A threshold on the lake level itself would not "
-        "work: the lakes rose about 3 m in 2020 and have stayed up, so it would activate every season since. "
-        "Tributary and settlement flash floods, most of the record, are covered by the rain forecast per district. "
-        "Each leg takes half the zone\u2019s rate and is calibrated on its own, so the single lake series is not "
-        f"outvoted by six rain series. It activates in {act} seasons and catches {caught}: 2020/21, where the lake "
-        "leg was already over its threshold when the window opened, three months into the flood. That is the honest "
-        "reading of a slow-onset leg in a window that starts in September \u2014 the signal was there in June. The "
-        f"{missed} misses include the DTM-recorded displacement of late 2023 and the November 2004 and 2008 floods."
+        "work: the lakes rose about 3 m in 2020 and have stayed up, so it would activate every year since. Tributary "
+        "and settlement flash floods, most of the record, are covered by the rain forecast per district, each leg "
+        f"taking half the zone\u2019s rate. At {rp}{raised} it activates in {act} windows and catches {caught}: 2020, "
+        "where the lake leg was already over its threshold when the window opened, four months into the flood. That "
+        "is the honest reading of a slow-onset leg in a window that starts in October \u2014 the signal was there in "
+        f"June. It misses {missed}, and November is the zone\u2019s deadliest month, so this is the one zone whose "
+        "impact the window fits at all well."
     )
 
 
@@ -597,21 +659,29 @@ def key_points(inp: Inputs) -> str:
         int(s_.missed.sum()),
         int(s_.major_seasons.sum()),
     )
+    catches = []
+    for z in ZONE_ORDER:
+        t = inp.tabs[z]
+        for _y, r in t[t.in_calibration & t.caught].sort_index(ascending=False).iterrows():
+            catches.append(f"{SHORT[z]} {r.label.replace('OND ', '')}")
     items = [
-        "Four triggers, one per zone, each all-in and independent of the others. They can activate only between "
-        f"1 September and the end of February, the window the funding covers. Calibrated and backtested on {cal}.",
-        "Each zone\u2019s return period matches how often that zone has a major-impact season \u2014 at least 5 deaths "
-        "or 5,000 people affected in one recorded event \u2014 but is never more frequent than 1-in-3: "
-        f"Teso {rp_txt(s_.loc['teso_kyoga'].design_rp)}, Karamoja {rp_txt(s_.loc['karamoja'].design_rp)}, "
-        f"Adjumani {rp_txt(s_.loc['adjumani'].design_rp)}, Elgon {rp_txt(s_.loc['elgon'].design_rp)}.",
-        f"<strong>Each activation is matched to a dated flood.</strong> Across the four zones the drafts activate "
-        f"{tot_a} times, catch <strong>{tot_c}</strong> major events and miss <strong>{tot_m} of {tot_major}</strong>. "
-        "That is the honest measure and it is far weaker than counting whole years: an activation in April and a "
-        "flood in November used to score as a catch.",
-        "The catches are Teso in 2007/08 and 2012/13, Elgon in November 2024 (eight days before the Bulambuli "
-        "landslides), Karamoja in 2006/07, and Adjumani in 2020/21 through the lake leg. The misses include the "
-        "Bududa landslides, Bukalasi in 2018 and the CERF floods of late 2019.",
-        "Existing triggers are reproduced alongside ours, on the same seasons and the same events.",
+        "Four triggers, one per zone, each all-in and independent of the others. They can activate only in "
+        f"<strong>October, November and December</strong> \u2014 planning runs into September, so October is the "
+        f"earliest month that can be acted on this year. Calibrated and backtested on {cal}.",
+        "Each zone\u2019s return period starts from how often that zone has a major-impact window (at least 5 deaths "
+        "or 5,000 people affected in one recorded event), then is <strong>raised as far as it can go without losing "
+        "a big flood it already catches</strong>: "
+        + ", ".join(f"{SHORT[z]} {rp_txt(s_.loc[z].design_rp)}" for z in ZONE_ORDER)
+        + ". That trades activations for precision; it cannot add catches.",
+        f"<strong>Every activation is matched to a dated flood.</strong> The drafts activate {tot_a} times across "
+        f"the four zones, catch <strong>{tot_c}</strong> major events \u2014 {', '.join(catches)} \u2014 and miss "
+        f"<strong>{tot_m} of {tot_major}</strong>.",
+        "<strong>The window is the binding problem.</strong> October to December holds 29 % of the people affected "
+        "on record in Teso, 24 % in Adjumani and 16 % in Elgon and Karamoja; the peak impact month is August in "
+        "three of the four zones. The indicators peak earlier still \u2014 April for the rain forecasts in Karamoja "
+        "and Adjumani, August for Teso\u2019s GloFAS \u2014 so for three zones the window sits after the signal and "
+        "beside the floods.",
+        "Existing triggers are reproduced alongside ours, on the same windows and the same events.",
     ]
     if inp.ptext.get("key_point"):
         items[-1] = inp.ptext["key_point"]
@@ -638,9 +708,21 @@ def page(inp: Inputs) -> str:
         summary_table(inp),
         "<p class='fn'>Major-impact season: a season in which one recorded event in the zone reached 5 deaths or "
         "5,000 people affected (the zone\u2019s share of events naming several districts). Activations, catches and "
-        "misses count only the window 1 September to end February. An activation catches an event when the event "
+        "misses count only the October\u2013December window. An activation catches an event when the event "
         "starts within the trigger\u2019s lead window after it \u2014 30 days for the rain forecasts, 45 for GloFAS, "
         "150 for Adjumani\u2019s lake leg \u2014 or is already under way when it comes (negative lead).</p>",
+        "<h2>When floods actually happen</h2>",
+        "<p>Each row is a share of its own total, per cent, across the calendar year; the October to December "
+        "window is boxed. The third row per zone is when the trigger would have fired if the window were lifted, "
+        "which is the honest test of whether the indicator peaks when the floods do.</p>",
+        months_table(inp),
+        "<p><strong>Two things to face.</strong> First, the window holds a minority of the record: 29 % of the "
+        "people affected in Teso, 24 % in Adjumani, 16 % in Elgon and Karamoja. The peak impact month is August in "
+        "Teso, Elgon and Karamoja, and April in Adjumani. An October to December trigger cannot be judged on, or "
+        "expected to catch, the floods of the long rains. Second, the indicators peak earlier still: the rain "
+        "forecasts crest in April in Karamoja and Adjumani, and Teso\u2019s GloFAS in August. Only Elgon\u2019s peak "
+        "sits inside the window \u2014 the same thing as the early activations noticed in the last draft: the "
+        "signal arrives before the window opens.</p>",
         "<h2>How each zone\u2019s return period is set</h2>",
         "<p>Each zone has its own envelope and triggers on its own, so there is no shared budget to divide. A zone\u2019s "
         "return period is set to <strong>how often that zone has a major-impact season</strong>, so the trigger "
@@ -652,6 +734,15 @@ def page(inp: Inputs) -> str:
         "tuned to them. The table shows what each return period would have done: <em>activations \u00b7 major events "
         "caught \u00b7 major seasons missed</em>, with each zone\u2019s chosen return period first. Going rarer buys "
         "fewer false alarms and almost no extra catches; going more frequent than 1-in-3 buys activations, not "
+        "<p><strong>Then raised to shed false alarms.</strong> Starting from that frequency-matched level, each "
+        "zone\u2019s threshold is stepped rarer for as long as it still catches every big flood it caught before \u2014 "
+        "big meaning thousands of people affected, not a hundred \u2014 and still activates at least once. The step "
+        "stops just before a big catch would be lost. Raising a threshold can only remove activations, never add "
+        "catches, so what it buys is precision: Teso goes from 1-in-8.7 to 1-in-17 and sheds two false alarms, "
+        "Adjumani from 1-in-5.2 to 1-in-17, Karamoja from 1-in-5.2 to 1-in-10. Elgon barely moves, to 1-in-5.4, "
+        "because the next step up would lose the November 2024 landslides. The risk is the usual one of tuning on a "
+        "short record: a big flood sitting just under the final threshold here might be missed in another 25 "
+        "years.</p>",
         "catches.</p>",
         sensitivity_table(inp),
         "<p class='fn'>Impact frequencies use the dated event record described under Data and methods, so they "
@@ -684,7 +775,7 @@ def page(inp: Inputs) -> str:
     parts += [
         "<h2>Reading the tables</h2>",
         "<ul>"
-        "<li><strong>Season</strong> 2019/20 means 1 September 2019 to 29 February 2020. Only activations and impact "
+        "<li><strong>Season</strong> \u201cOND 2019\u201d means 1 October to 31 December 2019. Only activations and impact "
         "inside that window count.</li>"
         "<li><strong>Our draft</strong> shows the first activation of the season \u2014 the one that releases an "
         "all-in envelope \u2014 with the district or leg that triggered it, and whether it matched a major event and "
@@ -714,8 +805,8 @@ def page(inp: Inputs) -> str:
         "<li><strong>Impact</strong>: EM-DAT, DesInventar (to 2021), press and ReliefWeb reports curated in the repo, "
         "and IOM DTM rounds from the country team, matched to districts and summed per zone and year. Events naming "
         "several districts are split evenly across them.</li>"
-        "<li><strong>Season and matching</strong>: the window is 1 September to end February, since the funding does "
-        "not run past March. Thresholds are calibrated on in-window maxima only. An activation catches an event when "
+        "<li><strong>Season and matching</strong>: the window is 1 October to 31 December \u2014 planning runs into "
+        "September, so October is the earliest month that can be acted on, and the funding does not run past March. Thresholds are calibrated on in-window maxima only. An activation catches an event when "
         "the event starts within the trigger\u2019s lead window after it (30 days rain, 45 GloFAS, 150 the lake leg) "
         "or is already under way; three days of tolerance allow for reporting dates.</li>"
         "<li><strong>Impact events</strong> are dated: EM-DAT, press and IOM DTM events keep their start and end "
@@ -734,7 +825,7 @@ def page(inp: Inputs) -> str:
         "<li><strong>The honest headline:</strong> matched to dated floods, these triggers catch few major events. "
         "Any of them would need the observational backstop behind it before it could be proposed as a mechanism.</li>"
         "<li><strong>Teso:</strong> run on the GloFAS reforecast (download nearly complete), and decide whether a "
-        "river already above the threshold on 1 September counts as an activation. Then the third opinion on the "
+        "river already above the threshold on 1 October counts as an activation. Then the third opinion on the "
         "post-2013 divergence \u2014 a DWRM gauge or Google Flood Hub.</li>"
         "<li><strong>Longer windows:</strong> test a 15- or 30-day accumulation for prolonged seasons such as "
         "2007.</li>"
@@ -742,7 +833,7 @@ def page(inp: Inputs) -> str:
         "split would let a later activation in the same season still act \u2014 which is exactly what late 2019 in "
         "Elgon needed.</li>"
         "<li><strong>Karamoja funding:</strong> all-in for the zone, or per district.</li>"
-        "<li><strong>Adjumani:</strong> the lake leg gives months of warning, so a window opening on 1 September "
+        "<li><strong>Adjumani:</strong> the lake leg gives months of warning, so a window opening on 1 October "
         "truncates it; consider reading Lake Albert directly and allowing an earlier readiness decision.</li>"
         "<li><strong>Return periods:</strong> frequency-matching with a 1-in-3 floor is a judgement; the sensitivity "
         "table shows the trade-off.</li>"

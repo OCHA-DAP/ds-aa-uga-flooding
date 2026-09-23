@@ -18,9 +18,9 @@ One all-in trigger per zone; zones trigger independently of each other.
               Each leg takes half the zone's rate and is calibrated on its own, so the single
               lake series is not outvoted by six rain series.
 
-Season. Triggers can activate only from 1 September to the end of February — the window the
-funding covers (it does not extend into March). A "season" is labelled by its start year:
-season 2019 is 1 Sep 2019 to 29 Feb 2020. Indicators and impact outside the window are ignored.
+Season. Triggers can activate only in OCTOBER, NOVEMBER and DECEMBER — the window that can
+still be acted on this year (planning runs into September, and the funding does not run past
+March). Indicators and impact outside the window are ignored.
 
 Return period. Each zone activates about as often as it has a major-impact season (at least 5
 deaths or 5,000 people affected recorded in a single event in the zone), and never more often
@@ -68,12 +68,16 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "outputs" / "triggers"
 GLOFAS_DIR = ROOT / "data" / "glofas" / "raw" / "reanalysis_uga_v4"
 
-SEASON_MONTHS = (9, 10, 11, 12, 1, 2)  # 1 Sep - end Feb: the window the funding covers
+SEASON_MONTHS = (10, 11, 12)  # October to December: the window acted on this year
 FIRST_SEASON = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 MIN_COVERAGE = 0.6  # a series' season counts when at least this share of its days has data
 RP_FLOOR = 3.0  # no zone activates more often than once in three seasons
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # a major event, per event, zone share
+BIG_AFFECTED = (
+    5000  # a "big" event, the kind a threshold must not be raised past (thousands of people)
+)
+MAX_RP = 25.0  # never raise a threshold rarer than this in a 25-season record
 # How far ahead of a flood an activation may be and still count as catching it. Generous on
 # purpose: reported impact dates lag the flood, and rain that falls inside the forecast window
 # can pool for days before it floods. Widening them further barely adds catches while raising
@@ -91,19 +95,17 @@ LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every othe
 
 
 def season_of(ts: pd.Timestamp) -> int | None:
-    if ts.month >= 9:
-        return ts.year
-    if ts.month in (1, 2):
-        return ts.year - 1
-    return None
+    return ts.year if ts.month in SEASON_MONTHS else None
 
 
 def season_bounds(season: int) -> tuple[pd.Timestamp, pd.Timestamp]:
-    return pd.Timestamp(season, 9, 1), pd.Timestamp(season + 1, 3, 1) - pd.Timedelta(days=1)
+    return pd.Timestamp(season, min(SEASON_MONTHS), 1), pd.Timestamp(
+        season, max(SEASON_MONTHS), 1
+    ) + pd.offsets.MonthEnd(0)
 
 
 def season_label(season: int) -> str:
-    return f"{season}/{(season + 1) % 100:02d}"
+    return f"OND {season}"
 
 
 def in_season(s: pd.Series) -> pd.Series:
@@ -472,6 +474,74 @@ def window_sensitivity(
     return pd.DataFrame(rows)
 
 
+def monthly_profile(events: dict, series: dict, thr_by_zone: dict, years) -> pd.DataFrame:
+    """Per zone and calendar month: recorded flood events, people affected, deaths, and the
+    activations the trigger would have had IF it ran all year. The last of those shows whether
+    the indicator peaks in the months the floods actually happen."""
+    rows = []
+    for z, ev in events.items():
+        e = ev[ev.start.dt.year.isin(years)]
+        idx = pd.DatetimeIndex(sorted(set().union(*(set(sr.index) for sr in series[z].values()))))
+        idx = idx[idx.year.isin(years)]
+        hit = pd.Series(False, index=idx)
+        for key, sr in series[z].items():
+            hit |= (sr >= thr_by_zone[z][key]).reindex(idx, fill_value=False)
+        starts = hit[hit & ~hit.shift(1, fill_value=False)].index
+        for m in range(1, 13):
+            x = e[e.start.dt.month == m]
+            rows.append(
+                dict(
+                    zone=z,
+                    month=m,
+                    events=len(x),
+                    affected=float(x.affected.sum()),
+                    deaths=float(x.deaths.sum()),
+                    activations_all_year=int((starts.month == m).sum()),
+                )
+            )
+    return pd.DataFrame(rows)
+
+
+def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float, dict]:
+    """Raise the threshold as far as it can go without losing a big event it already catches.
+
+    Starting from the frequency-matched return period, the threshold is stepped rarer while
+    every caught event of BIG_AFFECTED people or more is still caught, and at least one
+    activation remains. False alarms fall as it rises; the rule stops at the last step before
+    a big catch would be lost. It cannot invent catches — it only removes activations — so the
+    risk is the usual one of tuning on a short record: a big event just below the final
+    threshold in this record might be missed in another."""
+
+    def caught_big(rp: float) -> tuple[set, int, int]:
+        thr, _, _ = calibrate_zone_legs(
+            z, cal_ms, len([y for y in cal if y in next(iter(cal_ms.values())).dropna().index]) / rp
+        )
+        big, acts, hits = set(), 0, 0
+        for y in cal:
+            eps = activation_episodes({k: in_season(v) for k, v in series.items()}, thr, y)
+            if not eps:
+                continue
+            acts += 1
+            a, via = eps[0]
+            m = match(a, SERIES_LEG.get(via[0], "rain"), ev)
+            if len(m):
+                hits += 1
+                big |= {i for i in m.index if ev.loc[i].affected >= BIG_AFFECTED}
+        return big, acts, hits
+
+    base_big, _, base_hits = caught_big(design_rp)
+    if base_hits == 0:
+        return design_rp, {}  # nothing worth protecting: raising would only silence the trigger
+    best, stats = design_rp, None
+    for rp in np.arange(design_rp, MAX_RP + 0.01, 0.25):
+        big, acts, hits = caught_big(float(rp))
+        # stop before losing a big event, the last catch of any size, or every activation
+        if acts < 1 or hits < 1 or not base_big <= big:
+            break
+        best, stats = float(rp), dict(activations=acts, caught=hits, big_caught=len(big))
+    return best, (stats or {})
+
+
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     series = zone_series()
@@ -491,7 +561,9 @@ def main() -> None:
         n_major = sum(season_impact(events[z], y)["major"] for y in have)
         major_rp = (len(have) + 1) / max(1, n_major)
         design_rp = max(RP_FLOOR, major_rp)
-        thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / design_rp)
+        # then raise it as far as it goes without losing a big catch (see raise_threshold)
+        final_rp, raise_stats = raise_threshold(z, series[z], cal_ms[z], events[z], cal, design_rp)
+        thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / final_rp)
         thr_by_zone[z] = thr
         t = backtest_zone(z, series[z], thr, events[z], show, cal)
         t.sort_index(ascending=False).to_csv(OUT / f"{z}.csv")
@@ -501,7 +573,10 @@ def main() -> None:
             dict(
                 zone=z,
                 major_rp=major_rp,
-                design_rp=design_rp,
+                frequency_rp=design_rp,
+                design_rp=final_rp,
+                raised=bool(final_rp > design_rp + 1e-9),
+                big_caught=int(raise_stats.get("big_caught", 0)),
                 individual_rp=(sc["seasons_with_data"] + 1) / max(1, sc["activations"]),
                 activated_seasons=", ".join(t[t.activated & t.in_calibration].label),
                 **sc,
@@ -528,12 +603,15 @@ def main() -> None:
     s.to_csv(OUT / "summary.csv", index=False)
     pd.DataFrame(thr_rows).to_csv(OUT / "thresholds.csv", index=False)
     pd.DataFrame(sens).to_csv(OUT / "rp_sensitivity.csv", index=False)
+    monthly_profile(events, series, thr_by_zone, range(FIRST_SEASON, 2026)).to_csv(
+        OUT / "monthly_profile.csv", index=False
+    )
     window_sensitivity(series, thr_by_zone, events, cal).to_csv(
         OUT / "window_sensitivity.csv", index=False
     )
     pd.set_option("display.width", 220)
     print(
-        f"calibration seasons {s.calibration.iloc[0]} (n={n}); window Sep-Feb; RP floor {RP_FLOOR}"
+        f"calibration seasons {s.calibration.iloc[0]} (n={n}); window Oct-Dec; RP floor {RP_FLOOR}"
     )
     print(s.drop(columns=["calibration"]).round(1).to_string(index=False))
 
