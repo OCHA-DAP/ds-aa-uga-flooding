@@ -16,6 +16,7 @@ import json
 import re
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from ocha_stratus import emdat
 
@@ -82,18 +83,30 @@ def load_emdat_events() -> pd.DataFrame:
         sorted(_districts_in_text(loc, lookup) | _districts_in_admin_units(au, lookup))
         for loc, au in zip(em["Location"], em["Admin Units"], strict=True)
     ]
+    # EM-DAT leaves the day (and sometimes the month) blank. Filling those with the 1st and
+    # calling the result a date is how an event gets pinned to a day it did not happen on, so
+    # the precision is recorded and the end is stretched to cover the whole month or year.
+    em["date_precision"] = np.where(
+        em["Start Day"].notna(), "day", np.where(em["Start Month"].notna(), "month", "year")
+    )
     em["start"] = pd.to_datetime(
         dict(
-            year=em["Start Year"], month=em["Start Month"].fillna(1), day=em["Start Day"].fillna(1)
+            year=em["Start Year"],
+            month=em["Start Month"].fillna(1),
+            day=em["Start Day"].fillna(1),
         )
     )
-    em["end"] = pd.to_datetime(
-        dict(
-            year=em["End Year"].fillna(em["Start Year"]),
-            month=em["End Month"].fillna(em["Start Month"]).fillna(12),
-            day=em["End Day"].fillna(28),
-        )
+    end_month = em["End Month"].fillna(em["Start Month"]).fillna(12)
+    end_first = pd.to_datetime(
+        dict(year=em["End Year"].fillna(em["Start Year"]), month=end_month, day=1)
     )
+    # a known end day is used as given; otherwise the event runs to the end of its last month
+    em["end"] = np.where(
+        em["End Day"].notna(),
+        end_first + pd.to_timedelta(em["End Day"].fillna(1) - 1, unit="D"),
+        end_first + pd.offsets.MonthEnd(0),
+    )
+    em["end"] = pd.to_datetime(em["end"])
     return em.rename(
         columns={
             "DisNo.": "event_id",
@@ -102,14 +115,95 @@ def load_emdat_events() -> pd.DataFrame:
             "Total Affected": "affected",
         }
     )[
-        ["event_id", "subtype", "start", "end", "deaths", "affected", "Location", "districts"]
+        [
+            "event_id",
+            "subtype",
+            "start",
+            "end",
+            "deaths",
+            "affected",
+            "Location",
+            "districts",
+            "date_precision",
+        ]
     ].assign(source="EM-DAT")
 
 
 def load_curated_events() -> pd.DataFrame:
     df = pd.read_csv(CURATED, parse_dates=["start", "end"])
     df["districts"] = df["districts"].str.split(";").map(lambda xs: [x.strip() for x in xs])
+    # these are hand-curated from press and agency reports, so they carry the date the report
+    # gives; a row can say otherwise with a date_precision column
+    if "date_precision" not in df:
+        df["date_precision"] = "day"
+    df["date_precision"] = df["date_precision"].fillna("day")
     return df
+
+
+VERIFIED = Path(__file__).resolve().parents[1] / "data" / "event_dates.csv"
+
+
+def load_verified_dates() -> pd.DataFrame:
+    """Researched dates for events whose source dates are vague or wrong.
+
+    One row per correction (src/data/event_dates.csv):
+
+      event_id      the event to correct (EM-DAT DisNo., curated id, DTM id); blank matches on
+                    source + original start instead
+      source        source name to match when event_id is blank (e.g. DesInventar)
+      match_start   the event's original start date, as a guard against silent drift
+      districts     semicolon-separated; the correction applies only to these districts, which
+                    lets one national event carry the dates it actually had in each zone
+      start, end    the researched dates
+      precision     day | month
+      evidence      URL or citation the dates come from
+    """
+    if not VERIFIED.exists():
+        return pd.DataFrame(
+            columns=[
+                "event_id",
+                "source",
+                "match_start",
+                "districts",
+                "start",
+                "end",
+                "precision",
+                "evidence",
+                "note",
+            ]
+        )
+    v = pd.read_csv(VERIFIED, parse_dates=["match_start", "start", "end"])
+    v["districts"] = v.districts.fillna("").map(
+        lambda x: [d.strip() for d in str(x).split(";") if d.strip()]
+    )
+    return v
+
+
+def apply_verified_dates(ev: pd.DataFrame) -> pd.DataFrame:
+    """Override event dates from src/data/event_dates.csv, per district where a correction
+    names districts. Adds `date_evidence` so the page can say where a date came from."""
+    v = load_verified_dates()
+    ev = ev.copy()
+    if "date_precision" not in ev:
+        ev["date_precision"] = "day"
+    ev["date_evidence"] = ""
+    for _, c in v.iterrows():
+        m = pd.Series(True, index=ev.index)
+        if isinstance(c.event_id, str) and c.event_id:
+            m &= ev.event_id.astype(str) == c.event_id
+        if isinstance(c.source, str) and c.source:
+            m &= ev.source.astype(str).str.startswith(c.source)
+        if pd.notna(c.match_start):
+            m &= ev.start.dt.normalize() == c.match_start.normalize()
+        if c.districts:
+            m &= ev.district.isin(c.districts)
+        if not m.any():
+            continue
+        ev.loc[m, "start"] = c.start
+        ev.loc[m, "end"] = c.end if pd.notna(c.end) else c.start
+        ev.loc[m, "date_precision"] = c.precision if isinstance(c.precision, str) else "day"
+        ev.loc[m, "date_evidence"] = c.evidence if isinstance(c.evidence, str) else ""
+    return ev
 
 
 def events_by_district(include_curated: bool = True, include_dtm: bool = True) -> pd.DataFrame:
@@ -131,4 +225,4 @@ def events_by_district(include_curated: bool = True, include_dtm: bool = True) -
     zone_of.update({d: (z.key, "candidate") for z in ZONES.values() for d in z.candidate})
     ev["zone"] = ev.district.map(lambda d: zone_of.get(d, (None, None))[0])
     ev["membership"] = ev.district.map(lambda d: zone_of.get(d, (None, None))[1])
-    return ev.reset_index(drop=True)
+    return apply_verified_dates(ev.reset_index(drop=True))

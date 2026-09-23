@@ -212,3 +212,30 @@ do not land high in its own record), Moroto, and all of Adjumani.
 top fifth, against 20 % by chance), so the lake-level and gauge conclusion stands. The
 backstop-options and exposure analyses were already normalised per district — they use
 Weibull return periods and AUC — so their results are unaffected.
+
+
+## 7. Dating the impact record (Sep 2026)
+
+Once activations are matched to dated floods, the dates carry the result, so the record was
+audited and rebuilt:
+
+**Two silent date bugs, both fixed.**
+- DesInventar writes `0` for an unknown day. The loader dated those to the 1st and labelled
+  them day-precise: a quarter of all cards, carrying 61 % of the recorded deaths. They are now
+  month precision and match as a month-long span. It also clamped days 29-31 to the 28th.
+- EM-DAT leaves the start day (sometimes the month) blank. The loader filled it with the 1st.
+  Precision is now recorded, and an event with no end day runs to the end of its last month.
+  Four Uganda flood events from 2000 on are month-precision, including the April 2024 floods
+  (77 deaths, 57,804 affected).
+
+**Sources used to pin dates.** EM-DAT (mostly day-precise: 43 of 47 events from 2000);
+DesInventar (day where the export gives one); the Dartmouth Flood Observatory global archive
+via HDX (independent begin/end dates, good corroboration to 2010 — e.g. Pakwach 8-10 Nov 2004,
+Sironko/Kapchorwa 12-21 Aug 2006); GDACS (3 Dec 2019, 1-9 May 2020, 15 Aug 2007); and
+contemporaneous reporting researched per event.
+
+**How corrections are held.** `src/data/event_dates.csv`, applied by
+`impact.apply_verified_dates()`. A row can match an event by id, or by source and original
+start, and can name districts — so one national event (2007) carries the dates it actually had
+in each zone. Every correction records the evidence it came from, and
+`analysis/check_event_dates.py` fails if a correction matches nothing.

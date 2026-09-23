@@ -57,6 +57,9 @@ def load_dtm_events() -> pd.DataFrame:
             "start": long.start,
             "end": long.end,
             "deaths": pd.NA,
+            # DTM reports displacement by round, not by flood: the dates are the round's, so
+            # the precision is the month unless a researched date replaces them
+            "date_precision": "month",
             "affected": long.affected.astype(float),
             "Location": long.district + " (" + long["round"] + ")",
             "districts": long.district.map(lambda d: [d]),
