@@ -128,6 +128,30 @@ def build(force: bool = False) -> pd.DataFrame:
     return df
 
 
-def load_datacards(hydromet_only: bool = True) -> pd.DataFrame:
+def load_datacards(hydromet_only: bool = True, verified: bool = True) -> pd.DataFrame:
+    """Datacards, with `date_end` (a month-precision card spans its month) and researched date
+    corrections from src/data/event_dates.csv applied where they name a DesInventar card."""
     df = stratus.load_parquet_from_blob(OUT_BLOB, stage="dev")
-    return df[df.event_type.isin(FLOOD_TYPES)] if hydromet_only else df
+    if hydromet_only:
+        df = df[df.event_type.isin(FLOOD_TYPES)]
+    df = df.copy()
+    df["date_end"] = df.date.where(df.date_precision.eq("day"), df.date + pd.offsets.MonthEnd(0))
+    df["date_evidence"] = ""
+    if verified:
+        from src.datasources.impact import load_verified_dates
+
+        for _, c in load_verified_dates().iterrows():
+            if not (isinstance(c.source, str) and c.source.startswith("DesInventar")):
+                continue
+            m = pd.Series(True, index=df.index)
+            if pd.notna(c.match_start):
+                m &= df.date.dt.normalize() == c.match_start.normalize()
+            if c.districts:
+                m &= df.district.isin(c.districts)
+            if not m.any():
+                continue
+            df.loc[m, "date"] = c.start
+            df.loc[m, "date_end"] = c.end if pd.notna(c.end) else c.start
+            df.loc[m, "date_precision"] = c.precision if isinstance(c.precision, str) else "day"
+            df.loc[m, "date_evidence"] = c.evidence if isinstance(c.evidence, str) else ""
+    return df

@@ -293,7 +293,9 @@ def zone_events(z: str) -> pd.DataFrame:
     d.loc[d.affected >= IMPLAUSIBLE_AFFECTED, "affected"] = np.nan
     # month-precision cards (the export gives no day) span their whole month, so an activation
     # anywhere in that month can match them; day-precision cards are single days
-    d["end_"] = np.where(d.date_precision.eq("month"), d.date + pd.offsets.MonthEnd(0), d.date)
+    # the loader carries date_end (a month-precision card spans its month) and has already
+    # applied any researched date correction, so nothing is recomputed here
+    d["end_"] = d.date_end
     b = (
         d.groupby([d.date.dt.normalize().rename("start"), "end_"])
         .agg(affected=("affected", "sum"), deaths=("deaths", "sum"))
