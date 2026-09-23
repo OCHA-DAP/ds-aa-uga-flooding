@@ -234,6 +234,42 @@ via HDX (independent begin/end dates, good corroboration to 2010 — e.g. Pakwac
 Sironko/Kapchorwa 12-21 Aug 2006); GDACS (3 Dec 2019, 1-9 May 2020, 15 Aug 2007); and
 contemporaneous reporting researched per event.
 
+**What the research found** (three passes over contemporaneous reporting, Sep 2026):
+
+- *The big Katakwi numbers are report dates.* The 75,000-affected card of 16 Sep 2010 is dated
+  to the Chief Administrative Officer's letter (CR/1061/1), confirmed by a New Vision story
+  citing "the report of September 16"; ACT frames the event as waterlogging building since
+  April. Re-dated to Sep-Nov 2010. The Oct 2014 Katakwi card is the same pattern, single-source
+  and typed RAINS: flagged unverified.
+- *A 400-death record in the wrong month.* A DesInventar card placed ~400 deaths in Bududa in
+  February 2010. The raw record has day = 0 and names Nametsi, Kubewo and Namangasa and the
+  Bulucheke camp: it is the 1 March 2010 debris flow, mis-dated. DesInventar holds at least
+  eight overlapping entries for that one landslide (400/365/350/109/92/80/6 deaths), so its
+  death counts double-count.
+- *The 2007 floods are four different events.* EM-DAT and DFO carry one national envelope
+  (15 Aug - 31 Oct, DFO register 3170). Per sub-region: Teso from 23 Aug (first dated deaths)
+  to 6 Nov; Karamoja from about 21 Aug with peak impact 17-18 Sep; Elgon landslides dated
+  1 Aug to 12 Oct; West Nile month-precision September only - no source dates onset in
+  Adjumani, Moyo or Obongi.
+- *EM-DAT dates that are publication dates.* Its November 2008 event is dated 17 Nov, the date
+  of the Daily Monitor article; the floods ran from early November (Abim cut off on the 12th),
+  and in West Nile from late September. Its 49 deaths appear to conflate 2007's 47 with this
+  event's 2.
+- *April 2024's 77 deaths are May deaths*, counted by URCS as of 13 May; the April sub-events
+  are day-dated per district (Butaleja 3 Apr, Sironko 16 Apr, Bukedea 24 Apr, Mbale 26 Apr).
+- *2020 West Nile onset is month-precision.* "Started in April" (Pakwach) and "started in
+  June" (Obongi) are the only onset statements; the dated markers are 12 May, 9 Jul (ferry),
+  26-27 Oct (bridge) and 11-12 Nov (Obongi peak). Lake Albert itself peaked on 11 Dec 2020,
+  a month after the displacement peak - worth remembering for the Kyoga-rise leg.
+- *Date-only fixes, not impact fixes.* Several figures remain contested and are left as the
+  sources give them: 2020 Pakwach (100,000 per the district vs about 16,500 nationally per
+  FAO GIEWS), and the Elgon landslide tolls, which span 24-40 (2011), 18-450 (2012) and
+  20-31 (2024) across sources.
+
+**Still to do.** IOM's DTM workbooks on HDX carry day-precision event rows with district and
+sub-county; the repo loads a country-team workbook of month-long rounds. Wiring the HDX
+workbooks in directly would upgrade every 2022+ event from month to day precision.
+
 **How corrections are held.** `src/data/event_dates.csv`, applied by
 `impact.apply_verified_dates()`. A row can match an event by id, or by source and original
 start, and can name districts — so one national event (2007) carries the dates it actually had

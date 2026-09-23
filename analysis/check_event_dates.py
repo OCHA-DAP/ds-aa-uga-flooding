@@ -41,6 +41,8 @@ def main() -> None:
                 m &= ev.event_id.astype(str) == c.event_id
             if isinstance(c.source, str) and c.source:
                 m &= ev.source.astype(str).str.startswith(c.source)
+            if c.districts:
+                m &= ev.district.isin(c.districts)
             n, what = int(m.sum()), "event rows"
         label = str(c.event_id if isinstance(c.event_id, str) and c.event_id else c.source)
         print(
