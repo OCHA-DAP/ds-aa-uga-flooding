@@ -49,7 +49,6 @@ from trigger_draft import (
     match,
     season_bounds,
     season_label,
-    season_max,
     season_of,
     zone_events,
 )
@@ -70,14 +69,18 @@ PUBLIC_SPECS = [
         key="ifrc_teso",
         short="IFRC EAP",
         label=(
-            "GloFAS 5-year flood at a reporting point, 5-day lead (IFRC/URCS EAP2021UG01). Stand-in: the reanalysis at "
-            "G5196, the point in their Teso districts, reaching its 5-year level (the >1,000-household condition "
-            "cannot be backtested)"
+            "GloFAS 5-year flood at a reporting point, 5-day lead (IFRC/URCS EAP2021UG01). Reproduced on the GloFAS "
+            "reforecast at G5196, the point in their Teso districts: at least 60 % of members (the protocol's "
+            "operational bar) above the 5-year level on annual maxima within 5 days; 2003-2022 only. The "
+            ">1,000-household condition cannot be backtested"
         ),
         type="glofas_rp",
         lat=GLOFAS_PIXEL_LONLAT[1],
         lon=GLOFAS_PIXEL_LONLAT[0],
         rp=5,
+        forecast="g5196",
+        leads=(1, 5),
+        exceed_share=0.6,
     ),
     dict(
         zone="elgon",
@@ -134,8 +137,19 @@ def activation_days(spec: dict, d: Data) -> pd.Series:
     t = spec["type"]
     if t == "glofas_rp":
         q = d.glofas(spec["lat"], spec["lon"])
-        am = season_max(q)
+        # GloFAS return periods (and so the IFRC protocol's) are defined on ANNUAL maxima;
+        # seasonal maxima would understate the level
+        am = q.groupby(q.index.year).max()
         level = gumbel_level(spec["rp"], *gumbel_fit(am.loc[FIRST_SEASON:CAL_LAST]))
+        if spec.get("forecast"):
+            # the protocol's own form: share of reforecast members above the level within the
+            # lead window (the reforecast agrees with the reanalysis to within 1 % at these
+            # leads at G5196, so the reanalysis-fitted level is valid in model space)
+            from src.datasources.glofas import load_reforecast_point, reforecast_signal
+
+            rf = load_reforecast_point(spec["forecast"], spec["lat"], spec["lon"])
+            sig = reforecast_signal(rf, leads=spec["leads"], exceed_share=spec["exceed_share"])
+            return in_season(sig[sig.index <= "2022-12-31"]) >= level
         return in_season(q) >= level
     pcs = [d.adm[x] for x in spec["districts"]]
     if t == "rain_forecast":  # CHIRPS-GEFS 5-day accumulation, district mean or wettest pixel

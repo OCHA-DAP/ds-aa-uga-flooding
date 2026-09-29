@@ -210,3 +210,62 @@ def load_reanalysis_point(lat: float, lon: float, version: str = "version_4_0") 
     s = ds[var].sel({lat_name: snap(lat), lon_name: snap(lon)}, method="nearest").to_series()
     s.index = pd.to_datetime(s.index.get_level_values(-1) if s.index.nlevels > 1 else s.index)
     return s.rename("discharge")
+
+
+def load_reforecast_point(
+    station_key: str, lat: float, lon: float, bands=("", "_lead8_15")
+) -> pd.DataFrame:
+    """Long table of the point reforecast: issue_date, member (0 = control), lead_days, discharge.
+
+    Reads every monthly zip for each lead band once and caches the result as parquet under
+    data/glofas/processed/, since the raw files number in the hundreds. Delete the cache to
+    re-read after a download finishes.
+    """
+    cache = DATA_DIR / "processed" / f"reforecast_{station_key}.parquet"
+    if cache.exists():
+        return pd.read_parquet(cache)
+    frames = []
+    for band in bands:
+        raw_dir = DATA_DIR / "raw" / f"reforecast_{station_key}{band}"
+        for z in sorted(raw_dir.glob("*.zip")):
+            for f in _unwrap(z):
+                if f.suffix != ".nc":
+                    continue
+                ds = xr.open_dataset(f)
+                da = ds["dis24"].sel(latitude=snap(lat), longitude=snap(lon), method="nearest")
+                if "number" not in da.dims:
+                    da = da.expand_dims(number=[int(ds["number"].values.ravel()[0])])
+                df = da.to_dataframe(name="discharge").reset_index()
+                df["lead_days"] = (df.forecast_period / pd.Timedelta(days=1)).round().astype(int)
+                frames.append(
+                    df.rename(
+                        columns={"forecast_reference_time": "issue_date", "number": "member"}
+                    )[["issue_date", "member", "lead_days", "discharge"]]
+                )
+    out = (
+        pd.concat(frames, ignore_index=True)
+        .drop_duplicates(["issue_date", "member", "lead_days"])
+        .sort_values(["issue_date", "member", "lead_days"])
+        .reset_index(drop=True)
+    )
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    out.to_parquet(cache, index=False)
+    return out
+
+
+def reforecast_signal(rf: pd.DataFrame, leads=(3, 7), exceed_share: float = 0.6) -> pd.Series:
+    """Daily trigger signal from the reforecast, in the IFRC protocol's form.
+
+    For each issue date, each member's peak discharge over the lead window, then the member
+    value that `exceed_share` of the ensemble sits at or above (the 40th percentile for 0.6).
+    So "signal >= T" means exactly "at least 60 % of members forecast discharge above T in the
+    lead window". Each forecast then holds until the next is issued, giving a daily series
+    whose first crossing is always an issue date.
+    """
+    lo, hi = leads
+    x = rf[rf.lead_days.between(lo, hi)]
+    peak = x.groupby(["issue_date", "member"]).discharge.max()
+    sig = peak.groupby("issue_date").quantile(1 - exceed_share)
+    sig.index = pd.to_datetime(sig.index)
+    daily = sig.resample("D").ffill()
+    return daily.rename("reforecast_signal")

@@ -72,6 +72,10 @@ SEASON_MONTHS = (10, 11, 12)  # October to December: the window acted on this ye
 FIRST_SEASON = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 MIN_COVERAGE = 0.6  # a series' season counts when at least this share of its days has data
 RP_FLOOR = 3.0  # no zone activates more often than once in three seasons
+CAL_LAST_SEASON = 2024  # last season used for calibration, all zones
+TESO_SOURCE = "reforecast"  # or "reanalysis", the earlier stand-in
+TESO_LEADS = (3, 7)  # days: roughly the IFRC protocol's 5-day lead
+TESO_EXCEED_SHARE = 0.6  # share of ensemble members above threshold (IFRC's operational 60 %)
 LAKE_RISE_DAYS = 180
 MAJOR_DEATHS, MAJOR_AFFECTED = 5, 5000  # a major event, per event, zone share
 BIG_AFFECTED = (
@@ -151,6 +155,21 @@ def load(path: str) -> pd.DataFrame:
     return stratus.load_parquet_from_blob(f"{PROJECT_PREFIX}/{path}", stage="dev")
 
 
+def teso_series() -> pd.Series:
+    """Teso's trigger indicator. TESO_SOURCE picks the GloFAS reforecast (the operational form:
+    at least 60 % of members above the threshold within days 3-7) or the reanalysis (the earlier
+    stand-in, no forecast error). The reforecast runs March 2003 - November 2023."""
+    if TESO_SOURCE == "reanalysis":
+        return glofas_g5196()
+    from src.datasources.glofas import load_reforecast_point, reforecast_signal
+
+    rf = load_reforecast_point("g5196", GLOFAS_PIXEL_LONLAT[1], GLOFAS_PIXEL_LONLAT[0])
+    sig = reforecast_signal(rf, leads=TESO_LEADS, exceed_share=TESO_EXCEED_SHARE)
+    # the last issue is 25 Nov 2023, so OND 2023 has no December: a trigger could have
+    # activated unseen, so that season is "no data", not a quiet one
+    return sig[sig.index <= "2022-12-31"]
+
+
 def glofas_g5196() -> pd.Series:
     ds = xr.open_mfdataset(sorted(GLOFAS_DIR.glob("*.nc")), combine="by_coords")
     var = next(v for v in ds.data_vars if "dis" in v)
@@ -179,7 +198,7 @@ def zone_series() -> dict[str, dict[str, pd.Series]]:
     adm = load_adm2().set_index("ADM2_EN").ADM2_PCODE
     name_of = {v: k for k, v in adm.items()}
     zd = {z: list(ZONES[z].core) + list(ZONES[z].tier2) for z in ZONES}
-    series: dict[str, dict[str, pd.Series]] = {"teso_kyoga": {"GloFAS G5196": glofas_g5196()}}
+    series: dict[str, dict[str, pd.Series]] = {"teso_kyoga": {"GloFAS G5196": teso_series()}}
     series["elgon"] = {
         "zone-mean 5-day forecast": chirps_gefs_wide([adm[d] for d in zd["elgon"]]).mean(axis=1)
     }
@@ -547,8 +566,10 @@ def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     series = zone_series()
-    q = series["teso_kyoga"]["GloFAS G5196"]
-    last = min(season_of(q.index.max()) - (0 if q.index.max().month in (2,) else 1), 2024)
+    # The calibration window is fixed, not derived from any one zone's data: a zone whose
+    # indicator has a shorter record (the Teso reforecast ends in 2023) simply has fewer
+    # seasons with data, and must not shorten every other zone's calibration.
+    last = CAL_LAST_SEASON
     cal = list(range(FIRST_SEASON, last + 1))
     show = list(range(FIRST_SEASON, 2026))
     n = len(cal)

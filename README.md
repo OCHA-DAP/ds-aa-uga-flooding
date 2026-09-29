@@ -27,7 +27,7 @@ draft of all four triggers exists, calibrated and backtested on 2000–2025 (`/t
 
 | zone | draft trigger | return period | activations / caught / missed |
 |---|---|---|---|
-| Teso / Lake Kyoga | GloFAS G5196 discharge (reanalysis stand-in) | 1-in-17 (from 1-in-8.7) | 2 / 1 / 2 of 3 — catches Oct 2007 |
+| Teso / Lake Kyoga | GloFAS G5196 reforecast, ≥60 % of members above threshold within days 3–7 | 1-in-17 (from 1-in-8.7) | 2 / 1 / 2 of 3 — catches Oct 2007 |
 | Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | 1-in-5.5 | 5 / 1 / 4 of 5 — catches Nov 2024, eight days ahead |
 | Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | 1-in-9.9 (from 1-in-5.2) | 3 / 1 / 4 of 5 |
 | Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | 1-in-17 (from 1-in-5.2) | 2 / 1 / 4 of 5 — lake leg catches 2020 |
@@ -52,8 +52,10 @@ FloodScan backstop; Karamoja funding; agree spatial scale and rainfall product w
 DRC for their rain triggers; the country team's call on the Severity 3+ scope in Teso.
 
 **In flight.**
-- GloFAS reforecast for G5196 (`pipeline/download_glofas.py`, EWDS, slow queue; resumes from
-  what is on disk). When complete, replace the reanalysis stand-in for Teso.
+- GloFAS reforecast for G5196 is complete (2003-03 to 2023-11, both lead bands) and Teso now
+  runs on it. Finding: it agrees with the reanalysis to within 1 % at every lead in OND, and every
+  activation falls on 1 October with the river already high — no anticipatory lead in this
+  window. A rise-through-threshold variant catches at most one flood against 4-5 false alarms.
 - ERA5-Land soil moisture download stalled on CDS timeouts; the antecedent precipitation index
   (IMERG) is the proxy meanwhile.
 

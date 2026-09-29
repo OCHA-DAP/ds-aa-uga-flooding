@@ -181,9 +181,11 @@ def trigger_text(z: str, inp: Inputs) -> tuple[str, str]:
     t = inp.thr[inp.thr.zone == z].set_index("series")
     if z == "teso_kyoga":
         return (
-            f"GloFAS daily discharge at G5196 (Akokoro) reaches <strong>{t.threshold.iloc[0]:,.0f} m³/s</strong>, "
-            "in model space (the model runs about 1.7× wet, so this is not a gauged flow)",
-            "3–14 days once run on the forecast; <strong>none in this backtest</strong>, which uses the reanalysis",
+            f"at least 60 % of GloFAS reforecast members put the Akokoro at G5196 above "
+            f"<strong>{t.threshold.iloc[0]:,.0f} m\u00b3/s</strong> within days 3\u20137 (model space; the model runs "
+            "about 1.7\u00d7 wet, so this is not a gauged flow)",
+            "3\u20137 days nominally; <strong>none in practice</strong> \u2014 every activation falls on 1 October with "
+            "the river already above the threshold",
         )
     if z == "elgon":
         return (
@@ -569,15 +571,20 @@ def _zone_note(z: str, inp: Inputs) -> str:
     raised = f" \u2014 raised from {freq} to shed false alarms" if r.raised else ""
     if z == "teso_kyoga":
         return (
-            "Aligned with the IFRC/URCS early action protocol\u2019s instrument \u2014 GloFAS at a reporting point \u2014 "
-            "on the one point in the sub-region that passes both skill checks, as the country team asked. The "
-            "reanalysis stands in for the forecast until the reforecast download finishes, so this is an upper bound. "
-            f"At {rp}{raised} it activates in {act} of the {int(r.seasons_with_data)} windows and catches {caught}: "
-            "October 2007, the largest flood in the record, on the day. The other activation is October 2020, a "
-            f"season with nothing recorded, and it misses {missed} of {int(r.major_seasons)} major windows. Teso\u2019s "
-            "floods peak in August and September, so the October\u2013December window sees less than a third of its "
-            "recorded impact, and the model\u2019s own peak is in August \u2014 before the window opens."
-            + teso_ifrc_sentence(inp)
+            "Built in the IFRC/URCS protocol\u2019s own form, as the country team asked: on the GloFAS reforecast "
+            "(2003\u20132022, 11 members, issued about four times a week), at least 60 % of members above a "
+            "model-space threshold within days 3\u20137. At G5196 the reforecast agrees with the reanalysis to "
+            "within 1 % at every lead in October\u2013December, so thresholds fitted on the reanalysis hold. "
+            f"At {rp}{raised} it activates in {act} of the {int(r.seasons_with_data)} windows. <strong>Every "
+            "activation falls on 1 October</strong>, the day the window opens, with the Akokoro already above the "
+            "threshold from its August\u2013September peak \u2014 in the forecast and the reanalysis alike, so the "
+            "forecast buys no lead at all. The catches are floods already under way (2007, 39 days in) or an edge "
+            "of the matching tolerance (2012, one day after the event\u2019s recorded end); October 2014, October "
+            "2021 and the 2010 season are missed. Requiring the river to rise through the threshold after the "
+            "window opens does not rescue it: at any threshold it catches at most one flood, at 1\u20133 days, "
+            "against four or five false alarms. <strong>At this point and in this window, GloFAS has no "
+            "anticipatory skill for Teso.</strong> Teso\u2019s floods peak in August and September, before the "
+            "window, and the model\u2019s own peak is in August." + teso_ifrc_sentence(inp)
         )
     if z == "elgon":
         return (
@@ -701,7 +708,7 @@ def page(inp: Inputs) -> str:
         "<p class='callout'><strong>Restricted.</strong> This page includes material from partner plans that are not "
         "published (FAO’s draft Mt Elgon plan, the CRS/Caritas Tororo protocol, DRC’s Karamoja plan). Please "
         f"do not forward it outside the team. <strong>Status:</strong> first draft, calibrated on {cal}; Teso runs on "
-        "the GloFAS reanalysis until the reforecast is complete. Nothing here is endorsed.</p>",
+        "the GloFAS reforecast (2003\u20132022). Nothing here is endorsed.</p>",
         "<h2>In brief</h2>",
         key_points(inp),
         "<h2>The four triggers</h2>",
@@ -824,9 +831,10 @@ def page(inp: Inputs) -> str:
         "<ul>"
         "<li><strong>The honest headline:</strong> matched to dated floods, these triggers catch few major events. "
         "Any of them would need the observational backstop behind it before it could be proposed as a mechanism.</li>"
-        "<li><strong>Teso:</strong> run on the GloFAS reforecast (download nearly complete), and decide whether a "
-        "river already above the threshold on 1 October counts as an activation. Then the third opinion on the "
-        "post-2013 divergence \u2014 a DWRM gauge or Google Flood Hub.</li>"
+        "<li><strong>Teso:</strong> on the reforecast, GloFAS at G5196 has no anticipatory skill in an "
+        "October\u2013December window \u2014 it activates only on 1 October with the river already high. Either "
+        "Teso becomes observation-led in this window (FloodScan works well there), or the window question below is "
+        "reopened for it. Google Flood Hub, or a DWRM gauge, is still the third opinion worth having.</li>"
         "<li><strong>Longer windows:</strong> test a 15- or 30-day accumulation for prolonged seasons such as "
         "2007.</li>"
         "<li><strong>Staging:</strong> an all-in envelope is released by the first activation. A readiness/action "

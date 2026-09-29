@@ -34,6 +34,13 @@ report per-trigger and combined return periods.
   between legs. Existing triggers are reproduced in `analysis/existing_triggers.py` — published
   ones in `PUBLIC_SPECS`, unpublished ones in the gitignored config. `pipeline/encrypt.py` is the
   only path to a restricted page.
+- Teso on the GloFAS reforecast (29 Sep 2026): at G5196 the reforecast matches the reanalysis
+  within 1 % at leads 1-15 in OND (slow catchment: the forecast mostly persists the current
+  state), so reanalysis-fitted thresholds are valid in model space. But in the Oct-Dec window
+  every activation is on 1 Oct with the river already high from Aug-Sep: zero lead gained over
+  the reanalysis. Rise-through variant: <=1 catch vs 4-5 false alarms. Treat Teso OND as having
+  no GloFAS anticipatory skill unless the window changes. GloFAS/IFRC return periods are on
+  ANNUAL maxima — the IFRC stand-ins use those.
 - Severity 3+ scope decision on Teso/Kyoga districts is the working group's, not ours.
 - GloFAS G5196 vs FloodScan in Teso is NOT stationary (found 4 Sep 2026 once the reanalysis
   reached 2024): Katakwi anomaly corr by era 0.25 / 0.83 / 0.57 / 0.15 / 0.06 for 1999-2005,
