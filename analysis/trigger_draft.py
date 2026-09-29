@@ -523,6 +523,50 @@ def monthly_profile(events: dict, series: dict, thr_by_zone: dict, years) -> pd.
     return pd.DataFrame(rows)
 
 
+def timing_grid(
+    z: str, events: pd.DataFrame, series: dict, thr: dict, tab: pd.DataFrame, years
+) -> pd.DataFrame:
+    """One row per (year, month) for the timing grid on the page.
+
+    affected / deaths / n_events: recorded events STARTING that month (the zone's share);
+    ongoing: a longer event started earlier and was still under way;
+    activated: our trigger's activation (inside the Oct-Dec window, first of the season);
+    crossing: the indicator crossed its threshold that month outside the window, i.e. when
+    the trigger would have activated had the window allowed it.
+    """
+    idx = pd.DatetimeIndex(sorted(set().union(*(set(sr.index) for sr in series.values()))))
+    hit = pd.Series(False, index=idx)
+    for key, sr in series.items():
+        hit |= (sr >= thr[key]).reindex(idx, fill_value=False)
+    starts = hit[hit & ~hit.shift(1, fill_value=False)].index
+    acts = {pd.Timestamp(d) for d in tab.first_date.dropna() if isinstance(d, str) and d}
+    rows = []
+    for y in years:
+        for m in range(1, 13):
+            lo = pd.Timestamp(y, m, 1)
+            hi = lo + pd.offsets.MonthEnd(0)
+            st = events[(events.start >= lo) & (events.start <= hi)]
+            on = events[(events.start < lo) & (events.end >= lo)]
+            rows.append(
+                dict(
+                    zone=z,
+                    year=y,
+                    month=m,
+                    affected=float(st.affected.sum()),
+                    deaths=float(st.deaths.sum()),
+                    n_events=len(st),
+                    major=bool(st.major.any()),
+                    ongoing=bool(len(on)),
+                    ongoing_major=bool(on.major.any()) if len(on) else False,
+                    activated=any(lo <= a <= hi for a in acts),
+                    crossing=bool(((starts >= lo) & (starts <= hi)).any())
+                    and m not in SEASON_MONTHS,
+                    data=bool(((idx >= lo) & (idx <= hi)).any()),
+                )
+            )
+    return pd.DataFrame(rows)
+
+
 def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float, dict]:
     """Raise the threshold as far as it can go without losing a big event it already catches.
 
@@ -626,6 +670,20 @@ def main() -> None:
     s.to_csv(OUT / "summary.csv", index=False)
     pd.DataFrame(thr_rows).to_csv(OUT / "thresholds.csv", index=False)
     pd.DataFrame(sens).to_csv(OUT / "rp_sensitivity.csv", index=False)
+    pd.concat(
+        [
+            timing_grid(
+                z,
+                events[z],
+                series[z],
+                thr_by_zone[z],
+                pd.read_csv(OUT / f"{z}.csv"),
+                range(FIRST_SEASON, 2026),
+            )
+            for z in ZONES
+        ],
+        ignore_index=True,
+    ).to_csv(OUT / "timing_grid.csv", index=False)
     monthly_profile(events, series, thr_by_zone, range(FIRST_SEASON, 2026)).to_csv(
         OUT / "monthly_profile.csv", index=False
     )

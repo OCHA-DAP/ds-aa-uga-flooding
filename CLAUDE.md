@@ -41,6 +41,13 @@ report per-trigger and combined return periods.
   the reanalysis. Rise-through variant: <=1 catch vs 4-5 false alarms. Treat Teso OND as having
   no GloFAS anticipatory skill unless the window changes. GloFAS/IFRC return periods are on
   ANNUAL maxima — the IFRC stand-ins use those.
+- Google Flood Hub has NO gauges in Uganda (API: regionCode UG and a box around the country
+  both return 0; KE 3, SO 7, SS 4 — checked 29 Sep 2026). No third opinion from Google.
+- Teso Oct-Dec floods (analysis/teso_ond_drivers.py): rain (forecast, observed, antecedent) has
+  no skill (AUC ~0.5); the landscape state on 1 Oct does (FloodScan extent 0.70/0.76, GloFAS
+  level 0.66/0.80). October floods are the tail of a wet Aug-Sep, not a separate pluvial
+  mechanism despite being typed RAINS. A decide-on-1-October trigger at ~1-in-3.7 catches 2 of
+  the 3 major windows (2007, 2021) but with 0-1 days of lead; 2014 is caught by nothing.
 - Severity 3+ scope decision on Teso/Kyoga districts is the working group's, not ours.
 - GloFAS G5196 vs FloodScan in Teso is NOT stationary (found 4 Sep 2026 once the reanalysis
   reached 2024): Katakwi anomaly corr by era 0.25 / 0.83 / 0.57 / 0.15 / 0.06 for 1999-2005,

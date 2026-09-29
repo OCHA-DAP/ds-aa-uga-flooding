@@ -295,6 +295,148 @@ def months_table(inp: Inputs) -> str:
     return f"<div class='tw trig-months'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
 
+MONTH_NAMES = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+]
+
+
+def timing_grids(inp: Inputs) -> str:
+    """Per zone, a year x month grid of when floods happened and when the trigger activated."""
+    path = TRIG / "timing_grid.csv"
+    if not path.exists():
+        return ""
+    d = pd.read_csv(path)
+    top = max(float(d.affected.max()), 1.0)
+    out = []
+    for z in ZONE_ORDER:
+        g = d[d.zone == z].set_index(["year", "month"])
+        cols = "<col class='tg-y'>" + "<col class='tg-m'>" * 12
+        head = (
+            "<tr><th></th>"
+            + "".join(
+                f"<th class='{'tg-win' if m in WINDOW_MONTHS else ''}'>{MONTHS[m - 1][0]}</th>"
+                for m in range(1, 13)
+            )
+            + "</tr>"
+        )
+        rows = []
+        for y in sorted({i[0] for i in g.index}, reverse=True):
+            cells = []
+            for m in range(1, 13):
+                r = g.loc[(y, m)]
+                cls = ["tg-c"]
+                if m in WINDOW_MONTHS:
+                    cls.append("tg-win")
+                style = ""
+                if r.affected > 0 or r.deaths > 0:
+                    t = 0.12 + 0.88 * math.log10(max(r.affected, 1) + 1) / math.log10(top + 1)
+                    if r.major:
+                        t = max(t, 0.45)
+                    style = f"background:{ramp(t)}"
+                elif r.ongoing:
+                    cls.append("tg-on-major" if r.ongoing_major else "tg-on")
+                mark = ""
+                if r.activated:
+                    mark = f"<span class='tg-act' style='background:{bp.ZONE_COL[z]}'></span>"
+                elif r.crossing:
+                    mark = "<span class='tg-x'></span>"
+                tip = [f"{MONTH_NAMES[m - 1]} {y}"]
+                if r.n_events:
+                    tip.append(
+                        f"{int(r.n_events)} event(s) starting: {r.affected:,.0f} affected, {r.deaths:,.0f} deaths"
+                    )
+                if r.ongoing:
+                    tip.append("an earlier flood still under way")
+                if r.activated:
+                    tip.append("trigger activated")
+                if r.crossing:
+                    tip.append("indicator over threshold (outside the window)")
+                cells.append(
+                    f"<td class='{' '.join(cls)}' style='{style}' title='{bp.e('; '.join(tip))}'>{mark}</td>"
+                )
+            rows.append(f"<tr><th class='tg-yr'>{y}</th>{''.join(cells)}</tr>")
+        out.append(
+            f"<h3><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{bp.e(ZONES[z].label.split(' (')[0])}</h3>"
+            f"<div class='tw'><table class='tgrid'><colgroup>{cols}</colgroup><thead>{head}</thead>"
+            f"<tbody>{''.join(rows)}</tbody></table></div>"
+        )
+    legend = (
+        "<div class='tg-legend'>"
+        f"<span><i class='tg-sw' style='background:{ramp(0.2)}'></i><i class='tg-sw' style='background:{ramp(0.55)}'></i>"
+        f"<i class='tg-sw' style='background:{ramp(0.95)}'></i> flood starting that month (darker = more people "
+        "affected)</span>"
+        "<span><i class='tg-sw tg-on-major'></i> a major flood still under way</span>"
+        "<span><i class='tg-sw tg-on'></i> a smaller flood still under way</span>"
+        "<span><span class='tg-act' style='background:#555'></span> trigger activated (Oct\u2013Dec only)</span>"
+        "<span><span class='tg-x'></span> indicator over its threshold outside the window</span>"
+        "<span><i class='tg-sw tg-winsw'></i> the Oct\u2013Dec window</span>"
+        "</div>"
+    )
+    return legend + "".join(out)
+
+
+def teso_exploration() -> str:
+    """Side exploration: what drives Teso's Oct-Dec floods, and a decide-on-1-October test."""
+    dp, tp = TRIG / "teso_ond_drivers.csv", TRIG / "teso_oct1_trigger.csv"
+    if not (dp.exists() and tp.exists()):
+        return ""
+    d = pd.read_csv(dp)
+    rows = "".join(
+        f"<tr><td>{bp.e(r.indicator)}</td><td class='num'>{r.auc_any_flood:.2f}</td>"
+        f"<td class='num'>{r.auc_major:.2f}</td></tr>"
+        for r in d.itertuples()
+    )
+    t1 = (
+        "<div class='tw trig-cmp'><table><thead><tr><th>Indicator (0.5 = no skill)</th>"
+        "<th>Any Oct\u2013Dec flood</th><th>Major only</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+    )
+    t = pd.read_csv(tp)
+    rows2 = "".join(
+        f"<tr><td>{bp.e(r.indicator)}</td><td class='num'>{rp_txt(r.rp)}</td>"
+        f"<td class='num'>{r.flood_windows_caught} of {r.flood_windows}</td>"
+        f"<td class='num'>{r.majors_caught} of {r.majors}</td><td class='num'>{r.false_alarms}</td>"
+        f"<td class='src'>{bp.e(r.seasons)}</td></tr>"
+        for r in t.itertuples()
+    )
+    t2 = (
+        "<div class='tw trig-cmp'><table><thead><tr><th>Decide on 1 October from</th><th>Rarity</th>"
+        "<th>Flood windows caught</th><th>Major caught</th><th>False alarms</th><th>Activates in</th></tr></thead>"
+        f"<tbody>{rows2}</tbody></table></div>"
+    )
+    return (
+        "<h3>Side exploration: what drives Teso\u2019s October floods?</h3>"
+        "<p>The October\u2013December flood records in the Teso zone are mostly typed <em>rains</em> or "
+        "<em>rainstorm</em> rather than riverine flooding, in the flat Katakwi and Amuria plains, which suggests "
+        "pluvial waterlogging with a different driver from the August\u2013September river peak. The data do not "
+        "support that. Scoring candidate indicators on how well they separate the seven windows with a recorded "
+        "Oct\u2013Dec flood start (three of them major) from the rest, rainfall has no skill at all \u2014 "
+        "forecast, observed or antecedent \u2014 while the state of the landscape when the window opens does: how "
+        "much of Teso FloodScan shows flooded, and how high the Akokoro is, on 1 October. October floods are mostly "
+        "the tail of a wet August\u2013September, not a new rain-driven event. With 25 windows these scores are "
+        "noisy; differences under about 0.1 are ties.</p>"
+        + t1
+        + "<p>That suggests deciding on 1 October from the state at window open. It does better than the level "
+        "trigger drafted above \u2014 which is the same GloFAS signal set higher \u2014 catching two of the three "
+        "major October windows (2007 and 2021) at about 1-in-4. But it is early action on an already-primed "
+        "landscape rather than anticipation: the floods it catches are recorded as starting on 1\u20132 October, "
+        "so the lead is days at best. The largest October event, 2014 (66,573 affected, single-source), is caught "
+        "by nothing: the land was not wet on 1 October, and October rain did not stand out either.</p>"
+        + t2
+    )
+
+
 def window_table(inp: Inputs) -> str:
     """Catches against matching window, beside what random timing would score."""
     path = TRIG / "window_sensitivity.csv"
@@ -730,6 +872,11 @@ def page(inp: Inputs) -> str:
         "forecasts crest in April in Karamoja and Adjumani, and Teso\u2019s GloFAS in August. Only Elgon\u2019s peak "
         "sits inside the window \u2014 the same thing as the early activations noticed in the last draft: the "
         "signal arrives before the window opens.</p>",
+        "<h2>Timing, year by month</h2>",
+        "<p>When floods happened in each zone and when its trigger activated, month by month. Hover a cell for the "
+        "detail. The hollow dots are the point: they show the indicator crossing its threshold in months the "
+        "October\u2013December window cannot act on.</p>",
+        timing_grids(inp),
         "<h2>How each zone\u2019s return period is set</h2>",
         "<p>Each zone has its own envelope and triggers on its own, so there is no shared budget to divide. A zone\u2019s "
         "return period is set to <strong>how often that zone has a major-impact season</strong>, so the trigger "
@@ -779,6 +926,8 @@ def page(inp: Inputs) -> str:
                 existing_notes(cols),
             ]
         parts.append(zone_table(z, inp, cols))
+        if z == "teso_kyoga":
+            parts.append(teso_exploration())
     parts += [
         "<h2>Reading the tables</h2>",
         "<ul>"
