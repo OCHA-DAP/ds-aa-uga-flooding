@@ -44,7 +44,9 @@ INK, INK2, MUTED = "#0b0b0b", "#52514e", "#8a8984"
 # CERF rapid-response allocations for floods/landslides in Uganda (CERF Allocations dataset, HDX),
 # keyed on the year of the flood event they responded to: USD 4.8 M in Oct 2007 (Teso/northern
 # floods) and USD 3.95 M in Jan 2020 (Nov-Dec 2019 Rwenzori/Elgon floods and landslides).
-CERF_YEARS = {2007: "CERF $4.8M Oct 2007", 2019: "CERF $4.0M Jan 2020"}
+# amounts from the CERF API (sum of project approvals); per-zone attribution is in
+# src/data/cerf_allocations.csv
+CERF_YEARS = {2007: "CERF $6.0M Oct 2007", 2019: "CERF $4.0M Jan 2020"}
 ONI_ELNINO, DMI_POSITIVE = (
     0.5,
     0.4,
