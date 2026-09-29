@@ -1422,8 +1422,8 @@ def page(inp: Inputs) -> str:
         "<li><strong>Adjumani:</strong> the lake leg gives months of warning, so a window opening on 1 October "
         "truncates it; consider reading Lake Albert directly and allowing an earlier readiness decision.</li>"
         "<li><strong>Return periods:</strong> frequency-matching with a 1-in-3 floor is a judgement; the sensitivity "
-        "table shows the trade-off.</li>"
-        "</ul>",
+        "table shows the trade-off.</li>" + inp.ptext.get("next_step", "") + "</ul>",
+        # partner-specific next steps come from the gitignored config, never this source
         "<h2>Reproducing this page</h2>",
         "<p>In <code>OCHA-DAP/ds-aa-uga-flooding</code>, with the partner config in place (see the README):</p>"
         "<pre>uv run python analysis/ifrc_reproduction.py     # needs the official RL5 map in data/glofas/thresholds/\n"

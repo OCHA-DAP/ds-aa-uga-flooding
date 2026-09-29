@@ -105,6 +105,10 @@ EXTERNAL: dict[str, ExternalFramework] = {
                 "(activated May 2026) with multi-hazard bulletins — no flood trigger; not drawn on the flood map."
             ),
             "Rainfall thresholds are in mm/day within a 7-day forecast; the forecast product is not named in the plan summary.",
+            (
+                "A joint plan funded by the Uganda Humanitarian Fund (WFP, FAO, URCS, ACF) covers the same four districts "
+                "for October-December 2026 (draft, Sep 2026; details on the restricted partner page)."
+            ),
         ),
     ),
     "crs_elgon": ExternalFramework(
