@@ -39,7 +39,7 @@ ROOT = Path(__file__).resolve().parent.parent
 PAGES, OUT = ROOT / "pages", ROOT / "outputs"
 TODAY = date.today().isoformat()
 
-ASSET_VERSION = "30"  # bump when assets/*.css change so browsers refetch
+ASSET_VERSION = "31"  # bump when assets/*.css change so browsers refetch
 
 HEAD = """<!DOCTYPE html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
@@ -89,7 +89,7 @@ ZONE_STATUS = [
         "teso_kyoga",
         "tier 1",
         "Riverine — Akokoro river (Katakwi, Amuria, Kapelebyong)",
-        "GloFAS G5196 return-period exceedance, 3–14 d lead (IFRC EAP form)",
+        "the IFRC/URCS EAP trigger as the IBF portal runs it (GloFAS 5-yr, \u226560 % of members, \u22645 d)",
         "good",
         "yes",
         "all 3 districts usable; 79 % of events reach the district's top fifth, against 42 % of arbitrary windows. Rainfall OR-leg adds nothing (slow riverine)",
@@ -522,10 +522,11 @@ HARMONISATION = [
         "Teso / Lake Kyoga",
         "teso_kyoga",
         None,
-        "GloFAS G5196 return-period exceedance, 3\u201314 d",
-        "IFRC covers four of our six districts with the same instrument we propose. Agree one reporting point and one "
-        "threshold: Akokoro is the only defensible point in the sub-region, and thresholds have to be set in model "
-        "space. Nobody else operates here.",
+        "the IFRC/URCS EAP trigger, adopted as it runs",
+        "Aligned by adopting IFRC\u2019s trigger as the IBF portal computes it. It is not read at one reporting point: "
+        "each district is judged at its largest river cell \u2014 the Akokoro for Amuria and Kapelebyong, the Lake "
+        "Bisina\u2013Awoja channel for Katakwi, Soroti and Ngora \u2014 and any triggered sub-county triggers its "
+        "district. Nobody else operates here.",
     ),
     (
         "Mount Elgon \u2014 slopes",

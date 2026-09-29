@@ -105,6 +105,15 @@ class Inputs:
         )
         self.top_aff = max(float(t.affected.max()) for t in self.tabs.values())
         self.top_d = max(float(t.deaths.max()) for t in self.tabs.values())
+        # side analyses: IFRC reproduction, FloodScan fallback, Karamoja and Adjumani options
+        opt = lambda f: pd.read_csv(TRIG / f) if (TRIG / f).exists() else None
+        self.ifrc_units = opt("ifrc_units.csv")
+        self.ifrc_2023 = opt("ifrc_2023_check.csv")
+        self.fallback = opt("fallback_summary.csv")
+        self.kar_choice = opt("karamoja_indicator_choice.csv")
+        self.kar_variants = opt("karamoja_variants.csv")
+        self.adj_options = opt("adjumani_options.csv")
+        self.adj_grid = opt("adjumani_compound_grid.csv")
         # narrative about unpublished partner triggers: gitignored config, never this source
         self.ptext = load_private().get("trigger_page_text", {})
 
@@ -179,6 +188,14 @@ def rates(act: pd.Series, dat: pd.Series, caught: pd.Series, tab: pd.DataFrame) 
 def trigger_text(z: str, inp: Inputs) -> tuple[str, str]:
     """Plain description of the trigger and its lead time."""
     t = inp.thr[inp.thr.zone == z].set_index("series")
+    if z == "teso_kyoga" and "IFRC portal" in t.index:
+        return (
+            "the <strong>IFRC/URCS trigger</strong> shows any Teso district triggered on the IBF portal: at least "
+            "60 % of GloFAS members above the official <strong>5-year</strong> flow at a lead of up to 5 days, each "
+            "district, county and sub-county judged at its largest river cell",
+            "up to 5 days nominally; about <strong>none in practice</strong> in this window \u2014 the river is "
+            "usually already high when it opens",
+        )
     if z == "teso_kyoga":
         return (
             f"at least 60 % of GloFAS reforecast members put the Akokoro at G5196 above "
@@ -222,6 +239,11 @@ def summary_table(inp: Inputs) -> str:
             f"<span class='fn'>{rp_txt(r.major_rp)}</span></td>"
             f"<td class='num'><strong>{rp_txt(r.design_rp)}</strong>"
             + (f"<span class='fn'>raised from {rp_txt(r.frequency_rp)}</span>" if r.raised else "")
+            + (
+                "<span class='fn'>what the IFRC protocol gives; not calibrated</span>"
+                if r.get("fixed", False)
+                else ""
+            )
             + "</td>"
             f"<td class='num'>{int(r.activations)}<span class='fn'>{bp.e(r.activated_seasons)}</span></td>"
             f"<td class='num'>{int(r.caught)}</td><td class='num'>{int(r.false_alarms)}</td>"
@@ -578,9 +600,9 @@ def overview_table(inp: Inputs, years: list[int]) -> str:
     return f"<div class='tw trig-over'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
 
-def compare_table(z: str, tab: pd.DataFrame, cols) -> str:
+def compare_table(z: str, tab: pd.DataFrame, cols, own: str = "Our draft") -> str:
     """Our draft and each existing trigger over the same seasons, against the same events."""
-    items = [("Our draft", tab.activated, tab.data, tab.caught, bp.ZONE_COL[z])]
+    items = [(own, tab.activated, tab.data, tab.caught, bp.ZONE_COL[z])]
     items += [(short, h.activated, h.data, h.caught, EXT_COL) for short, _, h in cols]
     rows = []
     for name, act, dat, caught, col in items:
@@ -633,7 +655,7 @@ def zone_table(z: str, inp: Inputs, cols=()) -> str:
             via = r.via if isinstance(r.via, str) else ""
             via = (
                 ""
-                if via in ("GloFAS G5196", "zone-mean 5-day forecast")
+                if via in ("GloFAS G5196", "IFRC portal", "zone-mean 5-day forecast")
                 else f" \u00b7 {bp.e(via)}"
             )
             if r.caught:
@@ -652,7 +674,13 @@ def zone_table(z: str, inp: Inputs, cols=()) -> str:
             )
         else:
             act = "<td></td>"
-        if pd.notna(r.peak_rp) and r.data:
+        if r.get("via", "") == "IFRC portal" or (
+            z == "teso_kyoga" and inp.s.loc[z].get("fixed", False)
+        ):
+            # a protocol trigger: show how far the river got relative to its own bar
+            pv = r.get("peak_value", float("nan"))
+            peak = f"{pv:.2f}× the 5-yr flow" if pd.notna(pv) and r.data else ""
+        elif pd.notna(r.peak_rp) and r.data:
             peak = rp_txt(r.peak_rp) if r.peak_rp >= 2 else "below 1-in-2"
             if isinstance(r.peak_where, str) and z in ("karamoja", "adjumani"):
                 peak += f"<span class='fn'>{bp.e(r.peak_where)}</span>"
@@ -671,12 +699,303 @@ def zone_table(z: str, inp: Inputs, cols=()) -> str:
             f"<td class='src'>{bp.e(r.cerf) if isinstance(r.cerf, str) else ''}</td></tr>"
         )
     head = (
-        "<tr><th>Season</th><th>Our draft</th><th>Season\u2019s peak</th>"
+        f"<tr><th>Season</th><th>{'IFRC trigger (Teso)' if z == 'teso_kyoga' and inp.s.loc[z].get('fixed', False) else 'Our draft'}</th>"
+        "<th>Season\u2019s peak</th>"
         + "".join(f"<th>{bp.e(short)}</th>" for short, _, _ in cols)
         + "<th>People affected</th><th>Deaths</th><th>Events recorded</th><th>Impact sources</th>"
         "<th>CERF</th></tr>"
     )
     return f"<div class='tw trig-zone'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+
+
+# --- side analyses -------------------------------------------------------------------------
+
+# EAP2021UG01 trigger statements, verbatim. Approved EAP summary (IFRC, 27 May 2021) and the
+# EAP activation document for operation MDRUG048 (IFRC, 15 Nov 2023). Both are published by IFRC.
+IFRC_2021 = (
+    "URCS will activate this EAP when GloFAS issues a forecast of at least 70% probability of a 5-year "
+    "return period flood occurring in high priority flood prone districts, and 10 year return period in "
+    "lower priority flood prone districts, which will be anticipated to affect more than 1,000hh. The EAP "
+    "will be triggered with a lead time of 5 days and in locations where the FAR is not more than 0.5."
+)
+IFRC_2023 = (
+    "URCS will activate this EAP when GloFAS issues a forecast of at least 60% probability (based on the "
+    "different ensemble runs) of a 5-year return period flood occurring in flood prone districts, which will "
+    "be anticipated to affect more than 1,000hh. The EAP will be triggered with a lead time of 5 days and a "
+    "FAR of not more than 0.5."
+)
+IFRC_HIGH_RISK = (
+    "Kasese, Katakwi, Amuria, Kampala, Butaleja, Sironko, Bududa, Manafwa, Kumi, Ntoroko, Bulambuli, Moyo, "
+    "Nabilatuk and Ngora"
+)
+
+
+def img_uri(path: Path) -> str:
+    import base64
+
+    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
+
+
+def zone_map(z: str) -> str:
+    """The per-zone map (pipeline/zone_trigger_maps.py), embedded so the encrypted page is whole.
+    The Elgon map can name unpublished partner triggers: it only ever goes into this page."""
+    path = TRIG / f"map_{z}.png"
+    if not path.exists():
+        return ""
+    return (
+        f"<figure><img src='{img_uri(path)}' alt='Where the {SHORT[z]} trigger is measured'>"
+        "<figcaption class='fn'>Where the trigger is measured: the zone, the cells, points or areas each "
+        "indicator is read at, and the partner points nearby.</figcaption></figure>"
+    )
+
+
+def ifrc_section(inp: Inputs) -> str:
+    """The IFRC/URCS trigger word for word, what the portal computes, and our check of both."""
+    u = inp.ifrc_units
+    rows = ""
+    if u is not None:
+        teso = list(ZONES["teso_kyoga"].all_districts)
+        elg = ["Butaleja", "Sironko", "Bududa", "Manafwa", "Bulambuli", "Kumi"]
+        d2 = u[(u.level == 2) & u.district.isin(teso + elg)].copy()
+        d2["zone"] = d2.district.map(lambda d: "Teso" if d in teso else "Elgon")
+        d2["order"] = d2.district.map(lambda d: (teso + elg).index(d))
+        river = {
+            "Amuria": "Akokoro, next cell downstream of G5196",
+            "Kapelebyong": "Akokoro, upstream of G5196",
+            "Katakwi": "Lake Bisina–Awoja channel",
+            "Soroti": "Lake Bisina–Awoja channel",
+            "Ngora": "Awoja, above Lake Kyoga",
+            "Serere": "Lake Kyoga",
+            "Kumi": "Lake Bisina–Awoja channel",
+            "Butaleja": "Mpologoma",
+            "Manafwa": "Manafwa",
+        }
+        for r in d2.sort_values("order").itertuples():
+            rows += (
+                f"<tr><td>{r.zone}</td><td>{bp.e(r.district)}</td><td class='num'>{r.thr_lat:.3f}°N "
+                f"{r.thr_lon:.3f}°E</td><td class='num'>{r.threshold:,.0f}</td>"
+                f"<td class='num'>{r.mean_flow_thr_cell:,.0f}</td><td>{bp.e(river.get(r.district, ''))}</td></tr>"
+            )
+    cells = (
+        "<div class='tw trig-cmp'><table><thead><tr><th>Zone</th><th>District</th><th>Read at (cell centre)</th>"
+        "<th>Official 5-yr flow, m³/s</th><th>Mean flow there, m³/s</th><th>River</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+        "<p class='fn'>The district-level cell only. Each county and sub-county is judged at its own largest "
+        "cell too, and triggers the district if it exceeds — so smaller rivers inside a district count. "
+        "Because cells touching the boundary are included, a district’s cell can sit just over the line: "
+        "Katakwi’s is on the Soroti side. Flows are the model’s, not gauged.</p>"
+        if rows
+        else ""
+    )
+    chk = inp.ifrc_2023
+    check = ""
+    if chk is not None:
+        chk = chk.assign(first_day=pd.to_datetime(chk.first_day))
+        on_list = chk[chk.portal_2023]
+        by22 = int((on_list.first_day <= "2023-11-22").sum())
+        by30 = int(on_list.exceeds_15_30_nov.sum())
+        missing = ", ".join(on_list[~on_list.exceeds_15_30_nov].district)
+        check = (
+            f"<li><strong>Checked against the portal itself.</strong> On 15 November 2023 the portal triggered "
+            f"the EAP and listed {len(on_list)} potentially exposed districts. The reproduction has {by22} of them "
+            f"over the 5-year flow within that forecast’s 8 days (15–22 November) and {by30} by the "
+            f"end of the month; it misses only {missing}. It also has other districts over the level — the "
+            "Elgon slope districts among them — which is expected: the notification lists districts with "
+            "exposed population on the flood maps, in order of it, not every triggered area. None of the 16 is in "
+            "Teso, and the reproduction has Teso quiet until Katakwi crosses on 22 November, the last day of "
+            "that forecast.</li>"
+        )
+    return (
+        "<h3>The IFRC/URCS trigger, word for word</h3>"
+        "<p>The approved Early Action Protocol (EAP2021UG01, approved 27 May 2021; IFRC EAP summary):</p>"
+        f"<blockquote class='wording'>“{IFRC_2021}”</blockquote>"
+        "<p>As stated when it was activated (operation MDRUG048, trigger notification 15 November 2023; IFRC EAP "
+        "activation document):</p>"
+        f"<blockquote class='wording'>“{IFRC_2023}”</blockquote>"
+        f"<p>The EAP names 14 high-risk districts: {IFRC_HIGH_RISK}. Four are in Teso (Katakwi, Amuria, Ngora, "
+        "and Kumi, which this analysis places in the Elgon lowlands), five on Elgon, plus Moyo on the Albert Nile "
+        "and Nabilatuk in Karamoja.</p>"
+        "<p><strong>What the portal computes.</strong> The 510 IBF river-flood pipeline that raises the "
+        "notification (<code>rodekruis/IBF-river-flood-pipeline</code>, Uganda settings, read September 2026):</p>"
+        "<ul>"
+        "<li>admin levels 2, 3 and 4 — districts, counties and sub-counties;</li>"
+        "<li>threshold: the <strong>zonal maximum</strong> of the official GloFAS v4 5-year return-level map over "
+        "each area (cells touching the area count);</li>"
+        "<li>forecast: for each of the 51 ensemble members and each lead day 0–7, the zonal maximum of "
+        "forecast discharge over the same area;</li>"
+        "<li>triggered when at least <strong>60 %</strong> of members exceed the threshold at any lead of "
+        "<strong>5 days or less</strong>; a triggered county or sub-county also triggers its district.</li>"
+        "</ul>"
+        "<p>So in practice the 2023 wording is what runs, not the 2021 one: a single 60 %, 5-year bar in every "
+        "district, no 10-year bar for lower-priority districts. The “more than 1,000 households” and "
+        "“FAR not more than 0.5” conditions are not part of the computation: the first is judged from "
+        "the exposure the portal displays, the second was a condition on where the EAP applies.</p>"
+        "<p><strong>Did we have it right?</strong></p>"
+        "<ul>"
+        "<li><strong>The level — yes.</strong> Our own 5-year level at G5196 (Gumbel on annual maxima, "
+        "2000–2024) is 59 m³/s; the official map has 61 m³/s there.</li>"
+        "<li><strong>Probability and lead — yes.</strong> 60 % of members, up to 5 days.</li>"
+        "<li><strong>Where it is read — no.</strong> We read G5196, the Akokoro reporting point, alone. The "
+        "portal judges each area at its largest river cell. For Amuria and Kapelebyong that is the Akokoro, next "
+        "to G5196; for Katakwi, Soroti and Ngora it is the Lake Bisina–Awoja channel, whose 5-year flow is six "
+        "times the Akokoro’s; for Serere it is Lake Kyoga. Read at G5196 alone the trigger would have "
+        "activated once in 20 October–December windows; as the portal runs it, it activates in about one in "
+        "four.</li>"
+        f"{check}"
+        "</ul>"
+        f"{cells}"
+        "<p class='fn'>Reproduction: <code>analysis/ifrc_reproduction.py</code>, on the GloFAS v4 reanalysis "
+        "(1999–2025) against the official 5-year map (<code>flood_threshold_glofas_v4_rl_5.0.nc</code>, "
+        "GloFAS), with CODAB boundaries at levels 2–4 (the portal uses its own, of similar size). The "
+        "reanalysis stands in for the ensemble — as if the forecast came true — and an exceedance is "
+        "dated 5 days early, when a forecast would first have shown it.</p>"
+    )
+
+
+def fallback_section(inp: Inputs) -> str:
+    """FloodScan observed-flood fallback, per zone, alone and over the zone trigger."""
+    f = inp.fallback
+    if f is None:
+        return ""
+    rows = []
+    for z in ZONE_ORDER:
+        r = f.set_index("zone").loc[z]
+        if not isinstance(r.districts, str) or not r.districts:
+            rows.append(
+                f"<tr><td class='zn'><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{SHORT[z]}</td>"
+                "<td colspan='6'>no zone district where FloodScan tracks recorded floods — no fallback</td></tr>"
+            )
+            continue
+        n_d = len(r.districts.split(";"))
+        rows.append(
+            f"<tr><td class='zn'><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{SHORT[z]}</td>"
+            f"<td>{n_d}<span class='fn'>{bp.e(r.districts.replace(';', ', '))}</span></td>"
+            f"<td class='num'>{rp_txt(r.design_rp)}</td>"
+            f"<td class='num'>{int(r.fs_activations)}<span class='fn'>{bp.e(r.fs_activated)}</span></td>"
+            f"<td class='num'>{int(r.fs_caught)}</td>"
+            f"<td>{bp.e(r.added_catches) if isinstance(r.added_catches, str) else 'none'}</td>"
+            f"<td>{bp.e(r.added_false_alarms) if isinstance(r.added_false_alarms, str) else 'none'}"
+            f"<span class='fn'>zone then activates {rp_txt(r.combined_rp)}</span></td></tr>"
+        )
+    head = (
+        "<tr><th>Zone</th><th>Districts it reads</th><th>Return period</th><th>Activations</th>"
+        "<th>Caught</th><th>Catches it adds to the zone trigger</th><th>False alarms it adds</th></tr>"
+    )
+    return (
+        "<h2>The FloodScan fallback, zone by zone</h2>"
+        "<p>The country team asked for an observed-flood backstop everywhere, so that a forecast miss can still "
+        "release money. Each zone’s fallback reads FloodScan flood extent in the zone districts where it "
+        "tracks recorded floods (rank-based evidence: a district’s dated events reach its own top fifth more "
+        "often than an arbitrary window does, by at least 0.10), holds every district to the same rarity on its "
+        "own record, and is set by the same rule as the zone triggers: as frequent as the zone’s major "
+        "seasons, floored at 1-in-3, then raised while it keeps every big catch. An observed-flood activation "
+        "counts as catching a flood it sees while the flood is on or up to 10 days after it.</p>"
+        f"<div class='tw trig-cmp'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
+        "<p><strong>It earns its place in Teso only.</strong> There it catches October 2021, which the IFRC "
+        "trigger misses, for one extra false alarm. In Elgon and Karamoja it catches nothing in this window: "
+        "their October–December majors are landslides and flash floods that satellite extent does not see "
+        "at the right time, and every activation it adds is a false alarm. In Adjumani no district passes the "
+        "check — on the Albert Nile FloodScan does not track the recorded floods. Outside October–"
+        "December the picture is different (FloodScan tracks the long-rains floods in Elgon’s lowlands well), "
+        "so this is a verdict on this window, not on FloodScan.</p>"
+        "<p class='fn'><code>analysis/floodscan_fallback.py</code>. Districts whose evidence is too thin "
+        "(created after 2018, or fewer than three dated events) are left out rather than guessed.</p>"
+    )
+
+
+def karamoja_section(inp: Inputs) -> str:
+    ch, v = inp.kar_choice, inp.kar_variants
+    if ch is None or v is None:
+        return ""
+    f = lambda x: "" if pd.isna(x) else f"{x:+.2f}"
+    crow = "".join(
+        f"<tr><td>{bp.e(r.district)}</td><td class='num'>{int(r.n_events)}</td>"
+        f"<td class='num'>{f(r.rain_lift)}</td><td class='num'>{f(r.fs_lift)}</td>"
+        f"<td>{bp.e(r.choice)}</td></tr>"
+        for r in ch.itertuples()
+    )
+    vrow = "".join(
+        f"<tr><td>{bp.e(r.variant)}</td><td class='num'>{rp_txt(r.design_rp)}</td>"
+        f"<td class='num'>{int(r.activations)}<span class='fn'>{bp.e(r.activated)}</span></td>"
+        f"<td class='num'>{int(r.caught)}</td><td class='num'>{int(r.false_alarms)}</td>"
+        f"<td class='num'>{int(r.missed)} of {int(r.major_seasons)}</td></tr>"
+        for r in v.itertuples()
+    )
+    n_rain = int(ch.choice.eq("rain").sum())
+    n_rec = int((ch.n_events > 0).sum())
+    fs_only = ", ".join(ch[ch.choice == "floodscan"].district) or "none"
+    return (
+        "<h3>Rain forecast or FloodScan, district by district</h3>"
+        "<p>For each district, the same rank-based test for both indicators on every dated event in the district "
+        "(all months, for enough events): how much more often than an arbitrary window of the same length the "
+        "indicator reaches the district’s own top fifth around an event. Positive and at least 0.10 counts as "
+        "informative. The better-evidenced indicator is the district’s choice; with no evidence either way, "
+        "rain (it gives lead time).</p>"
+        "<div class='tw trig-cmp'><table><thead><tr><th>District</th><th>Dated events</th><th>Rain forecast, lift "
+        "over chance</th><th>FloodScan, lift over chance</th><th>Choice</th></tr></thead>"
+        f"<tbody>{crow}</tbody></table></div>"
+        f"<p>The rain forecast is the better indicator in {n_rain} of the {n_rec} districts with a record of their "
+        f"own; FloodScan only in {fs_only}. "
+        "Karenga and Nabilatuk were carved out in 2018–19 and their events are still recorded under Kaabong "
+        "and Nakapiripirit, so they have no record of their own. Each design below then gets the zone rule "
+        "(frequency, floor 1-in-3, raised while it keeps its big catches):</p>"
+        "<div class='tw trig-cmp'><table><thead><tr><th>Design</th><th>Return period</th><th>Activations</th>"
+        "<th>Caught</th><th>False alarms</th><th>Missed</th></tr></thead>"
+        f"<tbody>{vrow}</tbody></table></div>"
+        "<p><strong>Keep the rain forecast.</strong> Swapping in FloodScan where it is better, or adding it "
+        "everywhere it is usable, catches nothing more in October–December and adds false alarms. Thresholds "
+        "are deliberately not tuned district by district: each district has one to three dated October–"
+        "December events, so a per-district optimum would fit the record rather than the hazard. What is chosen "
+        "per district is the indicator; the rarity stays common. The near miss is November 2008, when "
+        "Kaabong’s forecast reached about 1-in-12 against a bar near 1-in-18.</p>"
+    )
+
+
+def adjumani_section(inp: Inputs) -> str:
+    o, g = inp.adj_options, inp.adj_grid
+    if o is None:
+        return ""
+    rows = "".join(
+        f"<tr><td>{bp.e(r.option)}</td><td class='num'>{int(r.activations)}<span class='fn'>"
+        f"{rp_txt(r.rp)}</span></td><td class='num'>{int(r.caught)}<span class='fn'>"
+        f"{bp.e(r.caught_seasons) if isinstance(r.caught_seasons, str) else ''}</span></td>"
+        f"<td class='num'>{int(r.false_alarms)}<span class='fn'>"
+        f"{bp.e(r.false_alarm_seasons) if isinstance(r.false_alarm_seasons, str) else ''}</span></td>"
+        f"<td>{'yes, ' + r.first_2023[5:] if r.catches_2023 else 'no'}</td></tr>"
+        for r in o.itertuples()
+    )
+    plateau = ""
+    if g is not None:
+        both = g[g.caught >= 2]
+        plateau = (
+            f" Across a grid of lake bars 1-in-2 to 1-in-8 and rain bars 1-in-2 to 1-in-6, {len(both)} of "
+            f"{len(g)} combinations catch both 2020 and 2023, with {int(both.activations.min())}–"
+            f"{int(both.activations.max())} activations: a plateau, not a knife edge."
+        )
+    return (
+        "<h3>Could Adjumani have caught 2023?</h3>"
+        "<p>October–December 2023 was a major season on the Albert Nile (Adjumani 2–7 November, "
+        "Madi Okollo from 5 November, IOM DTM counts in Moyo and Obongi through October and November) and the "
+        "draft stayed quiet. Nothing was extreme: the districts’ 5-day forecasts peaked at 1-in-3 to "
+        "1-in-9 (Obongi) and Lake Kyoga’s six-month rise at about 1-in-8, against draft bars near 1-in-30 "
+        "per series. What was unusual is that moderate things happened together: the Nile already high and "
+        "rain on top. Options, on the same seasons and events:</p>"
+        "<div class='tw trig-cmp'><table><thead><tr><th>Option</th><th>Activations</th><th>Caught</th>"
+        "<th>False alarms</th><th>Catches 2023</th></tr></thead>"
+        f"<tbody>{rows}</tbody></table></div>"
+        "<p><strong>Yes, with the compound rule</strong> — Lake Kyoga’s rise at 1-in-5 <em>and</em> "
+        "any district’s rain forecast at 1-in-3 on the same day. It activates at 1-in-6.5, exactly the "
+        "zone’s major-season frequency, catches 2020 and 2023 (from 15 October, 18 days ahead of the "
+        "Adjumani flood) and costs two false alarms. Lowering the rain bar or asking for several wet districts "
+        "at once also catches 2023, but only at about 1-in-3 with five or six false alarms. The compound rule "
+        f"also matches how the Albert Nile floods: backwater from a high Nile plus local runoff.{plateau} "
+        "Two cautions. It was found after looking at 2023, on four major seasons, so it is a hypothesis the "
+        "next seasons have to confirm. And 2004 and 2008 stay missed by every option: neither the lake nor the "
+        "rain was high then.</p>"
+        "<p class='fn'><code>analysis/adjumani_options.py</code>. The lake series is now smoothed with a "
+        "three-pass running median: single altimetry passes ~0.5 m low had been turning into fake six-month "
+        "“rises” half a year later (October 2024 read as a 1-in-18 rise).</p>"
+    )
 
 
 # --- narrative -----------------------------------------------------------------------------
@@ -738,6 +1057,29 @@ def _zone_note(z: str, inp: Inputs) -> str:
     act, caught, missed = int(r.activations), int(r.caught), int(r.missed)
     rp, freq = rp_txt(r.design_rp), rp_txt(r.frequency_rp)
     raised = f" \u2014 raised from {freq} to shed false alarms" if r.raised else ""
+    if z == "teso_kyoga" and r.get("fixed", False):
+        t = inp.tabs[z]
+        c = t[t.in_calibration & t.data]
+        fa = [x.replace("OND ", "") for x in c[c.activated & ~c.caught].label]
+        miss = [x.replace("OND ", "") for x in c[c.major & ~c.caught].label]
+        hit = [x.replace("OND ", "") for x in c[c.caught].label]
+        return (
+            "<strong>Teso uses the IFRC/URCS trigger</strong>, as the country team proposed after its call on "
+            "29 September: when the IBF portal shows any Teso district triggered, the zone activates, so the "
+            "money moves on the same signal as URCS\u2019s own early action. The exact wording and how the portal "
+            "turns it into an activation are set out in the next section, with our check of both. Backtested on "
+            "the GloFAS reanalysis against the official 5-year map \u2014 a perfect-forecast stand-in, which the "
+            "reforecast supports here (at G5196 it matches the reanalysis to within 1 % in this window) \u2014 it "
+            f"activates in {act} of the {int(r.seasons_with_data)} windows ({rp}), catches {caught} "
+            f"({years_txt(hit)}, a flood already under way) and misses {missed} of {int(r.major_seasons)} major "
+            f"seasons ({years_txt(miss)}). Its false alarms ({years_txt(fa)}) mostly come through the Lake "
+            "Bisina\u2013Awoja channel that the portal reads Katakwi, Soroti and Ngora on: it drains Mt Elgon\u2019s "
+            "northern slopes and runs high in Elgon\u2019s wet years, which were not Teso flood windows. Our own "
+            "G5196 draft did no better (1-in-8; activations 2007, 2012 and 2020, both catches floods already under "
+            "way): <strong>in an October\u2013December window GloFAS has no anticipatory skill for Teso, whoever "
+            "reads it</strong> \u2014 Teso\u2019s floods peak in August and September and October floods are their "
+            "tail. The FloodScan fallback below is what adds a catch here (October 2021)."
+        )
     if z == "teso_kyoga":
         return (
             "Built in the IFRC/URCS protocol\u2019s own form, as the country team asked: on the GloFAS reforecast "
@@ -791,6 +1133,38 @@ def _zone_note(z: str, inp: Inputs) -> str:
     )
 
 
+def raise_text(inp: Inputs) -> str:
+    """How far each calibrated zone's threshold was raised, from the summary (not hand-typed)."""
+    bits, flat = [], []
+    for z in ZONE_ORDER:
+        r = inp.s.loc[z]
+        if r.get("fixed", False):
+            continue
+        if r.raised:
+            bits.append(f"{SHORT[z]} from {rp_txt(r.frequency_rp)} to {rp_txt(r.design_rp)}")
+        else:
+            flat.append(SHORT[z])
+    teso = inp.s.loc["teso_kyoga"]
+    return (
+        "<p><strong>Then raised to shed false alarms.</strong> Starting from that frequency-matched level, each "
+        "zone\u2019s threshold is stepped rarer for as long as it still catches every big flood it caught before "
+        "\u2014 big meaning thousands of people affected, not a hundred \u2014 and still activates at least once. "
+        "The step stops just before a big catch would be lost. Raising a threshold can only remove activations, "
+        "never add catches, so what it buys is precision: "
+        + "; ".join(bits)
+        + (f"; {', '.join(flat)} not at all" if flat else "")
+        + ". "
+        + (
+            f"Teso is not calibrated: it takes the IFRC trigger as it is, which activates at "
+            f"{rp_txt(teso.design_rp)} in this window. "
+            if teso.get("fixed", False)
+            else ""
+        )
+        + "The risk is the usual one of tuning on a short record: a big flood sitting just under the final "
+        "threshold here might be missed in another 25 years.</p>"
+    )
+
+
 def must_catch_text(inp: Inputs) -> str:
     """The must-catch requirement and what each zone would have cost, from the options table."""
     path = TRIG / "must_catch_2007.csv"
@@ -841,14 +1215,25 @@ def key_points(inp: Inputs) -> str:
         for _y, r in t[t.in_calibration & t.caught].sort_index(ascending=False).iterrows():
             catches.append(f"{SHORT[z]} {r.label.replace('OND ', '')}")
     items = [
+        "<strong>Since the country-team call (29 September):</strong> Teso adopts the <strong>IFRC/URCS "
+        "trigger</strong>, now reproduced the way the IBF portal actually computes it (it is not read at G5196 "
+        "alone \u2014 see the Teso section for the wording and the check); Elgon\u2019s choice waits on FAO (see the Elgon "
+        "section); Karamoja keeps the rain forecast after a district-by-district "
+        "test against FloodScan; Adjumani has a compound lake-and-rain option that catches 2023; and every zone "
+        "has a FloodScan fallback test and a map of where it is measured.",
         "Four triggers, one per zone, each all-in and independent of the others. They can activate only in "
         f"<strong>October, November and December</strong> \u2014 planning runs into September, so October is the "
         f"earliest month that can be acted on this year. Calibrated and backtested on {cal}.",
         "Each zone\u2019s return period starts from how often that zone has a major-impact window (at least 5 deaths "
         "or 5,000 people affected in one recorded event), then is <strong>raised as far as it can go without losing "
         "a big flood it already catches</strong>: "
-        + ", ".join(f"{SHORT[z]} {rp_txt(s_.loc[z].design_rp)}" for z in ZONE_ORDER)
-        + ". That trades activations for precision; it cannot add catches.",
+        + ", ".join(
+            f"{SHORT[z]} {rp_txt(s_.loc[z].design_rp)}"
+            for z in ZONE_ORDER
+            if not s_.loc[z].get("fixed", False)
+        )
+        + ". That trades activations for precision; it cannot add catches. Teso is the exception: it takes the "
+        "IFRC trigger as it is.",
         f"<strong>Every activation is matched to a dated flood.</strong> The drafts activate {tot_a} times across "
         f"the four zones, catch <strong>{tot_c}</strong> major events \u2014 {', '.join(catches)} \u2014 and miss "
         f"<strong>{tot_m} of {tot_major}</strong>.",
@@ -876,8 +1261,9 @@ def page(inp: Inputs) -> str:
         ),
         "<p class='callout'><strong>Restricted.</strong> This page includes material from partner plans that are not "
         "published (FAO’s draft Mt Elgon plan, the CRS/Caritas Tororo protocol, DRC’s Karamoja plan). Please "
-        f"do not forward it outside the team. <strong>Status:</strong> first draft, calibrated on {cal}; Teso runs on "
-        "the GloFAS reforecast (2003\u20132022). Nothing here is endorsed.</p>",
+        f"do not forward it outside the team. <strong>Status:</strong> second draft, calibrated on {cal}. Teso now "
+        "uses the IFRC/URCS trigger as the IBF portal runs it (reproduced on the GloFAS reanalysis); Elgon\u2019s "
+        "likely choice waits on FAO. Nothing here is endorsed.</p>",
         "<h2>In brief</h2>",
         key_points(inp),
         "<h2>The four triggers</h2>",
@@ -915,16 +1301,8 @@ def page(inp: Inputs) -> str:
         "tuned to them. The table shows what each return period would have done: <em>activations \u00b7 major events "
         "caught \u00b7 major seasons missed</em>, with each zone\u2019s chosen return period first. Going rarer buys "
         "fewer false alarms and almost no extra catches; going more frequent than 1-in-3 buys activations, not "
-        "<p><strong>Then raised to shed false alarms.</strong> Starting from that frequency-matched level, each "
-        "zone\u2019s threshold is stepped rarer for as long as it still catches every big flood it caught before \u2014 "
-        "big meaning thousands of people affected, not a hundred \u2014 and still activates at least once. The step "
-        "stops just before a big catch would be lost. Raising a threshold can only remove activations, never add "
-        "catches, so what it buys is precision: Teso goes from 1-in-8.7 to 1-in-17 and sheds two false alarms, "
-        "Adjumani from 1-in-5.2 to 1-in-17, Karamoja from 1-in-5.2 to 1-in-10. Elgon barely moves, to 1-in-5.4, "
-        "because the next step up would lose the November 2024 landslides. The risk is the usual one of tuning on a "
-        "short record: a big flood sitting just under the final threshold here might be missed in another 25 "
-        "years.</p>",
         "catches.</p>",
+        raise_text(inp),
         sensitivity_table(inp),
         "<p class='fn'>Impact frequencies use the dated event record described under Data and methods, so they "
         "inherit its gaps: West Nile is thinly recorded before 2004, and seasons after 2021 rest on EM-DAT, press "
@@ -940,21 +1318,33 @@ def page(inp: Inputs) -> str:
     for z in ZONE_ORDER:
         what, lead = trigger_text(z, inp)
         cols = inp.existing.get(z, [])
+        fixed = bool(inp.s.loc[z].get("fixed", False))
+        rp_lab = "Return period (the protocol\u2019s own)" if fixed else "Design return period"
         parts += [
             f"<h2><span class='sw' style='background:{bp.ZONE_COL[z]}'></span>{bp.e(ZONES[z].label.split(' (')[0])}</h2>",
             f"<p><strong>Activates when</strong> {what}. <strong>Lead time:</strong> {lead}. "
-            f"<strong>Design return period:</strong> {rp_txt(inp.s.loc[z].design_rp)}.</p>",
+            f"<strong>{rp_lab}:</strong> {rp_txt(inp.s.loc[z].design_rp)}.</p>",
+            zone_map(z),
             f"<p>{zone_note(z, inp)}</p>",
         ]
+        if z == "teso_kyoga":
+            parts.append(ifrc_section(inp))
         if cols:
             parts += [
                 "<p><strong>Alongside existing triggers</strong> (grey), over the same years:</p>",
-                compare_table(z, inp.tabs[z], cols),
+                compare_table(
+                    z, inp.tabs[z], cols, "IFRC trigger (Teso\u2019s)" if fixed else "Our draft"
+                ),
                 existing_notes(cols),
             ]
         parts.append(zone_table(z, inp, cols))
         if z == "teso_kyoga":
             parts.append(teso_exploration())
+        if z == "karamoja":
+            parts.append(karamoja_section(inp))
+        if z == "adjumani":
+            parts.append(adjumani_section(inp))
+    parts.append(fallback_section(inp))
     parts += [
         "<h2>Reading the tables</h2>",
         "<ul>"
@@ -982,7 +1372,9 @@ def page(inp: Inputs) -> str:
         "<ul>"
         "<li><strong>GloFAS v4</strong> river discharge, reanalysis 1999–2024 for the Uganda box (EWDS), at G5196 "
         "“Akokorio at Uganda” (the local Akokoro river, 33.875°E 1.775°N) and G5220 Manafwa at Butaleja. "
-        "Thresholds are in model space: the model runs about 1.7× wet at G5196.</li>"
+        "Thresholds are in model space: the model runs about 1.7× wet at G5196. For the IFRC trigger, the "
+        "official GloFAS v4 5-year return-level map, read per district, county and sub-county as the IBF portal "
+        "does.</li>"
         "<li><strong>CHIRPS-GEFS v12</strong> 5-day rainfall forecasts, 2000 to July 2026, as district means (and "
         "the wettest pixel where stated). The CHC archive has no issues for January–September 2020.</li>"
         "<li><strong>IMERG</strong> daily rainfall for the observed-rain partner triggers, with an antecedent "
@@ -1011,10 +1403,16 @@ def page(inp: Inputs) -> str:
         "<ul>"
         "<li><strong>The honest headline:</strong> matched to dated floods, these triggers catch few major events. "
         "Any of them would need the observational backstop behind it before it could be proposed as a mechanism.</li>"
-        "<li><strong>Teso:</strong> on the reforecast, GloFAS at G5196 has no anticipatory skill in an "
-        "October\u2013December window \u2014 it activates only on 1 October with the river already high. Either "
-        "Teso becomes observation-led in this window (FloodScan works well there), or the window question below is "
-        "reopened for it. Google Flood Hub, or a DWRM gauge, is still the third opinion worth having.</li>"
+        "<li><strong>Teso:</strong> the IFRC trigger is adopted for alignment, not skill \u2014 in this window "
+        "no GloFAS reading has anticipatory skill for Teso. Add the FloodScan fallback (it catches October 2021). "
+        "Confirm with URCS that EAP2021UG01 is live for October\u2013December 2026: the 2023 activation document "
+        "gives the EAP\u2019s timeframe as 27 May 2021 to 27 May 2026, while IFRC GO lists operation MDRUG048 to "
+        "30 November 2026. If a renewed EAP changes the districts, probability or return period, the Teso trigger "
+        "follows it.</li>"
+        "<li><strong>Adjumani:</strong> decide whether to adopt the compound lake-and-rain rule, which catches "
+        "2023 at the zone\u2019s own frequency.</li>"
+        "<li><strong>FloodScan fallback:</strong> Teso only in this window; none for Elgon, Karamoja or "
+        "Adjumani.</li>"
         "<li><strong>Longer windows:</strong> test a 15- or 30-day accumulation for prolonged seasons such as "
         "2007.</li>"
         "<li><strong>Staging:</strong> an all-in envelope is released by the first activation. A readiness/action "
@@ -1028,7 +1426,10 @@ def page(inp: Inputs) -> str:
         "</ul>",
         "<h2>Reproducing this page</h2>",
         "<p>In <code>OCHA-DAP/ds-aa-uga-flooding</code>, with the partner config in place (see the README):</p>"
-        "<pre>uv run python analysis/trigger_draft.py\nuv run python analysis/existing_triggers.py\n"
+        "<pre>uv run python analysis/ifrc_reproduction.py     # needs the official RL5 map in data/glofas/thresholds/\n"
+        "uv run python analysis/trigger_draft.py\nuv run python analysis/existing_triggers.py\n"
+        "uv run python analysis/floodscan_vs_impact.py\nuv run python analysis/floodscan_fallback.py\n"
+        "uv run python analysis/adjumani_options.py\nuv run python pipeline/zone_trigger_maps.py\n"
         "uv run python pipeline/build_trigger_page.py</pre>",
         bp.FOOT.format(today=bp.TODAY).replace(
             "<code>pipeline/build_pages.py</code>",

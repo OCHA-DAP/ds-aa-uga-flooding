@@ -22,40 +22,58 @@ Restricted pages use the team review password (ask Tristan). See *Private materi
 
 ## Handover — state of play (Sep 2026)
 
-**Where it stands.** Zones are settled (`src/constants.py`, rationale on `/coverage/`). A first
-draft of all four triggers exists, calibrated and backtested on 2000–2025 (`/triggers/`):
+**Where it stands.** Zones are settled (`src/constants.py`, rationale on `/coverage/`). Second
+draft of the four triggers, backtested on Oct–Dec 2000–2024 (`/triggers/`), revised after the
+country-team call of 29 Sep 2026:
 
-| zone | draft trigger | return period | activations / caught / missed |
+| zone | trigger | return period | activations / caught / missed |
 |---|---|---|---|
-| Teso / Lake Kyoga | GloFAS G5196 reforecast, ≥60 % of members above threshold within days 3–7 | 1-in-17 (from 1-in-8.7) | 2 / 1 / 2 of 3 — catches Oct 2007 |
-| Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | 1-in-5.5 | 5 / 1 / 4 of 5 — catches Nov 2024, eight days ahead |
-| Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | 1-in-9.9 (from 1-in-5.2) | 3 / 1 / 4 of 5 |
-| Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | 1-in-17 (from 1-in-5.2) | 2 / 1 / 4 of 5 — lake leg catches 2020 |
+| Teso / Lake Kyoga | **the IFRC/URCS EAP trigger as the IBF portal runs it** (reproduced, below) | 1-in-4.3 (the protocol's own) | 6 / 1 / 3 of 4 — catches Oct 2007 |
+| Mount Elgon | CHIRPS-GEFS 5-day forecast, zone mean of 15 districts | 1-in-5.4 | 5 / 1 / 4 of 5 — catches Nov 2024, five days ahead |
+| Karamoja | CHIRPS-GEFS 5-day forecast, any district at a common rarity | 1-in-10 (from 1-in-5.2) | 3 / 1 / 4 of 5 |
+| Adjumani / Albert Nile | Lake Kyoga 180-day rise OR per-district rain forecast | 1-in-20 (from 1-in-6.5) | 2 / 1 / 3 of 4 — lake leg catches 2020 |
+
+- **Teso = IFRC.** The portal (rodekruis/IBF-river-flood-pipeline, UGA config) judges each
+  district, county and sub-county at its largest river cell — zonal max of each member's flow
+  against the zonal max of the official GloFAS v4 5-year map, >= 60 % of 51 members, lead <= 5 d,
+  and a triggered sub-area triggers its district. It is **not** read at G5196: Katakwi, Soroti
+  and Ngora are read on the Lake Bisina–Awoja channel (fed from Elgon). `analysis/ifrc_reproduction.py`
+  rebuilds it on the reanalysis and reproduces 15 of the 16 districts the portal listed on
+  15 Nov 2023. No GloFAS reading has anticipatory skill for Teso in Oct–Dec; the choice is for
+  alignment with URCS. Check with URCS that the EAP is live for Oct–Dec 2026 (its stated
+  timeframe ended 27 May 2026; the GO operation runs to 30 Nov 2026).
+- **Elgon**: the final choice waits on a partner's confirmation of how its trigger is processed
+  (restricted page).
+- **Karamoja**: district-by-district, the rain forecast beats FloodScan in 6 of the 7 districts
+  with their own record (`analysis/floodscan_fallback.py`); swapping or adding FloodScan catches
+  nothing more in Oct–Dec. Thresholds deliberately not tuned per district (1–3 events each).
+- **Adjumani**: a compound option — Kyoga rise >= 1-in-5 AND any district rain >= 1-in-3, same
+  day — activates at 1-in-6.5 and catches 2020 and 2023 (the current draft misses 2023) for two
+  false alarms (`analysis/adjumani_options.py`). Found after looking at 2023: decision pending.
+- **FloodScan fallback** (`analysis/floodscan_fallback.py`): worth adding in Teso only (catches
+  Oct 2021); catches nothing in Elgon or Karamoja in this window; no usable district in Adjumani.
+- Maps of where each trigger is measured: `pipeline/zone_trigger_maps.py` (the Elgon map names
+  partner triggers from the gitignored config; it only goes into the encrypted page).
 
 Zones trigger **independently**. Triggers may activate only in **October, November and
 December** (planning runs into September; the funding does not run past March). Each zone's
 return period starts from how often it has a major-impact window (one event with 5+ deaths or
 5,000+ affected), floored at 1-in-3, and is then **raised as far as it can go without losing a
-big flood it already catches** (`raise_threshold`, `BIG_AFFECTED`). Every activation is
-**matched to a dated flood** (30 days for rain forecasts, 45 for GloFAS, 150 for the lake leg,
-or during the event).
+big flood it already catches** (`raise_threshold`, `BIG_AFFECTED`); Teso takes the IFRC
+protocol's own rate. Every activation is **matched to a dated flood** (30 days for rain
+forecasts, 45 for GloFAS, 150 for the lake leg, during or up to 10 days after for FloodScan).
 
 **The window is the binding constraint**: Oct–Dec holds only 16–29 % of each zone's recorded
 people affected, and the peak impact month is August in three of the four zones. The
 indicators peak earlier still (April for the rain forecasts in Karamoja and Adjumani, August
 for Teso's GloFAS). `outputs/triggers/monthly_profile.csv` and the page's month table show it.
 
-**Open questions** (also at the foot of `/triggers/`): run Teso on the reforecast and get a
-third opinion (DWRM gauge / Flood Hub) on the post-2013 divergence; test longer rainfall
-windows (2007 was a long wet season); decide whether rain-forecast triggers sit behind the
-FloodScan backstop; Karamoja funding; agree spatial scale and rainfall product with FAO and
-DRC for their rain triggers; the country team's call on the Severity 3+ scope in Teso.
+**Open questions** (also at the foot of `/triggers/`): URCS on the EAP's status for 2026; the
+Elgon partner's processing; Adjumani compound rule yes/no; test longer rainfall windows (2007
+was a long wet season); Karamoja funding; agree spatial scale and rainfall product with partners
+for their rain triggers; the country team's call on the Severity 3+ scope in Teso.
 
 **In flight.**
-- GloFAS reforecast for G5196 is complete (2003-03 to 2023-11, both lead bands) and Teso now
-  runs on it. Finding: it agrees with the reanalysis to within 1 % at every lead in OND, and every
-  activation falls on 1 October with the river already high — no anticipatory lead in this
-  window. A rise-through-threshold variant catches at most one flood against 4-5 false alarms.
 - ERA5-Land soil moisture download stalled on CDS timeouts; the antecedent precipitation index
   (IMERG) is the proxy meanwhile.
 
@@ -66,6 +84,10 @@ DRC for their rain triggers; the country team's call on the Severity 3+ scope in
 - CHIRPS-GEFS: the builder retries (transient errors once silently dropped Mar–Dec 2013);
   Jan–Sep 2020 is a genuine gap in the product.
 - Unpublished partner material never goes in committed source or public pages.
+- Reproduce a partner's trigger from its code, not its prose: the IFRC wording says "5-year
+  flood in flood-prone districts"; the portal reads each area at its largest river cell.
+- Lake altimetry has single-pass outliers (~0.5 m); a running median over three passes before
+  differencing, or a 180-day "rise" appears half a year later.
 
 ## Rebuilding everything
 
@@ -78,9 +100,14 @@ uv run python pipeline/build_chirps_gefs_adm2.py
 uv run python pipeline/download_glofas.py            # or pull the mirror, below
 # analyses
 uv run python analysis/<script>.py                   # each is standalone; see Layout
-# triggers
+# triggers (ifrc_reproduction needs the official GloFAS v4 RL5 map in data/glofas/thresholds/)
+uv run python analysis/ifrc_reproduction.py
 uv run python analysis/trigger_draft.py
 uv run python analysis/existing_triggers.py
+uv run python analysis/floodscan_vs_impact.py
+uv run python analysis/floodscan_fallback.py
+uv run python analysis/adjumani_options.py
+uv run python pipeline/zone_trigger_maps.py
 # pages
 uv run python pipeline/zones_map.py
 uv run python pipeline/build_pages.py                # /coverage/ and /results/

@@ -73,7 +73,12 @@ FIRST_SEASON = 2000  # CHIRPS-GEFS hindcast starts 2000-01-01
 MIN_COVERAGE = 0.6  # a series' season counts when at least this share of its days has data
 RP_FLOOR = 3.0  # no zone activates more often than once in three seasons
 CAL_LAST_SEASON = 2024  # last season used for calibration, all zones
-TESO_SOURCE = "reforecast"  # or "reanalysis", the earlier stand-in
+# Teso uses the IFRC/URCS EAP trigger as the IBF portal runs it (user decision, 29 Sep 2026:
+# align with URCS rather than run a second GloFAS trigger); "reforecast" / "reanalysis" give our
+# own earlier G5196 draft. See analysis/ifrc_reproduction.py.
+TESO_SOURCE = "ifrc"
+IFRC_KEY = "IFRC portal"
+IFRC_LEAD = 5  # days: the portal triggers on an exceedance forecast up to 5 days ahead
 TESO_LEADS = (3, 7)  # days: roughly the IFRC protocol's 5-day lead
 TESO_EXCEED_SHARE = 0.6  # share of ensemble members above threshold (IFRC's operational 60 %)
 LAKE_RISE_DAYS = 180
@@ -86,11 +91,24 @@ MAX_RP = 25.0  # never raise a threshold rarer than this in a 25-season record
 # purpose: reported impact dates lag the flood, and rain that falls inside the forecast window
 # can pool for days before it floods. Widening them further barely adds catches while raising
 # what random timing would score — see window_sensitivity() and the page.
-LEAD_DAYS = {"glofas": 45, "rain": 30, "lake": 150}
+LEAD_DAYS = {"glofas": 45, "rain": 30, "lake": 150, "obs": 7}
 TOLERANCE_DAYS = 3  # an activation up to this long after an event ends still counts (date noise)
+# An observed-flood (FloodScan) activation comes during or just after the flood it reports —
+# satellite extent lags a flash flood by days — so it may come later than a forecast's.
+TOLERANCE_BY_LEG = {"obs": 10}
 
 # Series -> leg (which lead window applies). Anything not listed is a rain forecast.
-SERIES_LEG = {"GloFAS G5196": "glofas", "Kyoga rise": "lake"}
+SERIES_LEG = {"GloFAS G5196": "glofas", IFRC_KEY: "glofas", "Kyoga rise": "lake"}
+# Series whose threshold is fixed by someone else's protocol, not calibrated here
+FIXED_THRESHOLDS = {IFRC_KEY: 1.0}  # zonal-max flow / zonal-max official RL5
+
+
+def leg_of(key: str) -> str:
+    """The matching leg of a series: named ones above, FloodScan extent is observational,
+    everything else is a rainfall forecast."""
+    return SERIES_LEG.get(key, "obs" if key.startswith("FloodScan") else "rain")
+
+
 # Zones whose trigger has separate legs for separate flood regimes (see module docstring).
 LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every other series
 
@@ -176,7 +194,17 @@ def load(path: str) -> pd.DataFrame:
 def teso_series() -> pd.Series:
     """Teso's trigger indicator. TESO_SOURCE picks the GloFAS reforecast (the operational form:
     at least 60 % of members above the threshold within days 3-7) or the reanalysis (the earlier
-    stand-in, no forecast error). The reforecast runs March 2003 - November 2023."""
+    stand-in, no forecast error). The reforecast runs March 2003 - November 2023. "ifrc" is the
+    IFRC/URCS trigger as the portal computes it, per district (analysis/ifrc_reproduction.py):
+    the largest ratio of zonal-max flow to zonal-max official 5-year level over the district,
+    its counties and sub-counties, on the reanalysis, dated IFRC_LEAD days early (the forecast
+    that would have shown it)."""
+    if TESO_SOURCE == "ifrc":
+        r = pd.read_parquet(OUT / "ifrc_ratio_adm4.parquet")
+        cols = [d for d in ZONES["teso_kyoga"].all_districts if d in r.columns]
+        s = r[cols].max(axis=1).astype(float)
+        s.index = pd.to_datetime(s.index) - pd.Timedelta(days=IFRC_LEAD)
+        return s.rename("ifrc_ratio")
     if TESO_SOURCE == "reanalysis":
         return glofas_g5196()
     from src.datasources.glofas import load_reforecast_point, reforecast_signal
@@ -208,6 +236,10 @@ def chirps_gefs_wide(pcodes: list[str]) -> pd.DataFrame:
 def kyoga_rise() -> pd.Series:
     ll = load("processed/gwm/lake_levels.parquet")
     ky = ll[ll.lake == "kyoga"].set_index("date").height_m.sort_index()
+    # Altimetry has single-pass outliers of ~0.5 m (e.g. 14 Apr 2024, 1034.65 m between passes
+    # at 1035.3-1035.4); a 180-day difference turns one of them into a fake "rise" half a year
+    # later (Oct 2024 read as a 1-in-18 rise). A running median over three passes removes them.
+    ky = ky.rolling(3, center=True, min_periods=1).median()
     kyd = ky.resample("D").mean().interpolate(limit=40)
     return (kyd - kyd.shift(LAKE_RISE_DAYS)).dropna().rename("kyoga_rise_m")
 
@@ -216,7 +248,8 @@ def zone_series() -> dict[str, dict[str, pd.Series]]:
     adm = load_adm2().set_index("ADM2_EN").ADM2_PCODE
     name_of = {v: k for k, v in adm.items()}
     zd = {z: list(ZONES[z].core) + list(ZONES[z].tier2) for z in ZONES}
-    series: dict[str, dict[str, pd.Series]] = {"teso_kyoga": {"GloFAS G5196": teso_series()}}
+    teso_key = IFRC_KEY if TESO_SOURCE == "ifrc" else "GloFAS G5196"
+    series: dict[str, dict[str, pd.Series]] = {"teso_kyoga": {teso_key: teso_series()}}
     series["elgon"] = {
         "zone-mean 5-day forecast": chirps_gefs_wide([adm[d] for d in zd["elgon"]]).mean(axis=1)
     }
@@ -373,7 +406,7 @@ def match(activation: pd.Timestamp, leg: str, ev: pd.DataFrame) -> pd.DataFrame:
     m = ev[
         ev.major
         & (ev.start - pd.Timedelta(days=lead) <= activation)
-        & (activation <= ev.end + pd.Timedelta(days=TOLERANCE_DAYS))
+        & (activation <= ev.end + pd.Timedelta(days=TOLERANCE_BY_LEG.get(leg, TOLERANCE_DAYS)))
     ]
     return m.assign(lead_days=(m.start - activation).dt.days)
 
@@ -417,9 +450,9 @@ def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
         have = [k for k in series if y in sms[k].index]
         eps = activation_episodes({k: in_season(series[k]) for k in have}, thr, y) if have else []
         a, via = eps[0] if eps else (None, [])
-        leg = SERIES_LEG.get(via[0], "rain") if via else None
+        leg = leg_of(via[0]) if via else None
         m = match(a, leg, ev) if a is not None else ev.iloc[0:0]
-        later = [(d0, match(d0, SERIES_LEG.get(v[0], "rain"), ev)) for d0, v in eps[1:]]
+        later = [(d0, match(d0, leg_of(v[0]), ev)) for d0, v in eps[1:]]
         later = [(d0, mm) for d0, mm in later if len(mm)]
         peaks = {k: float(gumbel_rp(sms[k].get(y, np.nan), *fits[k])) for k in have}
         where = max(peaks, key=peaks.get) if peaks else ""
@@ -447,6 +480,7 @@ def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
                 ),
                 first_major=first_major.date().isoformat() if pd.notna(first_major) else "",
                 peak_rp=peaks.get(where, np.nan),
+                peak_value=float(sms[where].get(y, np.nan)) if where else np.nan,
                 peak_where=where,
                 **imp_,
                 cerf="; ".join(cz[(cz.zone == z) & cerf_season(cz.approved, y)].label),
@@ -495,7 +529,7 @@ def window_sensitivity(
         for y in cal:
             eps = activation_episodes({k: in_season(v) for k, v in series[z].items()}, thr, y)
             if eps:
-                acts[y] = (eps[0][0], SERIES_LEG.get(eps[0][1][0], "rain"))
+                acts[y] = (eps[0][0], leg_of(eps[0][1][0]))
         for w in (7, 14, 21, 30, 45, 60, 90):
             old = LEAD_DAYS.copy()
             LEAD_DAYS.update({k: (max(w, old["lake"]) if k == "lake" else w) for k in LEAD_DAYS})
@@ -620,7 +654,7 @@ def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float
                 continue
             acts += 1
             a, via = eps[0]
-            m = match(a, SERIES_LEG.get(via[0], "rain"), ev)
+            m = match(a, leg_of(via[0]), ev)
             if len(m):
                 hits += 1
                 big |= {i for i in m.index if ev.loc[i].affected >= BIG_AFFECTED}
@@ -660,11 +694,23 @@ def main() -> None:
         n_major = sum(season_impact(events[z], y)["major"] for y in have)
         major_rp = (len(have) + 1) / max(1, n_major)
         design_rp = max(RP_FLOOR, major_rp)
-        # then raise it as far as it goes without losing a big catch (see raise_threshold)
-        final_rp, raise_stats = raise_threshold(z, series[z], cal_ms[z], events[z], cal, design_rp)
-        thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / final_rp)
+        fixed = set(series[z]) <= set(FIXED_THRESHOLDS)
+        if fixed:
+            # someone else's protocol: its threshold is given, and its rate is whatever it is
+            thr = {k: FIXED_THRESHOLDS[k] for k in series[z]}
+            fits = {k: gumbel_fit(a.dropna()) for k, a in cal_ms[z].items()}
+            rp_star = float(min(gumbel_rp(v, *fits[k]) for k, v in thr.items()))
+            t = backtest_zone(z, series[z], thr, events[z], show, cal)
+            final_rp = (len(have) + 1) / max(1, int(t.loc[have].activated.sum()))
+            raise_stats = {}
+        else:
+            # then raise it as far as it goes without losing a big catch (see raise_threshold)
+            final_rp, raise_stats = raise_threshold(
+                z, series[z], cal_ms[z], events[z], cal, design_rp
+            )
+            thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / final_rp)
+            t = backtest_zone(z, series[z], thr, events[z], show, cal)
         thr_by_zone[z] = thr
-        t = backtest_zone(z, series[z], thr, events[z], show, cal)
         t.sort_index(ascending=False).to_csv(OUT / f"{z}.csv")
         events[z].to_csv(OUT / f"events_{z}.csv", index=False)
         sc = scores(t)
@@ -674,7 +720,8 @@ def main() -> None:
                 major_rp=major_rp,
                 frequency_rp=design_rp,
                 design_rp=final_rp,
-                raised=bool(final_rp > design_rp + 1e-9),
+                raised=bool(not fixed and final_rp > design_rp + 1e-9),
+                fixed=fixed,
                 big_caught=int(raise_stats.get("big_caught", 0)),
                 individual_rp=(sc["seasons_with_data"] + 1) / max(1, sc["activations"]),
                 activated_seasons=", ".join(t[t.activated & t.in_calibration].label),
@@ -682,7 +729,7 @@ def main() -> None:
             )
         )
         for key, v in thr.items():
-            leg = SERIES_LEG.get(key, "rain")
+            leg = leg_of(key)
             thr_rows.append(
                 dict(
                     zone=z,

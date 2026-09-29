@@ -43,6 +43,7 @@ from flash_flood_antecedent import api_index, pctl
 from trigger_draft import (
     FIRST_SEASON,
     GLOFAS_DIR,
+    IFRC_LEAD,
     gumbel_fit,
     gumbel_level,
     in_season,
@@ -63,16 +64,32 @@ OUT_PUBLIC = ROOT / "outputs" / "triggers" / "existing_public.csv"
 OUT_PRIVATE = ROOT / "site_private" / "existing_private.csv"
 CAL_LAST = 2024  # last calibration SEASON (2024/25), matching trigger_draft
 
+# The IFRC/URCS EAP trigger as the IBF portal runs it (analysis/ifrc_reproduction.py): a district
+# triggers when, at any lead up to 5 days, >= 60 % of members put the zonal-max flow of the
+# district, or of any of its counties or sub-counties, above the zonal-max of the official GloFAS
+# v4 5-year return-level map. Stand-in: the reanalysis (a perfect forecast), dated 5 days early.
+# Districts: the EAP's "high risk" districts that fall in each zone (EAP summary, May 2021).
+IFRC_WORDING = (
+    "IFRC/URCS EAP2021UG01 as the IBF portal runs it: >= 60 % of GloFAS members above the official "
+    "5-year level at any lead up to 5 days, each district judged at its largest river cell, and a "
+    "triggered county or sub-county triggers its district. Reproduced on the reanalysis against the "
+    "official return-level map. The >1,000-household condition cannot be backtested"
+)
+IFRC_DISTRICTS = {
+    "elgon": ["Butaleja", "Sironko", "Bududa", "Manafwa", "Bulambuli", "Kumi"],
+    "karamoja": ["Nabilatuk"],
+    "adjumani": ["Moyo"],
+}
 PUBLIC_SPECS = [
     dict(
         zone="teso_kyoga",
-        key="ifrc_teso",
-        short="IFRC EAP",
+        key="ifrc_teso_point",
+        short="IFRC read at G5196 only",
         label=(
-            "GloFAS 5-year flood at a reporting point, 5-day lead (IFRC/URCS EAP2021UG01). Reproduced on the GloFAS "
-            "reforecast at G5196, the point in their Teso districts: at least 60 % of members (the protocol's "
-            "operational bar) above the 5-year level on annual maxima within 5 days; 2003-2022 only. The "
-            ">1,000-household condition cannot be backtested"
+            "Our earlier reading of the IFRC/URCS trigger, before checking the portal code: the GloFAS "
+            "reforecast at G5196 alone, >= 60 % of members above the 5-year level (annual maxima) "
+            "within 5 days; 2003-2022. The portal does not do this — it judges each district at its "
+            "largest river cell, which for Katakwi, Soroti and Ngora is the Lake Bisina-Awoja channel"
         ),
         type="glofas_rp",
         lat=GLOFAS_PIXEL_LONLAT[1],
@@ -82,20 +99,16 @@ PUBLIC_SPECS = [
         leads=(1, 5),
         exceed_share=0.6,
     ),
+] + [
     dict(
-        zone="elgon",
-        key="ifrc_elgon",
+        zone=z,
+        key=f"ifrc_{z}",
         short="IFRC EAP",
-        label=(
-            "GloFAS 5-year flood at a reporting point, 5-day lead (IFRC/URCS EAP2021UG01). Stand-in: the reanalysis at "
-            "G5220, Manafwa at Butaleja — the only reporting point in the sub-region — reaching its "
-            "5-year level"
-        ),
-        type="glofas_rp",
-        lat=0.925,
-        lon=34.075,
-        rp=5,
-    ),
+        label=f"{IFRC_WORDING}. Districts: {', '.join(ds)} (the EAP's high-risk districts in this zone)",
+        type="ifrc_portal",
+        districts=ds,
+    )
+    for z, ds in IFRC_DISTRICTS.items()
 ]
 
 
@@ -151,6 +164,11 @@ def activation_days(spec: dict, d: Data) -> pd.Series:
             sig = reforecast_signal(rf, leads=spec["leads"], exceed_share=spec["exceed_share"])
             return in_season(sig[sig.index <= "2022-12-31"]) >= level
         return in_season(q) >= level
+    if t == "ifrc_portal":
+        r = pd.read_parquet(ROOT / "outputs" / "triggers" / "ifrc_ratio_adm4.parquet")
+        q = r[spec["districts"]].max(axis=1).astype(float)
+        q.index = pd.to_datetime(q.index) - pd.Timedelta(days=IFRC_LEAD)
+        return in_season(q) >= 1.0
     pcs = [d.adm[x] for x in spec["districts"]]
     if t == "rain_forecast":  # CHIRPS-GEFS 5-day accumulation, district mean or wettest pixel
         w = d.chirps_gefs(spec.get("stat", "mean"))[pcs]
@@ -173,7 +191,7 @@ def seasonal(spec: dict, days: pd.Series, events: dict) -> pd.DataFrame:
     """One row per season: did this trigger activate inside the funding window, and did that
     activation catch a major event, judged exactly as our own drafts are (same events, same
     lead windows — GloFAS-style triggers get the GloFAS window, rain triggers the rain one)."""
-    leg = "glofas" if spec["type"] == "glofas_rp" else "rain"
+    leg = "glofas" if spec["type"] in ("glofas_rp", "ifrc_portal") else "rain"
     ev = events[spec["zone"]]
     have = {season_of(t) for t in days.index}
     rows = []

@@ -41,6 +41,23 @@ report per-trigger and combined return periods.
   the reanalysis. Rise-through variant: <=1 catch vs 4-5 false alarms. Treat Teso OND as having
   no GloFAS anticipatory skill unless the window changes. GloFAS/IFRC return periods are on
   ANNUAL maxima — the IFRC stand-ins use those.
+- Teso = the IFRC/URCS trigger (user decision after the country-team call, 29 Sep 2026;
+  `TESO_SOURCE = "ifrc"`, `FIXED_THRESHOLDS` — not calibrated, not raised). The IBF portal
+  (rodekruis/IBF-river-flood-pipeline, UGA config: admin levels 2-4, lead <= 5, RP 5, p >= 0.6,
+  51 members) judges each area at its ZONAL MAX: max forecast flow over the area (all_touched) vs
+  max of the official GloFAS v4 RL5 map over the area; a triggered sub-county triggers its
+  district. So Katakwi/Soroti/Ngora read the Lake Bisina-Awoja channel (RL5 ~370-410 m3/s, fed
+  from Elgon), Amuria/Kapelebyong the Akokoro, Serere Lake Kyoga — NOT G5196 alone (our first
+  stand-in, 1 act in 20). `analysis/ifrc_reproduction.py` (reanalysis as perfect forecast, dated
+  5 d early) reproduces 15/16 districts of the portal's 15 Nov 2023 notification. Own Gumbel
+  annual-max RL5 at G5196 59.2 vs official 60.9. The 2021 wording (70 %, 10-yr in low-priority
+  districts) is not what runs; the 2023 wording is.
+- Post-call analyses (29 Sep 2026): FloodScan fallback helps Teso only (Oct 2021); Karamoja rain
+  forecast beats FloodScan per district (keep rain; indicator chosen per district, rarity common —
+  never tune thresholds per district on 1-3 events); Adjumani compound (Kyoga rise >= 1-in-5 AND
+  rain >= 1-in-3 same day) catches 2020+2023 at 1-in-6.5 — found after looking at 2023, pending
+  the user's decision. Elgon: the choice waits on a partner confirming its processing (the
+  specifics live only in the private config text). Kyoga altimetry is median-filtered (3 passes) before the 180-d rise.
 - Google Flood Hub has NO gauges in Uganda (API: regionCode UG and a box around the country
   both return 0; KE 3, SO 7, SS 4 — checked 29 Sep 2026). No third opinion from Google.
 - Teso Oct-Dec floods (analysis/teso_ond_drivers.py): rain (forecast, observed, antecedent) has

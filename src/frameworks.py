@@ -64,7 +64,10 @@ EXTERNAL: dict[str, ExternalFramework] = {
         ),
         trigger=(
             "GloFAS via the 510 IBF portal: >=70% (operationally 60%) probability of a 5-yr RP flood "
-            "in high-priority districts (10-yr in lower-priority), >1,000 households, 5-day lead, FAR<=0.5"
+            "in high-priority districts (10-yr in lower-priority), >1,000 households, 5-day lead, FAR<=0.5. "
+            "As the portal computes it: each district, county and sub-county judged at its largest "
+            "river cell (zonal max of forecast flow vs zonal max of the official 5-yr map); a triggered "
+            "sub-area triggers its district (analysis/ifrc_reproduction.py)"
         ),
         status=(
             "Approved 27 May 2021, 5-yr EAP nominally expired mid-2026 (GO appeal MDRUG048 open to 2026-11-30); "
