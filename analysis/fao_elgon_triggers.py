@@ -8,7 +8,9 @@ output of this script is committed. The parameters are read at runtime from
 
 with the shape {"districts": [...], "rain_mm": <float>, "antecedent_pctl": <float>,
 "glofas_points": {"<label>": [lat, lon]}}. Without that file the script exits with a message.
-Results are printed to the console and written to outputs/, which is gitignored.
+Results are printed to the console; the table and the figure go to site_private/, which is
+gitignored (outputs/*.png is committed for the public pages, so the figure must not go there).
+No label, title or string in this file may carry the partner's values: build them from the config.
 
 What it measures, all against the same record used elsewhere in the repo:
 
@@ -44,7 +46,7 @@ from src.glofas_coverage import lagged_corr
 from src.skill_chain import rolling_sum
 from src.zones import load_adm2
 
-OUT = Path(__file__).resolve().parent.parent / "outputs"
+OUT = Path(__file__).resolve().parent.parent / "site_private"
 CONFIG = Path(__file__).resolve().parent.parent / "config" / "partner_triggers.local.json"
 
 
@@ -100,7 +102,7 @@ def main() -> None:
             rows.append(
                 dict(
                     scope=d,
-                    rule=f"rain>=100mm/3d ({lbl})",
+                    rule=f"rain>={rain_mm:.0f}mm/3d ({lbl})",
                     n_days=int(hits.sum()),
                     per_year=hits.sum() / years,
                     max_3d=float(df[d].max()),
@@ -112,14 +114,14 @@ def main() -> None:
     any_both_px = ((rain_max >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
     for name, act in (
         ("T3, district mean", any_rain),
-        ("T3, district mean + antecedent >= 80th pctl", any_both),
+        (f"T3, district mean + antecedent >= {ante_pctl:.0f}th pctl", any_both),
         ("T3, wettest pixel", any_rain_px),
-        ("T3, wettest pixel + antecedent >= 80th pctl", any_both_px),
+        (f"T3, wettest pixel + antecedent >= {ante_pctl:.0f}th pctl", any_both_px),
     ):
         for eset, evs in esets.items():
             rows.append(
                 dict(
-                    scope="any of the 7 districts",
+                    scope=f"any of the {len(fao_districts)} districts",
                     rule=name,
                     events=eset,
                     n_days=int(act.sum()),
@@ -128,19 +130,19 @@ def main() -> None:
                 )
             )
     tab = pd.DataFrame(rows)
+    OUT.mkdir(exist_ok=True)
     tab.to_csv(OUT / "fao_elgon_triggers.csv", index=False)
     pd.set_option("display.width", 220)
     print("Per-district frequency of the partner threshold (IMERG, 1998-2026):")
+    any_scope = f"any of the {len(fao_districts)} districts"
     print(
-        tab[tab.scope != "any of the 7 districts"][
-            ["scope", "rule", "n_days", "per_year", "max_3d"]
-        ]
+        tab[tab.scope != any_scope][["scope", "rule", "n_days", "per_year", "max_3d"]]
         .round(2)
         .to_string(index=False)
     )
     print("\nSub-region rule performance:")
     print(
-        tab[tab.scope == "any of the 7 districts"][
+        tab[tab.scope == any_scope][
             ["rule", "events", "n_events", "n_days", "per_year", "recall", "precision"]
         ]
         .round(2)
@@ -208,7 +210,7 @@ def main() -> None:
     ax.legend(fontsize=8, frameon=False)
     ax.axvline(rain_mm, color=INK, lw=2)
     ax.annotate(
-        f"FAO threshold {rain_mm:.0f} mm\n{any_rain.sum()} days in {years} years\n({any_rain.sum() / years:.1f}/yr)",
+        f"partner threshold {rain_mm:.0f} mm\n{any_rain.sum()} days in {years} years\n({any_rain.sum() / years:.1f}/yr)",
         (rain_mm, ax.get_ylim()[1] * 0.55),
         xytext=(14, 0),
         textcoords="offset points",
@@ -219,7 +221,7 @@ def main() -> None:
     ax.set_xlabel("wettest district's 3-day rainfall, mm (IMERG)")
     ax.set_ylabel("days (log)")
     ax.set_title(
-        "Where FAO's 100 mm / 3-day threshold sits in the record",
+        f"Where the partner's {rain_mm:.0f} mm / 3-day threshold sits in the record",
         fontsize=11,
         fontweight="bold",
         loc="left",
@@ -234,14 +236,14 @@ def main() -> None:
     acts = [(rain >= t).any(axis=1).fillna(False).sum() / years for t in thrs]
     ax2.plot(thrs, rec, color=RED, lw=2, marker="o", ms=3, label="recall, district mean")
     ax2.plot(thrs, rec_px, color=INK2, lw=2, ls=":", label="recall, wettest pixel")
-    ax2.set_xlabel("3-day rainfall threshold, mm (any of the 7 districts)")
+    ax2.set_xlabel(f"3-day rainfall threshold, mm ({any_scope})")
     ax2.set_ylabel("share of major events caught")
     ax2.axvline(rain_mm, color=INK, lw=2)
     ax3 = ax2.twinx()
     ax3.plot(thrs, acts, color=INK2, lw=1.4, ls="--", label="activations per year")
     ax3.set_ylabel("activations per year")
     ax2.set_title(
-        "The trade-off FAO's threshold implies", fontsize=11, fontweight="bold", loc="left"
+        "The trade-off the partner's threshold implies", fontsize=11, fontweight="bold", loc="left"
     )
     ax2.spines[["top"]].set_visible(False)
     ax3.spines[["top"]].set_visible(False)
@@ -249,7 +251,7 @@ def main() -> None:
     h2, l2 = ax3.get_legend_handles_labels()
     ax2.legend(h1 + h2, l1 + l2, fontsize=8, frameon=False, loc="upper right")
     fig.suptitle(
-        "FAO Mt Elgon flood AAP, Trigger 3 (rainfall >100 mm / 3 days) against the observed record, 1998-2026",
+        f"Partner draft Trigger 3 (rainfall >{rain_mm:.0f} mm / 3 days) against the observed record, 1998-2026",
         fontsize=12,
         fontweight="bold",
         x=0.02,
