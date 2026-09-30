@@ -99,10 +99,10 @@ indicator). District lists and the rationale for each tier are on `/coverage/`.
 
 | zone | regime | draft indicator |
 |---|---|---|
-| **Teso / Lake Kyoga** — Akokoro river | riverine; tier 2 wetlands lag 3–4 weeks | GloFAS G5196 |
+| **Teso / Lake Kyoga** — Akokoro river and the Lake Bisina–Awoja channel | riverine; tier 2 wetlands lag 3–4 weeks | the IFRC/URCS EAP trigger (GloFAS, per district) |
 | **Mount Elgon** | flash floods and landslides on the slopes; tier 2 lowland riverine | rainfall forecast |
 | **Karamoja** | flash floods | rainfall forecast, per district |
-| **Adjumani / Albert Nile** | Nile high stand (lake backwater) and tributary flash floods | Lake Kyoga rise, or rainfall forecast |
+| **Adjumani / Albert Nile** | Nile high stand (lake backwater) and tributary flash floods | Lake Kyoga rise, or rainfall forecast (lake leg alone recommended) |
 
 ## Layout
 

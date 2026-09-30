@@ -57,7 +57,7 @@ class Zone:
 ZONES: dict[str, Zone] = {
     "teso_kyoga": Zone(
         key="teso_kyoga",
-        label="Teso / Lake Kyoga (Akokoro river, GloFAS G5196)",
+        label="Teso / Lake Kyoga (riverine, IFRC/URCS EAP trigger)",
         regime="riverine",
         # Core = districts whose FloodScan flood extent co-varies with G5196 discharge
         # (analysis/teso_glofas_coverage.py, 1999-2019): Amuria and Katakwi directly

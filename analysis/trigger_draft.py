@@ -2,9 +2,11 @@
 
 One all-in trigger per zone; zones trigger independently of each other.
 
-  teso_kyoga  GloFAS G5196 (Akokoro) daily discharge. REANALYSIS as a stand-in for the
-              forecast until the reforecast is complete, so the backtest has no forecast
-              error in it — an upper bound on what the forecast trigger could do.
+  teso_kyoga  the IFRC/URCS EAP trigger as the IBF portal computes it (TESO_SOURCE = "ifrc";
+              analysis/ifrc_reproduction.py): per district, county and sub-county, zonal-max
+              GloFAS flow over zonal-max official 5-year level, on the reanalysis as a stand-in
+              for the 51-member forecast. A fixed protocol threshold, not calibrated here.
+              TESO_SOURCE = "reforecast" / "reanalysis" gives our earlier G5196 draft.
   elgon       CHIRPS-GEFS 5-day forecast accumulation, mean over the zone's 15 districts
               (slopes and lowlands: every lowland flood year is also a slope flood year).
   karamoja    CHIRPS-GEFS 5-day forecast per district, each against its own threshold at a
@@ -29,7 +31,8 @@ in the backtest, because with ~25 seasons the best score is noise.
 
 Event matching. A season's first activation releases the envelope. It counts as catching a
 major event when the event starts within the trigger's lead window after the activation
-(LEAD_DAYS: 14 for the rain forecasts, 30 for GloFAS, 120 for the lake leg), or is still going
+(LEAD_DAYS: 30 for the rain forecasts, 45 for GloFAS, 150 for the lake leg, 7 for observed
+FloodScan extent), or is still going
 on when the activation comes (negative lead). Otherwise the activation is a false alarm, and a
 major-impact season with no matching activation is a miss.
 
