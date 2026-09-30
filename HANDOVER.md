@@ -62,8 +62,9 @@ at a lead of 5 days or less, and a triggered sub-area triggers its district. Con
   boundaries; an exceedance is dated 5 days early.
 - Check against the portal: it notified on 15 Nov 2023 with 16 "potentially exposed" districts;
   the reproduction has 12 of them over the level within that forecast's 8 days and 15 by the end
-  of the month (not Namayingo), plus other districts the notification would not list (it lists
-  districts with mapped exposure, ranked by it).
+  of the month (not Namayingo) — but also about 23 districts the portal did not list, including
+  Katakwi and Serere in Teso. Part of that may be the notification listing only districts with
+  mapped exposure; part is likely the stand-in over-triggering (section 4).
 
 To confirm:
 
@@ -157,7 +158,7 @@ portal for Teso, the CHIRPS3-GEFS 5-day district values against the thresholds i
 |---|---|
 | Is EAP2021UG01 live for Oct–Dec 2026? Portal trigger history and boundaries | URCS / 510 |
 | How the Elgon partner processes its trigger | the partner (private notes) |
-| Adjumani compound rule: adopt or not | Pauline + Tristan |
+| Adjumani: lake leg alone (recommended, section 4) or keep the current two-leg draft | Pauline + Tristan |
 | Karamoja: return period; district mean vs wettest pixel; all-in vs per district | Pauline; funding question for the country team |
 | Recalibrate rain thresholds on CHIRPS3-GEFS | Pauline (before monitoring) |
 | Severity 3+ scope in Teso | country team / working group |
