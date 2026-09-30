@@ -42,7 +42,7 @@ def data_uri(path: Path) -> str:
 
 
 def fao_trigger_table() -> str:
-    d = pd.read_csv(bp.OUT / "fao_elgon_triggers.csv")
+    d = pd.read_csv(bp.ROOT / "site_private" / "fao_elgon_triggers.csv")
     d = d[(d.scope == "any of the 7 districts") & (d.events == "major")]
     show = d[["rule", "per_year", "recall", "precision"]].rename(
         columns={
@@ -87,7 +87,7 @@ def page(priv: dict) -> str:
             section.append(
                 block.replace(
                     'src="fao_elgon_triggers.png"',
-                    f'src="{data_uri(bp.OUT / "fao_elgon_triggers.png")}"',
+                    f'src="{data_uri(bp.ROOT / "site_private" / "fao_elgon_triggers.png")}"',
                 )
             )
 
@@ -107,6 +107,14 @@ def page(priv: dict) -> str:
         "<h2>The drafts</h2>",
         *[framework_card(fw) for fw in fws.values()],
         *section,
+        *(
+            [
+                "<h2>Handover notes</h2>",
+                markdown.markdown(priv["handover_notes"], extensions=["tables"]),
+            ]
+            if priv.get("handover_notes")
+            else []
+        ),
         "<h2>Harmonising triggers, including the drafts</h2>",
         bp.harmonisation_table(
             frameworks={**EXTERNAL, **fws},

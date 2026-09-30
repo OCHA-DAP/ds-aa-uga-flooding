@@ -112,6 +112,9 @@ def main() -> None:
     for n, r in ((3, 4), (2, 5)):
         win = (rain >= r).rolling(5, min_periods=1).max().sum(axis=1) >= n
         opts[f"spatial: lake leg, or {n}+ districts at 1-in-{r} within 5 days"] = either(win)
+    # the review's point (30 Sep): the compound rule is close to a lake gate, so show the gate alone
+    for lk in (6.5, 5):
+        opts[f"lake leg alone at 1-in-{lk:g} (no rain leg)"] = (lake >= lk, "lake")
     for lk, r in ((5, 3), (4, 3)):
         c = (lake >= lk) & (rain >= r).any(axis=1)
         opts[f"compound: lake rise 1-in-{lk} AND any district rain 1-in-{r}, same day"] = (

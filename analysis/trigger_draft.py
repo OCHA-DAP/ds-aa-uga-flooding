@@ -661,8 +661,13 @@ def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float
         return big, acts, hits
 
     base_big, _, base_hits = caught_big(design_rp)
-    if base_hits == 0:
-        return design_rp, {}  # nothing worth protecting: raising would only silence the trigger
+    if base_hits == 0 or not base_big:
+        # Nothing big to protect. The rule (user, 23 Sep 2026) is to raise until a catch of
+        # thousands of people would be lost; with no such catch it has no stopping point, and
+        # raising "until the last small catch" just parks the bar a hair under that one event
+        # (Karamoja: 0.03 mm under a 140-affected card, 1-in-10 instead of 1-in-5.2 — found by
+        # the 30 Sep review). Stay at the frequency-matched level.
+        return design_rp, {}
     best, stats = design_rp, None
     for rp in np.arange(design_rp, MAX_RP + 0.01, 0.25):
         big, acts, hits = caught_big(float(rp))

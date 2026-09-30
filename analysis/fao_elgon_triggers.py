@@ -113,10 +113,10 @@ def main() -> None:
     any_both = ((rain >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
     any_both_px = ((rain_max >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
     for name, act in (
-        ("T3, district mean", any_rain),
-        (f"T3, district mean + antecedent >= {ante_pctl:.0f}th pctl", any_both),
-        ("T3, wettest pixel", any_rain_px),
-        (f"T3, wettest pixel + antecedent >= {ante_pctl:.0f}th pctl", any_both_px),
+        ("rain trigger, district mean", any_rain),
+        (f"rain trigger, district mean + antecedent >= {ante_pctl:.0f}th pctl", any_both),
+        ("rain trigger, wettest pixel", any_rain_px),
+        (f"rain trigger, wettest pixel + antecedent >= {ante_pctl:.0f}th pctl", any_both_px),
     ):
         for eset, evs in esets.items():
             rows.append(
@@ -160,10 +160,10 @@ def main() -> None:
                 f"major-event recall {sm['recall']:.0%}, precision {sm['precision']:.0%}"
             )
 
-    # --- T2: does GloFAS at the only Elgon point track observed flooding there? -----------
+    # --- GloFAS trigger: does GloFAS at the only Elgon point track observed flooding there? -----------
     # G5220 Manafwa at Butaleja, LISFLOOD v4 pixel; and the unnamed fixed point on the Mpologoma.
     print(
-        "\nT2 check - GloFAS reanalysis vs observed flood extent, correlation at best lag (Aug-Dec anomalies):"
+        "\nGloFAS trigger check - GloFAS reanalysis vs observed flood extent, correlation at best lag (Aug-Dec anomalies):"
     )
     ex = stratus.load_parquet_from_blob(
         f"{PROJECT_PREFIX}/processed/exposure/floodscan_exposure_adm2_daily.parquet", stage="dev"
@@ -251,7 +251,7 @@ def main() -> None:
     h2, l2 = ax3.get_legend_handles_labels()
     ax2.legend(h1 + h2, l1 + l2, fontsize=8, frameon=False, loc="upper right")
     fig.suptitle(
-        f"Partner draft Trigger 3 (rainfall >{rain_mm:.0f} mm / 3 days) against the observed record, 1998-2026",
+        f"Partner draft rain trigger (rainfall >{rain_mm:.0f} mm / 3 days) against the observed record, 1998-2026",
         fontsize=12,
         fontweight="bold",
         x=0.02,

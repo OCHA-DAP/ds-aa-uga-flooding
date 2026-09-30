@@ -799,11 +799,15 @@ def ifrc_section(inp: Inputs) -> str:
             f"<li><strong>Checked against the portal itself.</strong> On 15 November 2023 the portal triggered "
             f"the EAP and listed {len(on_list)} potentially exposed districts. The reproduction has {by22} of them "
             f"over the 5-year flow within that forecast’s 8 days (15–22 November) and {by30} by the "
-            f"end of the month; it misses only {missing}. It also has other districts over the level — the "
-            "Elgon slope districts among them — which is expected: the notification lists districts with "
-            "exposed population on the flood maps, in order of it, not every triggered area. None of the 16 is in "
-            "Teso, and the reproduction has Teso quiet until Katakwi crosses on 22 November, the last day of "
-            "that forecast.</li>"
+            f"end of the month; it misses only {missing}. But it also has <strong>other districts over the "
+            "level that the portal did not list</strong> \u2014 seven Elgon slope districts on 15 November, and in "
+            "Teso Katakwi (7\u201314 November, then the 22nd) and Serere (from the 21st). Some of that may be "
+            "the notification listing only districts with mapped exposure; some is the stand-in over-triggering. "
+            "Katakwi\u2019s exceedances are marginal (1.02\u20131.03\u00d7 the level), and at G5196 the reforecast "
+            "shows that when the reanalysis is 0\u20132 % over the level, 60 % of members agree only about a third "
+            "of the time. <strong>So the reproduction has the portal\u2019s mechanics, not necessarily its "
+            "decisions</strong>: read it as a stand-in until it is checked against the portal\u2019s own trigger "
+            "log (did Katakwi or Serere trigger in November 2023?).</li>"
         )
     return (
         "<h3>The IFRC/URCS trigger, word for word</h3>"
@@ -946,13 +950,24 @@ def karamoja_section(inp: Inputs) -> str:
         "everywhere it is usable, catches nothing more in October–December and adds false alarms. Thresholds "
         "are deliberately not tuned district by district: each district has one to three dated October–"
         "December events, so a per-district optimum would fit the record rather than the hazard. What is chosen "
-        "per district is the indicator; the rarity stays common. The near miss is November 2008, when "
-        "Kaabong’s forecast reached about 1-in-12 against a bar near 1-in-18.</p>"
+        "per district is the indicator; the rarity stays common.</p>"
+        + (
+            f"<p><strong>The near miss is November 2008</strong> ({kar08.affected:,.0f} affected on record, the zone\u2019s "
+            f"largest October\u2013December flood), when {kar08.peak_where}\u2019s forecast reached "
+            f"1-in-{kar08.peak_rp:.1f} against a per-district bar of 1-in-{inp.series_rp('karamoja'):.1f}. A zone return "
+            "period of 1-in-4 would catch it, at six activations in 25 windows (sensitivity table above); the "
+            "record cannot tell 1-in-4 from 1-in-5.2 apart, so that is a preference for 2008, not a finding. An "
+            "earlier draft sat at 1-in-10: the raise had parked the bar 0.03 mm under a 140-affected December 2006 "
+            "card, which the rule should not do when there is no big flood to protect (fixed 30 September). A "
+            "wettest-pixel reading of the forecast is worth one run (the district tables already carry it).</p>"
+            if (kar08 := inp.tabs["karamoja"].loc[2008]) is not None
+            else ""
+        )
     )
 
 
 def adjumani_section(inp: Inputs) -> str:
-    o, g = inp.adj_options, inp.adj_grid
+    o = inp.adj_options
     if o is None:
         return ""
     rows = "".join(
@@ -964,34 +979,30 @@ def adjumani_section(inp: Inputs) -> str:
         f"<td>{'yes, ' + r.first_2023[5:] if r.catches_2023 else 'no'}</td></tr>"
         for r in o.itertuples()
     )
-    plateau = ""
-    if g is not None:
-        both = g[g.caught >= 2]
-        plateau = (
-            f" Across a grid of lake bars 1-in-2 to 1-in-8 and rain bars 1-in-2 to 1-in-6, {len(both)} of "
-            f"{len(g)} combinations catch both 2020 and 2023, with {int(both.activations.min())}–"
-            f"{int(both.activations.max())} activations: a plateau, not a knife edge."
-        )
     return (
         "<h3>Could Adjumani have caught 2023?</h3>"
         "<p>October–December 2023 was a major season on the Albert Nile (Adjumani 2–7 November, "
         "Madi Okollo from 5 November, IOM DTM counts in Moyo and Obongi through October and November) and the "
         "draft stayed quiet. Nothing was extreme: the districts’ 5-day forecasts peaked at 1-in-3 to "
         "1-in-9 (Obongi) and Lake Kyoga’s six-month rise at about 1-in-8, against draft bars near 1-in-30 "
-        "per series. What was unusual is that moderate things happened together: the Nile already high and "
-        "rain on top. Options, on the same seasons and events:</p>"
+        "per series. Options, on the same seasons and events:</p>"
         "<div class='tw trig-cmp'><table><thead><tr><th>Option</th><th>Activations</th><th>Caught</th>"
         "<th>False alarms</th><th>Catches 2023</th></tr></thead>"
         f"<tbody>{rows}</tbody></table></div>"
-        "<p><strong>Yes, with the compound rule</strong> — Lake Kyoga’s rise at 1-in-5 <em>and</em> "
-        "any district’s rain forecast at 1-in-3 on the same day. It activates at 1-in-6.5, exactly the "
-        "zone’s major-season frequency, catches 2020 and 2023 (from 15 October, 18 days ahead of the "
-        "Adjumani flood) and costs two false alarms. Lowering the rain bar or asking for several wet districts "
-        "at once also catches 2023, but only at about 1-in-3 with five or six false alarms. The compound rule "
-        f"also matches how the Albert Nile floods: backwater from a high Nile plus local runoff.{plateau} "
-        "Two cautions. It was found after looking at 2023, on four major seasons, so it is a hypothesis the "
-        "next seasons have to confirm. And 2004 and 2008 stay missed by every option: neither the lake nor the "
-        "rain was high then.</p>"
+        "<p><strong>Not with anticipation, and not with the compound rule as calibrated.</strong> The compound "
+        "rule \u2014 Lake Kyoga\u2019s rise at 1-in-5 <em>and</em> any district\u2019s rain forecast at 1-in-3 on the "
+        "same day \u2014 does activate in 2023, at the zone\u2019s own frequency (1-in-6.5). But an independent "
+        "review (30 September) found both of its catches are floods already under way: the 2020 Nile flood had run "
+        "since mid-year, and 2023\u2019s began before the window (over 4,000 refugees hit in Adjumani on "
+        "20\u201327 September; DTM counts from 1 October). The rain condition does little work \u2014 some "
+        "district reaches 1-in-3 in most seasons \u2014 so the rule is close to a lake gate: the lake leg alone, at "
+        "the same rate, catches the same two seasons, on 1 October. With four major seasons and a rule chosen after "
+        "seeing 2023, a random rule of this size would do as well about one time in eight, and the grid of nearby "
+        "settings is not independent evidence (every cell scores the same two seasons). The honest option is the "
+        "<strong>lake leg at 1-in-5 to 1-in-6.5, stated plainly as \u201cactivate when the Nile is already "
+        "high\u201d</strong> \u2014 no anticipatory lead in this window \u2014 with the rain leg at its own rarity "
+        "if wanted. 2004 and 2008 are missed by every option; their impact figures look like national EM-DAT "
+        "totals split across districts, so the zone\u2019s major-season count is itself soft.</p>"
         "<p class='fn'><code>analysis/adjumani_options.py</code>. The lake series is now smoothed with a "
         "three-pass running median: single altimetry passes ~0.5 m low had been turning into fake six-month "
         "“rises” half a year later (October 2024 read as a 1-in-18 rise).</p>"
@@ -1068,11 +1079,14 @@ def _zone_note(z: str, inp: Inputs) -> str:
             "29 September: when the IBF portal shows any Teso district triggered, the zone activates, so the "
             "money moves on the same signal as URCS\u2019s own early action. The exact wording and how the portal "
             "turns it into an activation are set out in the next section, with our check of both. Backtested on "
-            "the GloFAS reanalysis against the official 5-year map \u2014 a perfect-forecast stand-in, which the "
-            "reforecast supports here (at G5196 it matches the reanalysis to within 1 % in this window) \u2014 it "
+            "the GloFAS reanalysis against the official 5-year map \u2014 a perfect-forecast stand-in, so read "
+            "these numbers as the IBF trigger\u2019s likely behaviour, not its record \u2014 it "
             f"activates in {act} of the {int(r.seasons_with_data)} windows ({rp}), catches {caught} "
-            f"({years_txt(hit)}, a flood already under way) and misses {missed} of {int(r.major_seasons)} major "
-            f"seasons ({years_txt(miss)}). Its false alarms ({years_txt(fa)}) mostly come through the Lake "
+            f"({years_txt(hit)}, a flood five weeks under way, and only through one Katakwi sub-county at 1.05\u00d7 "
+            "the level \u2014 at district level Teso stays below it that season) and misses "
+            f"{missed} of {int(r.major_seasons)} major seasons ({years_txt(miss)}). Because the district takes the "
+            "largest of many areas, some Teso district passes the \u201c5-year\u201d level in most years: do not "
+            f"describe this trigger as 1-in-5. Its false alarms ({years_txt(fa)}) mostly come through the Lake "
             "Bisina\u2013Awoja channel that the portal reads Katakwi, Soroti and Ngora on: it drains Mt Elgon\u2019s "
             "northern slopes and runs high in Elgon\u2019s wet years, which were not Teso flood windows. Our own "
             "G5196 draft did no better (1-in-8; activations 2007, 2012 and 2020, both catches floods already under "
@@ -1218,9 +1232,10 @@ def key_points(inp: Inputs) -> str:
         "<strong>Since the country-team call (29 September):</strong> Teso adopts the <strong>IFRC/URCS "
         "trigger</strong>, now reproduced the way the IBF portal actually computes it (it is not read at G5196 "
         "alone \u2014 see the Teso section for the wording and the check); Elgon\u2019s choice waits on FAO (see the Elgon "
-        "section); Karamoja keeps the rain forecast after a district-by-district "
-        "test against FloodScan; Adjumani has a compound lake-and-rain option that catches 2023; and every zone "
-        "has a FloodScan fallback test and a map of where it is measured.",
+        "section); Karamoja keeps the rain forecast after a district-by-district test against FloodScan, back "
+        "at its frequency-matched rate; Adjumani\u2019s 2023 flood can only be met once under way, and the honest "
+        "option is the lake leg stated as such; and every zone has a FloodScan fallback test and a map of where "
+        "it is measured. An independent review of the three judgement calls (30 September) is folded in.",
         "Four triggers, one per zone, each all-in and independent of the others. They can activate only in "
         f"<strong>October, November and December</strong> \u2014 planning runs into September, so October is the "
         f"earliest month that can be acted on this year. Calibrated and backtested on {cal}.",
@@ -1263,7 +1278,9 @@ def page(inp: Inputs) -> str:
         "published (FAO’s draft Mt Elgon plan, the CRS/Caritas Tororo protocol, DRC’s Karamoja plan). Please "
         f"do not forward it outside the team. <strong>Status:</strong> second draft, calibrated on {cal}. Teso now "
         "uses the IFRC/URCS trigger as the IBF portal runs it (reproduced on the GloFAS reanalysis); Elgon\u2019s "
-        "likely choice waits on FAO. Nothing here is endorsed.</p>",
+        "likely choice waits on FAO. Nothing here is endorsed. <strong>Handed over to Pauline on 30 September "
+        "2026</strong> \u2014 the next steps are at the foot of the page, and <code>HANDOVER.md</code> in the repo "
+        "is the full write-up.</p>",
         "<h2>In brief</h2>",
         key_points(inp),
         "<h2>The four triggers</h2>",
@@ -1399,7 +1416,20 @@ def page(inp: Inputs) -> str:
         "reported back as return levels per series. Return periods quoted for the backtest are Weibull, (n + 1) / "
         "activations.</li>"
         "</ul>",
-        "<h2>Open questions and next steps</h2>",
+        "<h2>Next steps (handover, 30 September 2026)</h2>",
+        "<ol>"
+        "<li><strong>Confirm the IFRC trigger looks good.</strong> Ask URCS/510 for the portal\u2019s own trigger "
+        "history and boundaries and compare with the reproduction; confirm the EAP is live for October\u2013December "
+        "2026; settle which Teso districts count.</li>"
+        "<li><strong>Put in FAO\u2019s processing</strong> for the Elgon trigger once they reply, and make it the "
+        "Elgon trigger (the questions are in the handover notes on the partner page).</li>"
+        "<li><strong>Finalise Karamoja and Adjumani:</strong> Karamoja\u2019s return period and rainfall reading "
+        "(district mean or wettest pixel); whether Adjumani takes the compound lake-and-rain rule.</li>"
+        "<li><strong>Set up monitoring</strong> for all four zones. Nothing runs yet. The rain thresholds were set on "
+        "CHIRPS-GEFS v2, which CHC discontinued on 1 July 2026: recalibrate on CHIRPS3-GEFS before monitoring. Teso "
+        "needs access to the IBF portal\u2019s trigger state.</li>"
+        "</ol>",
+        "<h2>Open questions</h2>",
         "<ul>"
         "<li><strong>The honest headline:</strong> matched to dated floods, these triggers catch few major events. "
         "Any of them would need the observational backstop behind it before it could be proposed as a mechanism.</li>"
