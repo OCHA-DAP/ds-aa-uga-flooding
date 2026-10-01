@@ -8,7 +8,7 @@ Two sources of trigger specifications:
 
   PUBLIC_SPECS   below — triggers from published documents (the IFRC/URCS EAP). Results go to
                  outputs/triggers/existing_public.csv and onto the public /triggers/ page.
-  private specs  config/private_frameworks.local.json, key "trigger_specs" (gitignored) —
+  private specs  private_frameworks.local.json on the dev blob, key "trigger_specs" —
                  triggers from partner documents that are not published (FAO's draft Elgon
                  AAP, and plans shared through the country team). Results go to the gitignored
                  site_private/existing_private.csv and only into the encrypted /partner/ page.
@@ -246,7 +246,7 @@ def main() -> None:
         run(priv, d, OUT_PRIVATE)
     else:
         print(
-            "\nno private trigger specs (config/private_frameworks.local.json) — public ones only"
+            "\nno private trigger specs (private_frameworks.local.json, dev blob) — public ones only"
         )
 
 

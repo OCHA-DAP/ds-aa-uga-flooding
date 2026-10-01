@@ -21,7 +21,9 @@ report per-trigger and combined return periods.
   OPM El Niño retrospective) are internal — reference them, never commit them.
 - Unpublished partner material (currently FAO's draft Mt Elgon flood AAP, Sep 2026) never
   goes in committed source or the public pages — this repo and its Pages site are public. It
-  lives in gitignored `config/*.local.json`; `pipeline/build_private_page.py` renders it into
+  lives in two JSON configs on the dev blob (`ds-aa-uga-flooding/private/config/`), read at run time by
+  `read_private_config` in `src/frameworks.py` (a gitignored local `config/` copy overrides);
+  `pipeline/build_private_page.py` renders it into
   gitignored `site_private/` with images as data URIs, then staticrypt-encrypts it into
   `pages/partner/index.html`, the only committed form. The public pages may say a draft exists
   and link to `/partner/`, nothing more. The script refuses to write if plaintext survives.

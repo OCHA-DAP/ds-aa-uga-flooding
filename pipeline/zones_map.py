@@ -317,7 +317,7 @@ def main(frameworks: dict | None = None, out: Path = OUT) -> None:
     fig.text(
         0.02,
         0.952,
-        "Four OCHA/CERF zones under design — tier 1 solid, tier 2 dotted with a dashed outline (same driver, different flood regime) — the GloFAS point, "
+        "Four UHF zones under design — tier 1 solid, tier 2 dotted with a dashed outline (same driver, different flood regime) — the GloFAS point, "
         "and the districts where other organisations already run flood anticipatory action (hatched; detail below).",
         fontsize=9.5,
         color=INK2,

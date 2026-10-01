@@ -94,7 +94,7 @@ ZONE_STATUS = [
         "yes",
         "all 3 districts usable; 79 % of events reach the district's top fifth, against 42 % of arbitrary windows. Rainfall OR-leg adds nothing (slow riverine)",
         "Relationship drifted after 2013; needs a gauge or Flood Hub cross-check.",
-        "2007 Teso floods (CERF), 2010, 2014",
+        "2007 Teso floods, 2010, 2014",
     ),
     (
         "teso_kyoga",
@@ -117,7 +117,7 @@ ZONE_STATUS = [
         "mixed: 4 of 9 districts usable (Bulambuli, Kapchorwa, Manafwa, Mbale). Bududa, Bukwo and Kween are always zero, Sironko's floods do not land high, and Namisindwa has one dated event. Needs the observed-rainfall OR-leg (+17 pts) and gauges where the satellite fails",
         "Precision under 15 % at any threshold; readiness-tier only. A partner plan for the sub-region is in draft "
         "\u2014 coordinate rather than duplicate.",
-        "2010 Nametsi, 2019 Bududa (CERF), Nov 2024 Bulambuli",
+        "2010 Nametsi, 2019 Bududa, Nov 2024 Bulambuli",
     ),
     (
         "elgon",
@@ -139,7 +139,7 @@ ZONE_STATUS = [
         "partial",
         "4 of 9 districts usable (Abim, Amudat, Kotido, Nakapiripirit); across the zone 50 % of events reach the top fifth against 43 % by chance, and year-level AUC is near chance; for major events the observed-rainfall OR-leg is the leg that works (+31 pts)",
         "Same limits as the Elgon slopes; DRC covers Moroto, Napak, Amudat.",
-        "2007 (CERF), 2008, 2018 Napak",
+        "2007, 2008, 2018 Napak",
     ),
     (
         "adjumani",
@@ -353,7 +353,7 @@ def coverage_page() -> str:
         HEAD.format(
             v=ASSET_VERSION,
             title="Trigger zones and existing coverage",
-            sub="The four OCHA/CERF zones under design, the GloFAS point, and where other organisations' flood anticipatory action already operates.",
+            sub="The four UHF zones under design, the GloFAS point, and where other organisations' flood anticipatory action already operates.",
         ),
         '<figure><img src="zones_coverage_map.png" alt="Map of Uganda with the four trigger zones and other organisations\' flood AA coverage">'
         "<figcaption>Backdrop: share of Oct–Dec seasons 1998–2025 with FloodScan flooding (SFED ≥ 0.05), clipped to Uganda. "
@@ -852,7 +852,7 @@ def results_page() -> str:
         "as circles, the 14 largest cumulative caseloads labelled, and the zones outlined.</p>",
         '<figure><img src="impact_summary.png" alt="Uganda districts coloured by number of years with recorded impact"></figure>',
         "<p>Then one map per year. Districts are coloured by people affected that year (log scale; pale pink = a record without a count), "
-        "circles mark five or more deaths. Panels are framed for the two CERF rapid-response allocations (gold: USD 4.8 M in Oct 2007, USD 4.0 M in Jan 2020 for the Nov–Dec 2019 floods) and for El Niño Oct–Dec seasons (orange, ONI ≥ 0.5), with a tag for positive-IOD seasons. The 2007 Teso floods, the 2010 to 2013 run, 2018, 2020 and the 2024 to 2025 El Niño years stand out; "
+        "circles mark five or more deaths. Panels are framed for El Niño Oct–Dec seasons (orange, ONI ≥ 0.5), with a tag for positive-IOD seasons. The 2007 Teso floods, the 2010 to 2013 run, 2018, 2020 and the 2024 to 2025 El Niño years stand out; "
         "2019 and 2022 are under-recorded because DesInventar has no 2019 cards and stops in 2021.</p>",
         '<figure><img src="impact_by_year.png" alt="Grid of 28 yearly maps of Uganda districts coloured by recorded impact"></figure>',
         "<p class='fn'>Two corrections to the raw sources: a few DesInventar datacards carry national totals against one district (Agago "

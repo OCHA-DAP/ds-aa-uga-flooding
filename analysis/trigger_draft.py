@@ -119,24 +119,6 @@ LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every othe
 # --- seasons -------------------------------------------------------------------------------
 
 
-CERF_FILE = ROOT / "src" / "data" / "cerf_allocations.csv"
-
-
-def cerf_by_zone() -> pd.DataFrame:
-    """CERF flood allocations to Uganda, attributed per zone from the RC/HC reports: a zone is
-    'primary' where the allocation targeted its districts, 'secondary' where it was covered
-    but not the focus. Allocations reaching no zone district are not listed."""
-    c = pd.read_csv(CERF_FILE, parse_dates=["approved"])
-    c["label"] = c.apply(
-        lambda r: (
-            f"CERF ${r.amount_usd / 1e6:.1f}M {r.approved:%b %Y}"
-            + (" (secondary)" if r.role == "secondary" else "")
-        ),
-        axis=1,
-    )
-    return c
-
-
 def season_of(ts: pd.Timestamp) -> int | None:
     return ts.year if ts.month in SEASON_MONTHS else None
 
@@ -436,15 +418,7 @@ def activation_episodes(series: dict[str, pd.Series], thr: dict[str, float], sea
     return out
 
 
-def cerf_season(approved: pd.Series, season: int) -> pd.Series:
-    """An allocation belongs to the season it responds to: approved in that window, or in the
-    first quarter after it (2020's allocation, approved 17 Jan, answered the Oct-Dec 2019 floods)."""
-    alloc_season = approved.dt.year - (approved.dt.month <= 3).astype(int)
-    return alloc_season == season
-
-
 def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
-    cz = cerf_by_zone()
     rows = []
     sms = {k: season_max(s) for k, s in series.items()}
     fits = {k: gumbel_fit(sms[k].reindex(cal).dropna()) for k in series}
@@ -486,7 +460,6 @@ def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
                 peak_value=float(sms[where].get(y, np.nan)) if where else np.nan,
                 peak_where=where,
                 **imp_,
-                cerf="; ".join(cz[(cz.zone == z) & cerf_season(cz.approved, y)].label),
             )
         )
     t = pd.DataFrame(rows).set_index("season")
@@ -603,8 +576,6 @@ def timing_grid(
         hit |= (sr >= thr[key]).reindex(idx, fill_value=False)
     starts = hit[hit & ~hit.shift(1, fill_value=False)].index
     acts = {pd.Timestamp(d) for d in tab.first_date.dropna() if isinstance(d, str) and d}
-    cz = cerf_by_zone()
-    cz = cz[cz.zone == z]
     rows = []
     for y in years:
         for m in range(1, 13):
@@ -627,10 +598,6 @@ def timing_grid(
                     crossing=bool(((starts >= lo) & (starts <= hi)).any())
                     and m not in SEASON_MONTHS,
                     data=bool(((idx >= lo) & (idx <= hi)).any()),
-                    cerf="; ".join(
-                        f"{r.code}|{r.role}|${r.amount_usd / 1e6:.1f}M|{r.responds_to}|{r.districts.replace(';', ', ')}"
-                        for r in cz[(cz.approved >= lo) & (cz.approved <= hi)].itertuples()
-                    ),
                 )
             )
     return pd.DataFrame(rows)

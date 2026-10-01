@@ -13,7 +13,7 @@ Optional local inputs, each skipped with a message if absent:
                                    (level 2 = district: the cell of its highest official RL5)
 
 Partner (unpublished) trigger names, e.g. which partner triggers also read a GloFAS point, are
-looked up at run time in the gitignored config/private_frameworks.local.json and are never
+looked up at run time in the private config on the dev blob and are never
 written here. When that file is present the maps are restricted-page material. Pass --public
 to leave partner names off.
 

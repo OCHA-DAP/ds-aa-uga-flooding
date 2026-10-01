@@ -144,5 +144,3 @@ td.tg-on-major, i.tg-on-major { background: repeating-linear-gradient(135deg, #e
 .tg-legend span { display: inline-flex; align-items: center; gap: 5px; }
 .tg-sw { display: inline-block; width: 16px; height: 12px; border-radius: 2px; }
 .tg-winsw { background: #f4f4f2; box-shadow: inset 0 0 0 1px #d9b24a; }
-.tg-cerf { display: inline-block; font: 700 9px/12px Roboto, sans-serif; color: #fff; background: #1f5f8b; border-radius: 3px; padding: 0 3px; margin-left: 2px; vertical-align: middle; }
-.tg-cerf2 { background: #fff; color: #1f5f8b; box-shadow: inset 0 0 0 1px #1f5f8b; }

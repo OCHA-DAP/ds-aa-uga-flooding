@@ -4,7 +4,7 @@ Some material shaping this design comes from partner documents that are not publ
 present FAO's draft Mt Elgon flood AAP. This repository and its GitHub Pages site are
 public, so that material never appears in committed source or in the public pages:
 
-  * the content lives in config/private_frameworks.local.json (gitignored);
+  * the content lives in private_frameworks.local.json on the dev blob, read at run time;
   * this script renders it, with images embedded as data URIs so nothing is fetchable on
     its own, into site_private/ (gitignored);
   * staticrypt encrypts that page into pages/partner/index.html, and only the encrypted
@@ -137,7 +137,7 @@ def main() -> None:
     priv = load_private()
     if not priv:
         print(
-            "No config/private_frameworks.local.json — nothing to build (the file is gitignored by design)."
+            "No private_frameworks.local.json (dev blob ds-aa-uga-flooding/private/config/) — nothing to build."
         )
         return
     BUILD.mkdir(exist_ok=True)

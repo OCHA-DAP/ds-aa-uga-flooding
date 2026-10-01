@@ -373,10 +373,6 @@ def timing_grids(inp: Inputs) -> str:
                     mark = f"<span class='tg-act' style='background:{bp.ZONE_COL[z]}'></span>"
                 elif r.crossing:
                     mark = "<span class='tg-x'></span>"
-                cerf = r.cerf if isinstance(r.cerf, str) and r.cerf else ""
-                if cerf:
-                    role = cerf.split("|")[1]
-                    mark += f"<span class='tg-cerf{' tg-cerf2' if role == 'secondary' else ''}'>C</span>"
                 tip = [f"{MONTH_NAMES[m - 1]} {y}"]
                 if r.n_events:
                     tip.append(
@@ -388,13 +384,6 @@ def timing_grids(inp: Inputs) -> str:
                     tip.append("trigger activated")
                 if r.crossing:
                     tip.append("indicator over threshold (outside the window)")
-                for c in filter(None, cerf.split("; ")):
-                    code, role, amt, resp, dists = c.split("|")
-                    tip.append(
-                        f"CERF {code} approved, {amt} for the {resp}"
-                        + (" (this zone secondary)" if role == "secondary" else "")
-                        + f" \u2014 {dists}"
-                    )
                 cells.append(
                     f"<td class='{' '.join(cls)}' style='{style}' title='{bp.e('; '.join(tip))}'>{mark}</td>"
                 )
@@ -413,8 +402,6 @@ def timing_grids(inp: Inputs) -> str:
         "<span><i class='tg-sw tg-on'></i> a smaller flood still under way</span>"
         "<span><span class='tg-act' style='background:#555'></span> trigger activated (Oct\u2013Dec only)</span>"
         "<span><span class='tg-x'></span> indicator over its threshold outside the window</span>"
-        "<span><span class='tg-cerf'>C</span> CERF flood allocation approved for this zone</span>"
-        "<span><span class='tg-cerf tg-cerf2'>C</span> zone covered, not the focus</span>"
         "<span><i class='tg-sw tg-winsw'></i> the Oct\u2013Dec window</span>"
         "</div>"
     )
@@ -557,19 +544,6 @@ def allocation_table(inp: Inputs) -> str:
     return f"<div class='tw trig-alloc'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
 
-def cerf_overview(inp: Inputs, y: int) -> str:
-    """The CERF allocation(s) for a season, with the zones each reached."""
-    by_label: dict[str, list[str]] = {}
-    for z in ZONE_ORDER:
-        c = inp.tabs[z].loc[y].cerf if y in inp.tabs[z].index else ""
-        for part in filter(None, (c if isinstance(c, str) else "").split("; ")):
-            base = part.replace(" (secondary)", "")
-            by_label.setdefault(base, []).append(
-                SHORT[z] + (" (secondary)" if "secondary" in part else "")
-            )
-    return "; ".join(f"{bp.e(k)} \u2014 {bp.e(', '.join(v))}" for k, v in by_label.items())
-
-
 def overview_table(inp: Inputs, years: list[int]) -> str:
     """One row per season; a cell says "caught" where the activation matched a major event."""
     rows = []
@@ -585,17 +559,15 @@ def overview_table(inp: Inputs, years: list[int]) -> str:
                 cells.append(f"<td class='act' style='background:{bp.ZONE_COL[z]}'>{txt}</td>")
             else:
                 cells.append("<td></td>")
-        cerf = cerf_overview(inp, y)
         lbl = inp.tabs["teso_kyoga"].loc[y].label
         rows.append(
             f"<tr><td class='yr'>{lbl}</td>{''.join(cells)}"
-            f"<td class='any'>{'●' if anyz else ''}</td>"
-            f"<td class='src'>{cerf}</td></tr>"
+            f"<td class='any'>{'●' if anyz else ''}</td></tr>"
         )
     head = (
         "<tr><th>Season</th>"
         + "".join(f"<th>{SHORT[z]}</th>" for z in ZONE_ORDER)
-        + "<th>Any zone</th><th>CERF flood allocation, and the zones it reached</th></tr>"
+        + "<th>Any zone</th></tr>"
     )
     return f"<div class='tw trig-over'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
@@ -695,15 +667,13 @@ def zone_table(z: str, inp: Inputs, cols=()) -> str:
             + "".join(existing_cell(h, y) for _, _, h in cols)
             + f"{impact_cell(r.affected, inp.top_aff, 500)}{impact_cell(r.deaths, inp.top_d, 1)}"
             f"<td class='num'>{int(r.n_events) if r.n_events else ''}</td>"
-            f"<td class='src'>{bp.e(source_labels(src))}</td>"
-            f"<td class='src'>{bp.e(r.cerf) if isinstance(r.cerf, str) else ''}</td></tr>"
+            f"<td class='src'>{bp.e(source_labels(src))}</td></tr>"
         )
     head = (
         f"<tr><th>Season</th><th>{'IFRC trigger (Teso)' if z == 'teso_kyoga' and inp.s.loc[z].get('fixed', False) else 'Our draft'}</th>"
         "<th>Season\u2019s peak</th>"
         + "".join(f"<th>{bp.e(short)}</th>" for short, _, _ in cols)
-        + "<th>People affected</th><th>Deaths</th><th>Events recorded</th><th>Impact sources</th>"
-        "<th>CERF</th></tr>"
+        + "<th>People affected</th><th>Deaths</th><th>Events recorded</th><th>Impact sources</th></tr>"
     )
     return f"<div class='tw trig-zone'><table><thead>{head}</thead><tbody>{''.join(rows)}</tbody></table></div>"
 
@@ -1031,7 +1001,7 @@ def season_2007(inp: Inputs) -> str:
                 f"{SHORT[z]} did not activate ({rp_txt(r.peak_rp)} against a {rp_txt(inp.series_rp(z, leg))} bar)"
             )
     return (
-        "<p><strong>October\u2013December 2007</strong>, the largest flood year on record and a CERF year: "
+        "<p><strong>October\u2013December 2007</strong>, the largest flood year on record: "
         + "; ".join(bits)
         + ". The 2007 floods ran from mid-August to the end of October, so most of them fell before the window "
         "opened, and as a long wet season rather than one extreme week they are not what a 5-day forecast peak "
@@ -1203,8 +1173,8 @@ def must_catch_text(inp: Inputs) -> str:
         "<th>Zone-worst years caught, all zones</th></tr>"
     )
     return (
-        "<p><strong>Tried and not chosen: requiring 2007.</strong> 2007 \u2014 the largest flood year on record and a "
-        "CERF year \u2014 activates in no zone (see below). One way to force it is to write it in as a must-catch year: "
+        "<p><strong>Tried and not chosen: requiring 2007.</strong> 2007 \u2014 the largest flood year on record \u2014 "
+        "activates in no zone (see below). One way to force it is to write it in as a must-catch year: "
         "for each zone, find the smallest share that would make that zone activate in 2007, re-scale the others to "
         "hold the overall return period, and keep the option that catches the most of the zones\u2019 worst years. "
         "Teso would be the cheapest, at about 1-in-6, but the others would then have to be much rarer \u2014 "
@@ -1378,12 +1348,6 @@ def page(inp: Inputs) -> str:
         "for their own coverage and budgets, so this is about which floods each would have caught, not a ranking.</li>"
         "<li><strong>Impact</strong> is shaded by magnitude on one scale for every zone, and is what was recorded, "
         "which is not the same as what happened.</li>"
-        "<li><strong>CERF</strong> marks Uganda\u2019s two CERF flood allocations \u2014 07-RR-UGA-11920 (approved 4 "
-        "October 2007, $6.0M) and 20-RR-UGA-40553 (approved 17 January 2020, $3.95M, for the September\u2013December "
-        "2019 floods) \u2014 only in the zones they reached, per the Resident Coordinator\u2019s report on each. 2007 "
-        "targeted Teso and Karamoja, with the Elgon districts covered but not the focus; 2020 targeted Elgon, "
-        "including the Kumi and Pallisa lowlands, alongside Rwenzori outside the zones. Neither reached West Nile. "
-        "Attribution and evidence are in <code>src/data/cerf_allocations.csv</code>.</li>"
         "</ul>",
         "<h2>Data and methods</h2>",
         "<ul>"

@@ -4,7 +4,7 @@
 `CLAUDE.md` (working notes and conventions, written for Claude as much as for people), then the
 restricted `/triggers/` page, which carries every backtest table. Anything that comes from an
 unpublished partner document is **not** in this file or anywhere else in the repo — it is in the
-gitignored `config/*.local.json` and on the restricted pages (see *Private material*).
+private configs on the dev blob (read at run time, never downloaded) and on the restricted pages (see *Private material*).
 
 The funding window is **1 October to 31 December 2026**, which opens now, and **nothing is
 monitored yet** (step 4).
@@ -87,11 +87,11 @@ The exact trigger wording (2021 approved, 2023 as activated) is quoted on `/trig
 
 The Elgon trigger is expected to become a partner's trigger. The plan is unpublished, so its
 name, thresholds and the questions put to the partner are in the **private handover notes**
-(`config/private_frameworks.local.json`, key `handover_notes`, also rendered on `/partner/`).
+(`private_frameworks.local.json` on the dev blob, key `handover_notes`, also rendered on `/partner/`).
 
 How to put it in:
 
-1. Edit its entry in `trigger_specs` in `config/private_frameworks.local.json`. Supported types
+1. Edit its entry in `trigger_specs` in `private_frameworks.local.json` (see *Private material* for how to edit the blob copy). Supported types
    (`analysis/existing_triggers.py`, `activation_days`): `rain_forecast` (CHIRPS-GEFS 5-day,
    `stat` = `mean` for the district mean or `max` for the wettest pixel, `mm`) and `rain_observed`
    (IMERG `window`-day sum, `stat`, `mm`, optional `antecedent_pctl` using the IMERG antecedent
@@ -218,17 +218,11 @@ seasons.
 - **Pages**: https://ocha-dap.github.io/ds-aa-uga-flooding/ — `/coverage/` and `/results/`
   public; `/triggers/` and `/partner/` restricted (team review password: ask Tristan).
 - **Knowledge base**: `frameworks/uga-flooding/development.md` in `ds-knowledge-base`.
-- **Private material** (gitignored, never commit): `config/private_frameworks.local.json` (partner
-  frameworks, partner trigger specs, restricted page text, handover notes) and
-  `config/partner_triggers.local.json`. Mirrored on the dev blob; to pull:
-
-  ```bash
-  uv run python -c "import ocha_stratus as s; cc = s.get_container_client(stage='dev'); \
-  [open(f'config/{f}', 'wb').write(cc.download_blob(f'ds-aa-uga-flooding/private/config/{f}').readall()) \
-   for f in ('private_frameworks.local.json', 'partner_triggers.local.json')]"
-  ```
-
-  After editing, push back with `get_container_client(stage='dev', write=True)` and
+- **Private material** (never commit): `private_frameworks.local.json` (partner frameworks,
+  partner trigger specs, restricted page text, handover notes) and `partner_triggers.local.json`,
+  on the dev blob under `ds-aa-uga-flooding/private/config/`. The code reads them from blob at run time
+  (`src/frameworks.py`, `read_private_config`). To edit, put a copy in the gitignored `config/`
+  (it overrides the blob while present), test, then push back with `get_container_client(stage='dev', write=True)` and
   `upload_blob(..., overwrite=True)`. Country-team and partner documents are on the dev blob under
   `ds-aa-uga-flooding/raw/external_frameworks/` — reference them, never commit them.
 - **Local data**: GloFAS reanalysis, reforecast and the official return-level map live in

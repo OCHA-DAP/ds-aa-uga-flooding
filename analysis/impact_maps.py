@@ -41,17 +41,11 @@ REDS = LinearSegmentedColormap.from_list(
     "imp", ["#fde5d9", "#f4a582", "#d6604d", "#b2182b", "#67001f"]
 )
 INK, INK2, MUTED = "#0b0b0b", "#52514e", "#8a8984"
-# CERF rapid-response allocations for floods/landslides in Uganda (CERF Allocations dataset, HDX),
-# keyed on the year of the flood event they responded to: USD 4.8 M in Oct 2007 (Teso/northern
-# floods) and USD 3.95 M in Jan 2020 (Nov-Dec 2019 Rwenzori/Elgon floods and landslides).
-# amounts from the CERF API (sum of project approvals); per-zone attribution is in
-# src/data/cerf_allocations.csv
-CERF_YEARS = {2007: "CERF $6.0M Oct 2007", 2019: "CERF $4.0M Jan 2020"}
 ONI_ELNINO, DMI_POSITIVE = (
     0.5,
     0.4,
 )  # OND-mean thresholds on the NOAA ONI / DMI (ds-seas5-skill index table)
-ENSO_COL, IOD_COL, CERF_COL = "#d95926", "#1baf7a", "#8a6d00"
+ENSO_COL, IOD_COL = "#d95926", "#1baf7a"
 IMPLAUSIBLE_AFFECTED = 100_000  # per district-card; above this it is a national total mis-filed
 
 
@@ -158,8 +152,6 @@ def main() -> None:
             tags.append(("El Niño", ENSO_COL))
         if year in piod:
             tags.append(("+IOD", IOD_COL))
-        if year in CERF_YEARS:
-            tags.append((CERF_YEARS[year], CERF_COL))
         ax.set_title(str(year), fontsize=10, fontweight="bold", color=INK, pad=2)
         for j, (txt, col) in enumerate(tags):
             ax.text(
@@ -174,12 +166,7 @@ def main() -> None:
                 fontweight="bold",
                 bbox={"boxstyle": "round,pad=0.25", "fc": col, "ec": "none"},
             )
-        if year in CERF_YEARS:
-            for sp in ax.spines.values():
-                sp.set_visible(True)
-                sp.set_edgecolor(CERF_COL)
-                sp.set_linewidth(2.2)
-        elif year in elnino:
+        if year in elnino:
             for sp in ax.spines.values():
                 sp.set_visible(True)
                 sp.set_edgecolor(ENSO_COL)
@@ -197,12 +184,12 @@ def main() -> None:
         ax.set_aspect("equal")
         ax.set_xticks([])
         ax.set_yticks([])
-        if year in CERF_YEARS or year in elnino:
-            ax.set_facecolor("#fff8f0" if year in elnino else "white")
+        if year in elnino:
+            ax.set_facecolor("#fff8f0")
             for sp in ax.spines.values():
                 sp.set_visible(True)
-                sp.set_edgecolor(CERF_COL if year in CERF_YEARS else ENSO_COL)
-                sp.set_linewidth(2.4 if year in CERF_YEARS else 1.4)
+                sp.set_edgecolor(ENSO_COL)
+                sp.set_linewidth(1.4)
         else:
             for sp in ax.spines.values():
                 sp.set_visible(False)
@@ -230,12 +217,6 @@ def main() -> None:
         for k, z in ZONES.items()
     ]
     handles += [
-        Patch(
-            facecolor="white",
-            edgecolor=CERF_COL,
-            linewidth=2.4,
-            label="CERF rapid-response allocation for that flood",
-        ),
         Patch(
             facecolor="#fff8f0",
             edgecolor=ENSO_COL,

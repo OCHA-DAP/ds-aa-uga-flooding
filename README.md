@@ -1,7 +1,7 @@
 # ds-aa-uga-flooding
 
 Trigger design for **anticipatory action (AA) for flooding in Uganda** — a multi-zone
-mechanism for the OCHA/CERF framework under development (started Sep 2026).
+mechanism for the UHF framework under development (started Sep 2026).
 
 Builds on the exploratory work in
 [`ds-seas5-skill`](https://github.com/OCHA-DAP/ds-seas5-skill) (Uganda drought & flood
@@ -75,22 +75,15 @@ are not published (FAO's draft Mt Elgon AAP; the CRS/Caritas Tororo protocol, DR
 AAP and WFP southwest plan shared through the country team) must not appear in committed
 source or on public pages.
 
-- Their parameters live in `config/private_frameworks.local.json` and
-  `config/partner_triggers.local.json` — **gitignored**. The source documents are on the dev
-  blob under `raw/external_frameworks/` and `raw/country_team/`.
+- Their parameters live in `private_frameworks.local.json` and `partner_triggers.local.json`
+  on the dev blob under `ds-aa-uga-flooding/private/config/`, and the code reads them from there at run time
+  (`src/frameworks.py`, `read_private_config`); nothing is written to disk. A local copy in
+  the gitignored `config/` overrides the blob, for testing edits before uploading them. The
+  source documents are on the dev blob under `raw/external_frameworks/` and `raw/country_team/`.
 - Restricted pages are built in plaintext into the gitignored `site_private/`, then encrypted
   by `pipeline/encrypt.py` (staticrypt, needs `npx`), which refuses to write if plaintext
   survives. Only the encrypted `index.html` is committed.
-- To pick this up on a new machine, copy the two config files from the dev blob:
-
-```bash
-uv run python -c "
-import ocha_stratus as s, pathlib
-c = s.get_container_client(stage='dev')
-for n in ('private_frameworks.local.json', 'partner_triggers.local.json'):
-    pathlib.Path('config', n).write_bytes(c.download_blob(f'ds-aa-uga-flooding/private/config/{n}').readall())
-"
-```
+- On a new machine nothing needs copying: dev blob access is enough.
 
 ## The zones
 
@@ -130,7 +123,7 @@ indicator). District lists and the rationale for each tier are on `/coverage/`.
   - observation: `floodscan_vs_impact.py`, `exposure_vs_impact.py`, `backstop_options.py`, `cems_pass.py`
   - impact: `impact_maps.py`, `impact_coverage.py`
 - `data/` — local caches (gitignored); `outputs/` — figures (tracked) and tables (gitignored);
-  `config/*.local.json`, `site_private/` — private, gitignored
+  `config/*.local.json` (optional local override of the blob configs), `site_private/` — private, gitignored
 
 ## Data (dev blob, container `projects`)
 
@@ -144,7 +137,7 @@ ds-aa-uga-flooding/processed/desinventar/datacards.parquet             DesInvent
 ds-aa-uga-flooding/processed/gwm/lake_levels.parquet                    Victoria/Kyoga/Albert altimetry
 ds-aa-uga-flooding/raw/glofas/                                          mirror of data/glofas/raw (reanalysis box, point reforecasts)
 ds-aa-uga-flooding/raw/country_team/, raw/external_frameworks/          documents shared by the country team (internal)
-ds-aa-uga-flooding/private/config/                                      the gitignored config/*.local.json files
+ds-aa-uga-flooding/private/config/                                      the private configs, read at run time
 ```
 
 Uganda is capped at ADM1 in the team rasterstats DB, so district series are computed here
