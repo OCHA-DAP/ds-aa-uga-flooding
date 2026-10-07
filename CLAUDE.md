@@ -1,6 +1,8 @@
 # ds-aa-uga-flooding — working notes for Claude
 
-Read `README.md` first. Team discipline for this work: the `aa-methods` plugin
+**Handover (30 Sep 2026, Tristan → Pauline): read `HANDOVER.md` first** — state per zone, the
+four next steps, outstanding points with owners, the independent review, where everything is.
+Then `README.md`. Team discipline for this work: the `aa-methods` plugin
 (`trigger-design`, `return-periods`) — say "activated" not "fired", validate every
 specific trigger against BOTH an impact record and an observed-hazard record, always
 report per-trigger and combined return periods.
@@ -19,7 +21,9 @@ report per-trigger and combined return periods.
   OPM El Niño retrospective) are internal — reference them, never commit them.
 - Unpublished partner material (currently FAO's draft Mt Elgon flood AAP, Sep 2026) never
   goes in committed source or the public pages — this repo and its Pages site are public. It
-  lives in gitignored `config/*.local.json`; `pipeline/build_private_page.py` renders it into
+  lives in two JSON configs on the dev blob (`ds-aa-uga-flooding/private/config/`), read at run time by
+  `read_private_config` in `src/frameworks.py` (a gitignored local `config/` copy overrides);
+  `pipeline/build_private_page.py` renders it into
   gitignored `site_private/` with images as data URIs, then staticrypt-encrypts it into
   `pages/partner/index.html`, the only committed form. The public pages may say a draft exists
   and link to `/partner/`, nothing more. The script refuses to write if plaintext survives.
@@ -55,9 +59,22 @@ report per-trigger and combined return periods.
 - Post-call analyses (29 Sep 2026): FloodScan fallback helps Teso only (Oct 2021); Karamoja rain
   forecast beats FloodScan per district (keep rain; indicator chosen per district, rarity common —
   never tune thresholds per district on 1-3 events); Adjumani compound (Kyoga rise >= 1-in-5 AND
-  rain >= 1-in-3 same day) catches 2020+2023 at 1-in-6.5 — found after looking at 2023, pending
-  the user's decision. Elgon: the choice waits on a partner confirming its processing (the
+  rain >= 1-in-3 same day) catches 2020+2023 at 1-in-6.5 — found after looking at 2023; NOT
+  recommended after the 30 Sep review (see below). Elgon: the choice waits on a partner confirming its processing (the
   specifics live only in the private config text). Kyoga altimetry is median-filtered (3 passes) before the 180-d rise.
+- Review of 30 Sep 2026 (HANDOVER.md section 4): the IFRC reproduction is a STAND-IN — it has
+  the portal's mechanics, not necessarily its decisions (reanalysis over-triggers at 1.00-1.03x the
+  level; the 2007 Teso catch exists only at one sub-county). Adjumani's compound rule is a lake gate
+  in disguise and was chosen after seeing 2023 — not recommended; the lake leg alone, stated as "the
+  Nile is already high", is. `raise_threshold` now stays at the frequency level when there is no
+  catch of >= 5,000 affected (it had parked Karamoja's bar 0.03 mm under a 140-affected card).
+- Monitoring does not exist yet. CHIRPS-GEFS v2 (every rain threshold's calibration base) was
+  discontinued 1 Jul 2026; CHIRPS3-GEFS at data.chc.ucsb.edu/products/CHIRPS-GEFS/v3/05_day/africa/
+  data/YYYY/c3g_YYYY.MM.DD.tif is live with a 2001-2019 + 2021- hindcast — recalibrate before
+  monitoring. Team FloodScan and IMERG rasters (prod blob, container raster) are current.
+- Privacy slip found 30 Sep: a partner threshold sat in figure titles and a committed PNG for three
+  weeks. Any figure built from a partner config goes to site_private/, and no label or title may
+  carry the partner's numbers.
 - Google Flood Hub has NO gauges in Uganda (API: regionCode UG and a box around the country
   both return 0; KE 3, SO 7, SS 4 — checked 29 Sep 2026). No third opinion from Google.
 - Teso Oct-Dec floods (analysis/teso_ond_drivers.py): rain (forecast, observed, antecedent) has

@@ -2,9 +2,11 @@
 
 One all-in trigger per zone; zones trigger independently of each other.
 
-  teso_kyoga  GloFAS G5196 (Akokoro) daily discharge. REANALYSIS as a stand-in for the
-              forecast until the reforecast is complete, so the backtest has no forecast
-              error in it — an upper bound on what the forecast trigger could do.
+  teso_kyoga  the IFRC/URCS EAP trigger as the IBF portal computes it (TESO_SOURCE = "ifrc";
+              analysis/ifrc_reproduction.py): per district, county and sub-county, zonal-max
+              GloFAS flow over zonal-max official 5-year level, on the reanalysis as a stand-in
+              for the 51-member forecast. A fixed protocol threshold, not calibrated here.
+              TESO_SOURCE = "reforecast" / "reanalysis" gives our earlier G5196 draft.
   elgon       CHIRPS-GEFS 5-day forecast accumulation, mean over the zone's 15 districts
               (slopes and lowlands: every lowland flood year is also a slope flood year).
   karamoja    CHIRPS-GEFS 5-day forecast per district, each against its own threshold at a
@@ -29,7 +31,8 @@ in the backtest, because with ~25 seasons the best score is noise.
 
 Event matching. A season's first activation releases the envelope. It counts as catching a
 major event when the event starts within the trigger's lead window after the activation
-(LEAD_DAYS: 14 for the rain forecasts, 30 for GloFAS, 120 for the lake leg), or is still going
+(LEAD_DAYS: 30 for the rain forecasts, 45 for GloFAS, 150 for the lake leg, 7 for observed
+FloodScan extent), or is still going
 on when the activation comes (negative lead). Otherwise the activation is a false alarm, and a
 major-impact season with no matching activation is a miss.
 
@@ -114,24 +117,6 @@ LEGS = {"adjumani": {"lake": ["Kyoga rise"], "rain": None}}  # None = every othe
 
 
 # --- seasons -------------------------------------------------------------------------------
-
-
-CERF_FILE = ROOT / "src" / "data" / "cerf_allocations.csv"
-
-
-def cerf_by_zone() -> pd.DataFrame:
-    """CERF flood allocations to Uganda, attributed per zone from the RC/HC reports: a zone is
-    'primary' where the allocation targeted its districts, 'secondary' where it was covered
-    but not the focus. Allocations reaching no zone district are not listed."""
-    c = pd.read_csv(CERF_FILE, parse_dates=["approved"])
-    c["label"] = c.apply(
-        lambda r: (
-            f"CERF ${r.amount_usd / 1e6:.1f}M {r.approved:%b %Y}"
-            + (" (secondary)" if r.role == "secondary" else "")
-        ),
-        axis=1,
-    )
-    return c
 
 
 def season_of(ts: pd.Timestamp) -> int | None:
@@ -433,15 +418,7 @@ def activation_episodes(series: dict[str, pd.Series], thr: dict[str, float], sea
     return out
 
 
-def cerf_season(approved: pd.Series, season: int) -> pd.Series:
-    """An allocation belongs to the season it responds to: approved in that window, or in the
-    first quarter after it (2020's allocation, approved 17 Jan, answered the Oct-Dec 2019 floods)."""
-    alloc_season = approved.dt.year - (approved.dt.month <= 3).astype(int)
-    return alloc_season == season
-
-
 def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
-    cz = cerf_by_zone()
     rows = []
     sms = {k: season_max(s) for k, s in series.items()}
     fits = {k: gumbel_fit(sms[k].reindex(cal).dropna()) for k in series}
@@ -483,7 +460,6 @@ def backtest_zone(z, series, thr, ev, seasons, cal) -> pd.DataFrame:
                 peak_value=float(sms[where].get(y, np.nan)) if where else np.nan,
                 peak_where=where,
                 **imp_,
-                cerf="; ".join(cz[(cz.zone == z) & cerf_season(cz.approved, y)].label),
             )
         )
     t = pd.DataFrame(rows).set_index("season")
@@ -600,8 +576,6 @@ def timing_grid(
         hit |= (sr >= thr[key]).reindex(idx, fill_value=False)
     starts = hit[hit & ~hit.shift(1, fill_value=False)].index
     acts = {pd.Timestamp(d) for d in tab.first_date.dropna() if isinstance(d, str) and d}
-    cz = cerf_by_zone()
-    cz = cz[cz.zone == z]
     rows = []
     for y in years:
         for m in range(1, 13):
@@ -624,10 +598,6 @@ def timing_grid(
                     crossing=bool(((starts >= lo) & (starts <= hi)).any())
                     and m not in SEASON_MONTHS,
                     data=bool(((idx >= lo) & (idx <= hi)).any()),
-                    cerf="; ".join(
-                        f"{r.code}|{r.role}|${r.amount_usd / 1e6:.1f}M|{r.responds_to}|{r.districts.replace(';', ', ')}"
-                        for r in cz[(cz.approved >= lo) & (cz.approved <= hi)].itertuples()
-                    ),
                 )
             )
     return pd.DataFrame(rows)
@@ -661,8 +631,13 @@ def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float
         return big, acts, hits
 
     base_big, _, base_hits = caught_big(design_rp)
-    if base_hits == 0:
-        return design_rp, {}  # nothing worth protecting: raising would only silence the trigger
+    if base_hits == 0 or not base_big:
+        # Nothing big to protect. The rule (user, 23 Sep 2026) is to raise until a catch of
+        # thousands of people would be lost; with no such catch it has no stopping point, and
+        # raising "until the last small catch" just parks the bar a hair under that one event
+        # (Karamoja: 0.03 mm under a 140-affected card, 1-in-10 instead of 1-in-5.2 — found by
+        # the 30 Sep review). Stay at the frequency-matched level.
+        return design_rp, {}
     best, stats = design_rp, None
     for rp in np.arange(design_rp, MAX_RP + 0.01, 0.25):
         big, acts, hits = caught_big(float(rp))

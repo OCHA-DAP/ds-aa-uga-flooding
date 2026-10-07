@@ -102,7 +102,7 @@ sub-region in September 2026. Its scope, triggers, thresholds, household target 
 are **not recorded here or on the public pages**: the document is not public, and this repo
 and its GitHub Pages site are. The detail and our backtest of its three triggers are on the
 password-protected page `/partner/` (staticrypt, team review password), built by
-`pipeline/build_private_page.py` from the gitignored `config/private_frameworks.local.json`.
+`pipeline/build_private_page.py` from `private_frameworks.local.json` on the dev blob.
 
 What is safe to carry forward, because it is our own analysis rather than their document:
 
@@ -120,7 +120,7 @@ What is safe to carry forward, because it is our own analysis rather than their 
   forecast skill over climatology at any lead.
 
 `analysis/fao_elgon_triggers.py` reads the partner thresholds from an untracked local config
-(`config/partner_triggers.local.json`, gitignored); its outputs stay in gitignored `outputs/`
+(`partner_triggers.local.json` on the dev blob); its outputs stay in gitignored `outputs/`
 and reach the web only inside the encrypted page.
 Without that file it exits with a message rather than failing.
 

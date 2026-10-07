@@ -109,3 +109,19 @@ main { padding:36px 44px 8px; }
 .k-feature .views { flex:0 0 auto; font-size:12px; color:var(--n7);
                     line-height:1.7; margin-bottom:14px; }
 .k-feature .foot { margin-top:auto; }
+
+/* "Where it stands" summary on the landing page */
+.status { border:1px solid var(--b1); border-radius:4px; padding:16px 19px; background:var(--b05); }
+.status p { margin:0; font-size:13.5px; line-height:1.55; color:var(--n8); }
+.status .status-lead { margin-bottom:12px; }
+.status .status-foot { margin-top:12px; font-size:12.5px; color:var(--n7); }
+.zones { margin:0; display:grid; gap:8px; }
+.zones > div { display:grid; grid-template-columns:190px 1fr; gap:12px; padding:9px 0 0; border-top:1px solid var(--b1); }
+.zones dt { font-weight:700; font-size:13.5px; }
+.zones dd { margin:0; font-size:13.5px; line-height:1.55; color:var(--n8); }
+.st { display:inline-block; font-size:9.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+      padding:2px 7px; border-radius:10px; margin-right:6px; vertical-align:1px; }
+.st-ok { background:#dff3e4; color:#1e6b34; }
+.st-wait { background:#fff1d6; color:#7a5200; }
+.st-draft { background:#e6eef7; color:#24507f; }
+@media (max-width:640px) { .zones > div { grid-template-columns:1fr; gap:2px; } }

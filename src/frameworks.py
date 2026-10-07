@@ -7,6 +7,7 @@ source documents and must not be presented as fact.
 
 import json
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 
 
@@ -251,7 +252,7 @@ PROGRAMMES: dict[str, Programme] = {
         status="Standing; convened the national AA dialogues of Nov 2022 and May 2024 and the 2026 roadmap",
         source="WFP Southwest Flood AAP (Aug 2026) on institutional arrangements; CRS/Caritas protocol 2.1; CRS learning brief (Jul 2024)",
         relevance=(
-            "Any OCHA/CERF trigger for Uganda should be tabled here, and the IFRC-form alignment for Teso is the natural "
+            "Any UHF trigger for Uganda should be tabled here, and the IFRC-form alignment for Teso is the natural "
             "opening. Note the WFP plan's own admission that 'limited information at lower administrative levels' "
             "constrains lead time and accuracy — the same gap our district-level analysis fills."
         ),
@@ -276,19 +277,41 @@ PROGRAMMES: dict[str, Programme] = {
 }
 
 
-PRIVATE_CONFIG = Path(__file__).resolve().parent.parent / "config" / "private_frameworks.local.json"
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
+PRIVATE_BLOB_DIR = "ds-aa-uga-flooding/private/config"
+
+
+@cache
+def read_private_config(name: str) -> dict | None:
+    """A private config file, read from the dev blob (PRIVATE_BLOB_DIR) into memory.
+
+    A local config/<name> (gitignored) wins if present, to test edits before uploading them.
+    Nothing is written to disk. Returns None when neither is reachable (no file, no blob
+    access), so public builds need nothing extra.
+    """
+    local = CONFIG_DIR / name
+    if local.exists():
+        return json.loads(local.read_text())
+    try:
+        import ocha_stratus as stratus
+
+        blob = stratus.get_container_client(stage="dev").download_blob(f"{PRIVATE_BLOB_DIR}/{name}")
+        return json.loads(blob.readall())
+    except Exception as e:  # noqa: BLE001 -- missing blob, no credentials, offline
+        print(f"private config {name} not available from blob ({type(e).__name__})")
+        return None
 
 
 def load_private() -> dict:
     """Unpublished partner material, kept out of this public repository.
 
-    Read from config/private_frameworks.local.json (gitignored). It is rendered only into the
-    password-protected page (pipeline/build_private_page.py), never into the public pages.
-    Returns an empty dict when the file is absent, so public builds need nothing extra.
+    Read from private_frameworks.local.json on the dev blob (see read_private_config). It is
+    rendered only into the password-protected page (pipeline/build_private_page.py), never into
+    the public pages. Returns an empty dict when unavailable.
     """
-    if not PRIVATE_CONFIG.exists():
+    raw = read_private_config("private_frameworks.local.json")
+    if raw is None:
         return {}
-    raw = json.loads(PRIVATE_CONFIG.read_text())
     fws = {}
     for f in raw.get("frameworks", []):
         f = dict(f)

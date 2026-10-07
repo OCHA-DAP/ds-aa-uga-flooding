@@ -4,10 +4,11 @@ The plan is UNPUBLISHED. This repository and its GitHub Pages site are public, s
 partner's thresholds, districts, household target and budget are NOT hardcoded here and no
 output of this script is committed. The parameters are read at runtime from
 
-    config/partner_triggers.local.json        (gitignored)
+    partner_triggers.local.json on the dev blob, ds-aa-uga-flooding/private/config/
+    (a local config/partner_triggers.local.json, gitignored, overrides it)
 
 with the shape {"districts": [...], "rain_mm": <float>, "antecedent_pctl": <float>,
-"glofas_points": {"<label>": [lat, lon]}}. Without that file the script exits with a message.
+"glofas_points": {"<label>": [lat, lon]}}. Without it the script exits with a message.
 Results are printed to the console; the table and the figure go to site_private/, which is
 gitignored (outputs/*.png is committed for the public pages, so the figure must not go there).
 No label, title or string in this file may carry the partner's values: build them from the config.
@@ -27,7 +28,6 @@ What it measures, all against the same record used elsewhere in the repo:
 Run:  uv run python analysis/fao_elgon_triggers.py
 """
 
-import json
 import sys
 from pathlib import Path
 
@@ -42,25 +42,25 @@ from analysis.exposure_vs_impact import dated_events_df
 from analysis.flash_flood_antecedent import api_index, pctl
 from src.constants import PROJECT_PREFIX
 from src.datasources import glofas
+from src.frameworks import read_private_config
 from src.glofas_coverage import lagged_corr
 from src.skill_chain import rolling_sum
 from src.zones import load_adm2
 
 OUT = Path(__file__).resolve().parent.parent / "site_private"
-CONFIG = Path(__file__).resolve().parent.parent / "config" / "partner_triggers.local.json"
 
 
 def load_config() -> dict:
-    """Partner trigger parameters, kept out of this public repo."""
-    if not CONFIG.exists():
+    """Partner trigger parameters, kept out of this public repo (read from the dev blob)."""
+    cfg = read_private_config("partner_triggers.local.json")
+    if cfg is None:
         print(
-            f"No partner trigger config at {CONFIG.relative_to(CONFIG.parents[2])}.\n"
+            "No partner trigger config (dev blob ds-aa-uga-flooding/private/config/).\n"
             "The plan it describes is unpublished and this repo is public, so the parameters are "
-            "not committed. Create the file (gitignored) to run this analysis; the expected shape "
-            "is in the module docstring."
+            "not committed. The expected shape is in the module docstring."
         )
         raise SystemExit(0)
-    return json.loads(CONFIG.read_text())
+    return cfg
 
 
 RED, INK, INK2 = "#e34948", "#0b0b0b", "#52514e"
@@ -113,10 +113,10 @@ def main() -> None:
     any_both = ((rain >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
     any_both_px = ((rain_max >= rain_mm) & (ante >= ante_pctl)).any(axis=1).fillna(False)
     for name, act in (
-        ("T3, district mean", any_rain),
-        (f"T3, district mean + antecedent >= {ante_pctl:.0f}th pctl", any_both),
-        ("T3, wettest pixel", any_rain_px),
-        (f"T3, wettest pixel + antecedent >= {ante_pctl:.0f}th pctl", any_both_px),
+        ("rain trigger, district mean", any_rain),
+        (f"rain trigger, district mean + antecedent >= {ante_pctl:.0f}th pctl", any_both),
+        ("rain trigger, wettest pixel", any_rain_px),
+        (f"rain trigger, wettest pixel + antecedent >= {ante_pctl:.0f}th pctl", any_both_px),
     ):
         for eset, evs in esets.items():
             rows.append(
@@ -160,10 +160,10 @@ def main() -> None:
                 f"major-event recall {sm['recall']:.0%}, precision {sm['precision']:.0%}"
             )
 
-    # --- T2: does GloFAS at the only Elgon point track observed flooding there? -----------
+    # --- GloFAS trigger: does GloFAS at the only Elgon point track observed flooding there? -----------
     # G5220 Manafwa at Butaleja, LISFLOOD v4 pixel; and the unnamed fixed point on the Mpologoma.
     print(
-        "\nT2 check - GloFAS reanalysis vs observed flood extent, correlation at best lag (Aug-Dec anomalies):"
+        "\nGloFAS trigger check - GloFAS reanalysis vs observed flood extent, correlation at best lag (Aug-Dec anomalies):"
     )
     ex = stratus.load_parquet_from_blob(
         f"{PROJECT_PREFIX}/processed/exposure/floodscan_exposure_adm2_daily.parquet", stage="dev"
@@ -251,7 +251,7 @@ def main() -> None:
     h2, l2 = ax3.get_legend_handles_labels()
     ax2.legend(h1 + h2, l1 + l2, fontsize=8, frameon=False, loc="upper right")
     fig.suptitle(
-        f"Partner draft Trigger 3 (rainfall >{rain_mm:.0f} mm / 3 days) against the observed record, 1998-2026",
+        f"Partner draft rain trigger (rainfall >{rain_mm:.0f} mm / 3 days) against the observed record, 1998-2026",
         fontsize=12,
         fontweight="bold",
         x=0.02,

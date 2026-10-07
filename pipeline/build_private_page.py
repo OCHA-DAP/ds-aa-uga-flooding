@@ -4,7 +4,7 @@ Some material shaping this design comes from partner documents that are not publ
 present FAO's draft Mt Elgon flood AAP. This repository and its GitHub Pages site are
 public, so that material never appears in committed source or in the public pages:
 
-  * the content lives in config/private_frameworks.local.json (gitignored);
+  * the content lives in private_frameworks.local.json on the dev blob, read at run time;
   * this script renders it, with images embedded as data URIs so nothing is fetchable on
     its own, into site_private/ (gitignored);
   * staticrypt encrypts that page into pages/partner/index.html, and only the encrypted
@@ -42,7 +42,7 @@ def data_uri(path: Path) -> str:
 
 
 def fao_trigger_table() -> str:
-    d = pd.read_csv(bp.OUT / "fao_elgon_triggers.csv")
+    d = pd.read_csv(bp.ROOT / "site_private" / "fao_elgon_triggers.csv")
     d = d[(d.scope == "any of the 7 districts") & (d.events == "major")]
     show = d[["rule", "per_year", "recall", "precision"]].rename(
         columns={
@@ -87,7 +87,7 @@ def page(priv: dict) -> str:
             section.append(
                 block.replace(
                     'src="fao_elgon_triggers.png"',
-                    f'src="{data_uri(bp.OUT / "fao_elgon_triggers.png")}"',
+                    f'src="{data_uri(bp.ROOT / "site_private" / "fao_elgon_triggers.png")}"',
                 )
             )
 
@@ -107,6 +107,14 @@ def page(priv: dict) -> str:
         "<h2>The drafts</h2>",
         *[framework_card(fw) for fw in fws.values()],
         *section,
+        *(
+            [
+                "<h2>Handover notes</h2>",
+                markdown.markdown(priv["handover_notes"], extensions=["tables"]),
+            ]
+            if priv.get("handover_notes")
+            else []
+        ),
         "<h2>Harmonising triggers, including the drafts</h2>",
         bp.harmonisation_table(
             frameworks={**EXTERNAL, **fws},
@@ -129,7 +137,7 @@ def main() -> None:
     priv = load_private()
     if not priv:
         print(
-            "No config/private_frameworks.local.json — nothing to build (the file is gitignored by design)."
+            "No private_frameworks.local.json (dev blob ds-aa-uga-flooding/private/config/) — nothing to build."
         )
         return
     BUILD.mkdir(exist_ok=True)
