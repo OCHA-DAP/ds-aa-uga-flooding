@@ -97,11 +97,14 @@ class Inputs:
     def __init__(self):
         self.s = pd.read_csv(TRIG / "summary.csv").set_index("zone")
         self.thr = pd.read_csv(TRIG / "thresholds.csv")
-        self.alloc = pd.read_csv(TRIG / "allocations.csv")
+        # allocations.csv is no longer produced (budget-sharing layer dropped); unused below
+        alloc = TRIG / "allocations.csv"
+        self.alloc = pd.read_csv(alloc) if alloc.exists() else None
         self.tabs = {z: pd.read_csv(TRIG / f"{z}.csv").set_index("season") for z in ZONE_ORDER}
         self.existing = merge_existing(
             load_existing(TRIG / "existing_public.csv"),
             load_existing(PRIVATE / "existing_private.csv"),
+            load_existing(PRIVATE / "elgon_exposure_trigger.csv"),  # analysis/elgon_exposure_trigger.py
         )
         self.top_aff = max(float(t.affected.max()) for t in self.tabs.values())
         self.top_d = max(float(t.deaths.max()) for t in self.tabs.values())

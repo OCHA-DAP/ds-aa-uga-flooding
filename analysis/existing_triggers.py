@@ -63,6 +63,7 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT_PUBLIC = ROOT / "outputs" / "triggers" / "existing_public.csv"
 OUT_PRIVATE = ROOT / "site_private" / "existing_private.csv"
 CAL_LAST = 2024  # last calibration SEASON (2024/25), matching trigger_draft
+CPC_CAPACITY_MM = 760  # CPC Leaky Bucket total-column soil-moisture capacity
 
 # The IFRC/URCS EAP trigger as the IBF portal runs it (analysis/ifrc_reproduction.py): a district
 # triggers when, at any lead up to 5 days, >= 60 % of members put the zonal-max flow of the
@@ -124,6 +125,7 @@ class Data:
         self._glofas = None
         self._imerg = None
         self._cg = {}
+        self._cpc = None
 
     def glofas(self, lat: float, lon: float) -> pd.Series:
         if self._glofas is None:
@@ -138,11 +140,30 @@ class Data:
             self._imerg = load("processed/imerg/imerg_adm2_daily.parquet")
         return self._imerg.pivot_table(index="date", columns="pcode", values=stat)
 
-    def chirps_gefs(self, stat: str = "mean") -> pd.DataFrame:
-        if stat not in self._cg:
-            cg = load("processed/chirps_gefs/chirps_gefs_5day_adm2.parquet")
-            self._cg[stat] = cg.pivot_table(index="issue_date", columns="pcode", values=stat)
-        return self._cg[stat]
+    def cpc_soil(self) -> pd.DataFrame:
+        """NOAA CPC daily soil moisture (mm, 0.5 deg Leaky Bucket), district mean."""
+        if self._cpc is None:
+            sm = load("processed/cpc_soil/cpc_soil_adm2_daily.parquet")
+            self._cpc = sm.pivot_table(index="date", columns="pcode", values="mean")
+        return self._cpc
+
+    def chirps_gefs(self, stat: str = "mean", product: str = "v2") -> pd.DataFrame:
+        """CHIRPS-GEFS 5-day forecast per district: v2 (the calibration base, discontinued
+        1 Jul 2026) or v3 (CHIRPS3-GEFS, its successor; October-December issue days only)."""
+        if (stat, product) not in self._cg:
+            if product.startswith("gefs_c00_"):  # GEFS v12 reforecast control, e.g. gefs_c00_72h
+                cg = load("processed/gefs_reforecast/gefs_c00_apcp_adm2.parquet")
+                cg = cg[cg.hours == int(product.removeprefix("gefs_c00_").removesuffix("h"))]
+                self._cg[stat, product] = cg.pivot_table(
+                    index="issue_date", columns="pcode", values=stat
+                )
+                return self._cg[stat, product]
+            name = {"v2": "chirps_gefs", "v3": "chirps3_gefs"}[product]
+            cg = load(f"processed/chirps_gefs/{name}_5day_adm2.parquet")
+            self._cg[stat, product] = cg.pivot_table(
+                index="issue_date", columns="pcode", values=stat
+            )
+        return self._cg[stat, product]
 
 
 def activation_days(spec: dict, d: Data) -> pd.Series:
@@ -171,8 +192,20 @@ def activation_days(spec: dict, d: Data) -> pd.Series:
         return in_season(q) >= 1.0
     pcs = [d.adm[x] for x in spec["districts"]]
     if t == "rain_forecast":  # CHIRPS-GEFS 5-day accumulation, district mean or wettest pixel
-        w = d.chirps_gefs(spec.get("stat", "mean"))[pcs]
-        return (w >= spec["mm"]).any(axis=1)[w.notna().any(axis=1)].pipe(in_season)
+        w = d.chirps_gefs(spec.get("stat", "mean"), spec.get("product", "v2"))[pcs]
+        cond = w >= spec["mm"]
+        if spec.get("antecedent_pctl") is not None:  # wet soils on the issue date (IMERG proxy)
+            mean = d.imerg("mean")[pcs]
+            ante = pd.DataFrame({c: pctl(api_index(mean[c]).shift(1)) for c in pcs}).reindex(w.index)
+            cond &= ante >= spec["antecedent_pctl"]
+        if spec.get("cpc_soil") is not None:  # NOAA CPC soil moisture, day before issue
+            sm = d.cpc_soil()[pcs].shift(1)
+            if spec["cpc_soil"] == "wetness":  # fraction of the model's 760 mm capacity
+                sm = sm / CPC_CAPACITY_MM
+            else:  # "pctl": percentile of each district's own daily record
+                sm = sm.rank(pct=True) * 100
+            cond &= sm.reindex(w.index) >= spec["cpc_soil_min"]
+        return cond.any(axis=1)[w.notna().any(axis=1)].pipe(in_season)
     if (
         t == "rain_observed"
     ):  # IMERG n-day sum (district mean, or the wettest pixel), optional wet soils
