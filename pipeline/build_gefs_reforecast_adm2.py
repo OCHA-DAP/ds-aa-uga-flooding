@@ -82,7 +82,7 @@ def _one(args):
         u = url(issue)
         msgs, end = six_hour_messages(_get(u + ".idx").decode())
         data = _get(u, {"Range": f"bytes=0-{end - 1}"})
-    except Exception:
+    except (OSError, ValueError, TypeError):  # network failure after retries, or a bad index
         return None
     with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as f:
         f.write(data)

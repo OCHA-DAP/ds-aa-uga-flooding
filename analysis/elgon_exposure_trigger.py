@@ -160,7 +160,7 @@ def main() -> None:
 
     hh = {}
     for d, g in cells.groupby("district"):
-        cols = list(zip(g.lat, g.lon))
+        cols = list(zip(g.lat, g.lon, strict=True))
         hh[d] = exceed[cols].mul(g.households.to_numpy(), axis=1).sum(axis=1)
     hh = pd.DataFrame(hh)
     met = hh.ge(n_hh).any(axis=1)

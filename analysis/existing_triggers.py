@@ -200,10 +200,9 @@ def activation_days(spec: dict, d: Data) -> pd.Series:
             cond &= ante >= spec["antecedent_pctl"]
         if spec.get("cpc_soil") is not None:  # NOAA CPC soil moisture, day before issue
             sm = d.cpc_soil()[pcs].shift(1)
-            if spec["cpc_soil"] == "wetness":  # fraction of the model's 760 mm capacity
-                sm = sm / CPC_CAPACITY_MM
-            else:  # "pctl": percentile of each district's own daily record
-                sm = sm.rank(pct=True) * 100
+            # "wetness": fraction of the model's 760 mm capacity; "pctl": percentile of each
+            # district's own daily record
+            sm = sm / CPC_CAPACITY_MM if spec["cpc_soil"] == "wetness" else sm.rank(pct=True) * 100
             cond &= sm.reindex(w.index) >= spec["cpc_soil_min"]
         return cond.any(axis=1)[w.notna().any(axis=1)].pipe(in_season)
     if (
