@@ -213,8 +213,15 @@ def glofas_g5196() -> pd.Series:
     return s.dropna().rename("discharge")
 
 
+# Rain forecast product: "v2" (CHIRPS-GEFS, the calibration base, discontinued 1 Jul 2026) or
+# "v3" (CHIRPS3-GEFS, its operational successor; Oct-Dec issue days 2001-2025, no 2020 hindcast).
+# Set from the command line; v3 results go to outputs/triggers_v3/ so the two can be compared.
+RAIN_PRODUCT = "v2"
+RAIN_FILES = {"v2": "chirps_gefs_5day_adm2.parquet", "v3": "chirps3_gefs_5day_adm2.parquet"}
+
+
 def chirps_gefs_wide(pcodes: list[str]) -> pd.DataFrame:
-    cg = load("processed/chirps_gefs/chirps_gefs_5day_adm2.parquet")
+    cg = load(f"processed/chirps_gefs/{RAIN_FILES[RAIN_PRODUCT]}")
     return cg[cg.pcode.isin(pcodes)].pivot_table(index="issue_date", columns="pcode", values="mean")
 
 
@@ -648,8 +655,11 @@ def raise_threshold(z, series, cal_ms, ev, cal, design_rp: float) -> tuple[float
     return best, (stats or {})
 
 
-def main() -> None:
-    OUT.mkdir(parents=True, exist_ok=True)
+def main(product: str = "v2") -> None:
+    global RAIN_PRODUCT
+    RAIN_PRODUCT = product
+    dest = OUT if product == "v2" else OUT.parent / f"triggers_{product}"
+    dest.mkdir(parents=True, exist_ok=True)
     series = zone_series()
     # The calibration window is fixed, not derived from any one zone's data: a zone whose
     # indicator has a shorter record (the Teso reforecast ends in 2023) simply has fewer
@@ -686,8 +696,8 @@ def main() -> None:
             thr, _, rp_star = calibrate_zone_legs(z, cal_ms[z], len(have) / final_rp)
             t = backtest_zone(z, series[z], thr, events[z], show, cal)
         thr_by_zone[z] = thr
-        t.sort_index(ascending=False).to_csv(OUT / f"{z}.csv")
-        events[z].to_csv(OUT / f"events_{z}.csv", index=False)
+        t.sort_index(ascending=False).to_csv(dest / f"{z}.csv")
+        events[z].to_csv(dest / f"events_{z}.csv", index=False)
         sc = scores(t)
         summary.append(
             dict(
@@ -721,9 +731,9 @@ def main() -> None:
             )
     s = pd.DataFrame(summary)
     s["calibration"] = f"{season_label(cal[0])}–{season_label(cal[-1])}"
-    s.to_csv(OUT / "summary.csv", index=False)
-    pd.DataFrame(thr_rows).to_csv(OUT / "thresholds.csv", index=False)
-    pd.DataFrame(sens).to_csv(OUT / "rp_sensitivity.csv", index=False)
+    s.to_csv(dest / "summary.csv", index=False)
+    pd.DataFrame(thr_rows).to_csv(dest / "thresholds.csv", index=False)
+    pd.DataFrame(sens).to_csv(dest / "rp_sensitivity.csv", index=False)
     pd.concat(
         [
             timing_grid(
@@ -731,25 +741,26 @@ def main() -> None:
                 events[z],
                 series[z],
                 thr_by_zone[z],
-                pd.read_csv(OUT / f"{z}.csv"),
+                pd.read_csv(dest / f"{z}.csv"),
                 range(FIRST_SEASON, 2026),
             )
             for z in ZONES
         ],
         ignore_index=True,
-    ).to_csv(OUT / "timing_grid.csv", index=False)
+    ).to_csv(dest / "timing_grid.csv", index=False)
     monthly_profile(events, series, thr_by_zone, range(FIRST_SEASON, 2026)).to_csv(
-        OUT / "monthly_profile.csv", index=False
+        dest / "monthly_profile.csv", index=False
     )
     window_sensitivity(series, thr_by_zone, events, cal).to_csv(
-        OUT / "window_sensitivity.csv", index=False
+        dest / "window_sensitivity.csv", index=False
     )
     pd.set_option("display.width", 220)
     print(
-        f"calibration seasons {s.calibration.iloc[0]} (n={n}); window Oct-Dec; RP floor {RP_FLOOR}"
+        f"rain product {product}; calibration seasons {s.calibration.iloc[0]} (n={n}); "
+        f"window Oct-Dec; RP floor {RP_FLOOR}"
     )
     print(s.drop(columns=["calibration"]).round(1).to_string(index=False))
 
 
 if __name__ == "__main__":
-    main()
+    main(*sys.argv[1:])
