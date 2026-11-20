@@ -30,6 +30,15 @@ def url_5day(issue: date) -> str:
     return f"{BASE}/05day/precip_mean/data-mean_{issue:%Y%m%d}_{end:%Y%m%d}.tif"
 
 
+BASE_V3 = "https://data.chc.ucsb.edu/products/CHIRPS-GEFS/v3/05_day/africa/data"
+
+
+def url_5day_v3(issue: date) -> str:
+    """CHIRPS3-GEFS 5-day accumulation, the operational successor to v2 (discontinued
+    1 Jul 2026). Hindcast 2001-2019 and 2021 onward."""
+    return f"{BASE_V3}/{issue:%Y}/c3g_{issue:%Y.%m.%d}.tif"
+
+
 def url_daily(issue: date, valid: date) -> str:
     return f"{BASE}/daily_16day/{issue:%Y/%m/%d}/data.{valid:%Y.%m%d}.tif"
 
