@@ -19,3 +19,4 @@ pipeline/.checkpoint_*/
 # Partner documents that are not public: parameters live here, never committed
 config/*.local.json
 site_private/
+monitoring/out/
