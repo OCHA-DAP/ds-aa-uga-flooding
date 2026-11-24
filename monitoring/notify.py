@@ -166,8 +166,16 @@ def trigger_lines(day: pd.DataFrame) -> dict[str, list[str]]:
                 lines.append(f"<b>{trig}</b>: not evaluated | {t.detail.iloc[0]}")
                 continue
             met = t[t.met.eq(True)]
-            top = (met if len(met) else t).sort_values("c", ascending=False).iloc[0]
+            # stable: among equal readings, keep the order evaluate gave (Teso: closest first)
+            top = (
+                (met if len(met) else t[t.met.notna()])
+                .sort_values("c", ascending=False, kind="stable")
+                .iloc[0]
+            )
+            n_gap = int(t.met.isna().sum())
             state = "MET" if len(met) else "not met"
+            if n_gap and not len(met):
+                state = f"not met where evaluated ({n_gap} of {len(t)} not evaluated)"
             where = ", ".join(met.place) if len(met) else top.place
             lines.append(
                 f"<b>{trig}</b>: {state} | {'met in' if len(met) else 'closest'} {where}: "
@@ -256,7 +264,45 @@ Lake Kyoga altimetry record.</p>
 # --- send --------------------------------------------------------------------------------------
 
 
-def send(day: pd.DataFrame, season: pd.DataFrame) -> dict:
+def _list_id(name: str, default: str | None = None) -> int | None:
+    v = (os.getenv(name) or default or "").strip()
+    if not v:
+        return None
+    if not v.isdigit():
+        raise SystemExit(f"{name}={v!r}: expected a Listmonk list id")
+    return int(v)
+
+
+def target_list(test: bool) -> int:
+    """The list this run sends to; refuses the unsafe combinations."""
+    if test:
+        list_id = _list_id("LISTMONK_TEST_LIST_ID", "103")
+        if list_id == _list_id("LISTMONK_LIST_ID"):
+            raise SystemExit("LISTMONK_TEST_LIST_ID is the live list: refusing a test send")
+        return list_id
+    list_id = _list_id("LISTMONK_LIST_ID")
+    if list_id is None:
+        raise SystemExit("TEST_EMAIL=false needs LISTMONK_LIST_ID (no live list is set)")
+    return list_id
+
+
+def check_config() -> tuple[bool, bool]:
+    """Parse the run mode and check the send settings before any waiting or writing, so a
+    mistake fails the run at the start, not hours later with nothing sent. (DRY_RUN, TEST_EMAIL)"""
+    dry = env_flag("DRY_RUN", True)
+    test = env_flag("TEST_EMAIL", True)
+    if not dry:
+        target_list(test)
+        from ocha_relay.listmonk import ListmonkClient
+
+        ListmonkClient.from_env()  # missing Listmonk credentials fail here
+    return dry, test
+
+
+def send(day: pd.DataFrame, season: pd.DataFrame, on_live_send=None) -> dict:
+    """on_live_send(record) is called as soon as Listmonk accepts a live send, before the
+    delivery check, so the caller can record it: a failure after that point must not lead a
+    re-run to send the live email again."""
     dry = env_flag("DRY_RUN", True)
     test = env_flag("TEST_EMAIL", True)
     issue = pd.Timestamp(day.issue_date.iloc[0])
@@ -271,15 +317,7 @@ def send(day: pd.DataFrame, season: pd.DataFrame) -> dict:
 
     from ocha_relay.listmonk import ListmonkClient
 
-    if test:
-        list_id = int(os.getenv("LISTMONK_TEST_LIST_ID", "103"))
-        live = os.getenv("LISTMONK_LIST_ID")
-        if live and int(live) == list_id:
-            raise SystemExit("LISTMONK_TEST_LIST_ID is the live list: refusing a test send")
-    else:
-        if not os.getenv("LISTMONK_LIST_ID"):
-            raise SystemExit("TEST_EMAIL=false needs LISTMONK_LIST_ID (no live list is set)")
-        list_id = int(os.environ["LISTMONK_LIST_ID"])
+    list_id = target_list(test)
     client = ListmonkClient.from_env()
     url = client.upload_media(png.read_bytes(), png.name)
     subject, body = render(day, season, url)
@@ -290,7 +328,13 @@ def send(day: pd.DataFrame, season: pd.DataFrame) -> dict:
     client.send_campaign(cid, skip_confirmation=True)
     print(f"sent campaign {cid} to list {list_id}: {subject}")
     out = {"sent": True, "campaign": cid, "list": list_id, "subject": subject, "test": test}
-    return out | verify_delivery(client, cid)
+    if not test and on_live_send is not None:
+        on_live_send(out)
+    try:
+        return out | verify_delivery(client, cid)
+    except Exception as err:  # noqa: BLE001 - the email is out; the check only adds to the record
+        print(f"WARNING campaign {cid}: delivery check failed ({type(err).__name__}: {err})")
+        return out | {"delivered": False, "status": f"check failed: {type(err).__name__}"}
 
 
 def verify_delivery(client, cid: int, attempts: int = 12, delay: float = 5.0) -> dict:

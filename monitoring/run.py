@@ -111,10 +111,17 @@ def on_grid(da):
     return da.sel(lat=lat, lon=lon, method="nearest", tolerance=1e-3)
 
 
+_STARTED = datetime.now(UTC)
+PAST_ISSUE_WAIT = timedelta(hours=3)
+
+
 def glofas_deadline(issue: date) -> datetime:
     """When the daily job stops waiting for EWDS (GLOFAS_DEADLINE_UTC, HH:MM on the issue day,
     default 17:30): the email then goes out with the GloFAS triggers marked not evaluated, rather
-    than the job timing out with no email at all."""
+    than the job timing out with no email at all. For a past issue (a manual re-run) the
+    issue-day deadline has already gone, so the wait is PAST_ISSUE_WAIT from the job's start."""
+    if issue < _STARTED.date():
+        return _STARTED + PAST_ISSUE_WAIT
     h, m = map(int, os.getenv("GLOFAS_DEADLINE_UTC", "17:30").split(":"))
     return datetime(issue.year, issue.month, issue.day, h, m, tzinfo=UTC)
 
@@ -122,17 +129,20 @@ def glofas_deadline(issue: date) -> datetime:
 _NUDGE: dict[date, int] = {}  # per issue, kept across daily.py waits: never re-ask an area
 
 
-def glofas_issue(issue: date, attempts: int = 3):
+def glofas_issue(issue: date, attempts: int = 1):
     """The forecast for one issue: from a cached file if there is one, else from EWDS. A partial
     issue (fewer than 51 members) is deleted and requested again with a newly nudged area; the
     nudge keeps counting across calls, since EWDS serves a cached partial product back to any
-    area it has already seen."""
+    area it has already seen. One request per call by default: daily.py calls again every
+    RETRY_MINUTES, and the account's EWDS queue is shared with other live monitors."""
     da = _cached(issue)
     offline = os.getenv("GLOFAS_OFFLINE", "").lower() == "true"  # replay from the cache only
     if da is not None and (offline or int(da.lead_day.max()) >= ev.TESO_STEPS):
         return on_grid(da)
     if offline:
         return None
+    if datetime.now(UTC) >= glofas_deadline(issue):
+        raise TimeoutError(f"past the GloFAS deadline ({glofas_deadline(issue):%d %b %H:%M} UTC)")
     path = GLOFAS_CACHE / f"glofas_fc_{issue:%Y-%m-%d}_{issue:%d}.zip"
     q = None
     for _ in range(attempts):

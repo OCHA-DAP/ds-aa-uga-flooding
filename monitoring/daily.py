@@ -48,24 +48,54 @@ def past(cutoff: str) -> bool:
     return (now.hour, now.minute) >= (h, m)
 
 
+def keep_fuller(day: pd.DataFrame, blob: str) -> pd.DataFrame:
+    """The stored evaluation of this issue if it has fewer gaps than the new one (a late re-run
+    must not replace a met / not-met reading with "not evaluated"), else the new one."""
+    if not R.blob_exists(blob):
+        return day
+    old = stratus.load_parquet_from_blob(blob, stage="dev")
+    if old.met.isna().sum() < day.met.isna().sum():
+        print(f"the stored record for this issue has fewer gaps: keeping it ({blob})")
+        return old
+    return day
+
+
+def mark_sent(record: dict, blob: str, attempts: int = 3) -> None:
+    for i in range(attempts):
+        try:
+            stratus.upload_blob_data(json.dumps(record, default=str).encode(), blob, stage="dev")
+            return
+        except Exception:
+            if i == attempts - 1:
+                raise
+            time.sleep(10)
+
+
 def main() -> None:
     issue = date.fromisoformat(os.getenv("MONITORING_DATE") or datetime.now(UTC).date().isoformat())
     if issue.month not in R.SEASON_MONTHS:
         print(f"{issue}: outside the October-December window, nothing to do")
         return
+    dry, test = notify.check_config()  # fail now, not after hours of waiting
+    sent_blob = f"{R.OUT}/sent/{issue:%Y-%m-%d}.json"
+    if not dry and not test and R.blob_exists(sent_blob):
+        print(f"already sent for {issue}; not evaluating or sending again")
+        return
     cutoff = os.getenv("WAIT_UNTIL_UTC", "15:45")
+    rerun = issue < datetime.now(UTC).date()  # a past issue: everything is out, no waiting
     inp = R.Inputs()
     while True:
         day = R.evaluate_issue(issue, inp, live=True)
         missing = waiting_for(day)
-        if not missing or past(cutoff):
+        if not missing or rerun or past(cutoff):
             break
         print(
             f"waiting for {sorted(missing)}; next try in {RETRY_MINUTES} min (until {cutoff} UTC)"
         )
         time.sleep(RETRY_MINUTES * 60)
 
-    if not notify.env_flag("DRY_RUN", True):
+    if not dry:
+        day = keep_fuller(day, f"{R.OUT}/daily/{issue:%Y-%m-%d}.parquet")
         R.write(day)
         R.append(day, f"{R.OUT}/season/{issue.year}.parquet")
         R.append(R.zone_summary(day), f"{R.OUT}/season/{issue.year}_zones.parquet")
@@ -76,19 +106,17 @@ def main() -> None:
         season = pd.concat([old[old.issue_date != pd.Timestamp(issue)], day])
     print(R.zone_summary(day).to_string(index=False))
 
-    sent_blob = f"{R.OUT}/sent/{issue:%Y-%m-%d}.json"
-    live_send = not notify.env_flag("DRY_RUN", True) and not notify.env_flag("TEST_EMAIL", True)
-    if live_send and R.blob_exists(sent_blob):
-        print(f"already sent for {issue}; not sending again")
-        return
-    result = notify.send(day, season.sort_values("issue_date"))
+    # A live send is recorded as soon as Listmonk accepts it, before the delivery check, so a
+    # failure after that cannot make a re-run send it twice.
+    result = notify.send(
+        day, season.sort_values("issue_date"), on_live_send=lambda r: mark_sent(r, sent_blob)
+    )
     if result.get("sent") and not result.get("delivered"):
         # Listmonk's sent count is not reliable either way (19 Nov 2026: 0/1 reported, email
-        # received), so this is a warning in the log and the record, not a failure: failing would
-        # make a re-run send the trigger email twice.
+        # received), so this is a warning in the log and the record, not a failure.
         print(f"WARNING: Listmonk did not confirm delivery of campaign {result.get('campaign')}")
     if result.get("sent") and not result.get("test"):
-        stratus.upload_blob_data(json.dumps(result, default=str).encode(), sent_blob, stage="dev")
+        mark_sent(result, sent_blob)  # the full record, with the delivery check
 
 
 if __name__ == "__main__":

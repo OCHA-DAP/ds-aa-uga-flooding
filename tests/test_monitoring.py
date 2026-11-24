@@ -435,8 +435,169 @@ def test_glofas_wait_stops_at_the_deadline_and_frees_the_queue(monkeypatch, tmp_
         def retrieve(self, name, request):
             return StuckRemote()
 
-    monkeypatch.setattr(g, "_client", lambda wait_until_complete=True: Client())
+    monkeypatch.setattr(g, "_client", lambda **kwargs: Client())
     past = datetime.now(UTC) - timedelta(minutes=1)
     with pytest.raises(TimeoutError):
         feeds.download_glofas(ISSUE.date(), tmp_path / "x.zip", deadline=past, poll=0)
     assert StuckRemote.deleted
+
+
+# --- review fixes (24 Nov 2026) -----------------------------------------------------------------
+
+
+def test_members_missing_at_a_later_step_are_not_counted_present():
+    q = forecast({1: np.full(51, 5.0)})
+    q[30:, 2] = np.nan  # 21 members missing at the third step only
+    assert ev.members_present(q) == 30
+
+
+def test_teso_tie_at_zero_names_the_district_nearest_its_level():
+    q = forecast({})  # every member below the level everywhere
+    q[:, :, 0, 0] = 9.0  # district B (cell 0) at 0.9 x the level; A stays at 0.1 x
+    rows = ev.teso(q, UNITS, ISSUE)
+    assert list(rows.place) == ["B", "A"]
+    day = rows.assign(issue_date=ISSUE)
+    line = notify.trigger_lines(day)["teso_kyoga"][0]
+    assert "closest B" in line
+
+
+def test_nodata_soil_is_not_evaluated_never_the_0th_percentile():
+    assert np.isnan(ev.soil_percentile(np.nan, HIST["mean"]))
+    assert state(ev.elgon_t3(rain(150.0), soil(np.nan), HIST, CFG, ISSUE).met.iloc[0]) is None
+
+
+def test_a_stale_lake_feed_is_not_evaluated():
+    late = ISSUE + pd.Timedelta(days=ev.LAKE_MAX_AGE_DAYS + 5)
+    row = ev.adjumani_lake(lake_passes(2.0), THR, late).iloc[0]
+    assert state(row.met) is None and "stopped" in row.detail
+
+
+def test_a_live_send_is_recorded_before_the_delivery_check(monkeypatch, fake_listmonk):
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("TEST_EMAIL", "false")
+    monkeypatch.setenv("LISTMONK_LIST_ID", "999")
+    monkeypatch.setenv("LISTMONK_TEST_LIST_ID", "5")
+
+    def down(self, campaign_id):
+        raise TimeoutError("listmonk slow")
+
+    monkeypatch.setattr(fake_listmonk, "get_campaign", down)
+    recorded = []
+    day = day_table(
+        {"teso_kyoga": [False], "elgon": [False], "karamoja": [False], "adjumani": [False]}
+    )
+    out = notify.send(day, day, on_live_send=recorded.append)
+    assert recorded and recorded[0]["list"] == 999 and recorded[0]["sent"] is True
+    assert out["sent"] is True and out["delivered"] is False
+
+
+def test_send_settings_fail_at_the_start(monkeypatch, fake_listmonk):
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("TEST_EMAIL", "true")
+    monkeypatch.setenv("LISTMONK_TEST_LIST_ID", "abc")
+    with pytest.raises(SystemExit):
+        notify.check_config()
+    monkeypatch.setenv("TEST_EMAIL", "false")
+    monkeypatch.delenv("LISTMONK_LIST_ID", raising=False)
+    with pytest.raises(SystemExit):
+        notify.check_config()
+    monkeypatch.setenv("DRY_RUN", "off")
+    with pytest.raises(ValueError):
+        notify.check_config()
+
+
+class FailedRemote(StuckRemote):
+    status = "failed"
+
+    def delete(self):
+        FailedRemote.deleted = True
+
+
+def test_glofas_request_is_deleted_on_any_exit_but_success(monkeypatch, tmp_path):
+    import src.datasources.glofas as g
+
+    class Client:
+        def retrieve(self, name, request):
+            return FailedRemote()
+
+    monkeypatch.setattr(g, "_client", lambda **kwargs: Client())
+    FailedRemote.deleted = False
+    with pytest.raises(RuntimeError):
+        feeds.download_glofas(ISSUE.date(), tmp_path / "x.zip", poll=0)
+    assert FailedRemote.deleted
+
+
+def test_no_glofas_request_after_the_deadline(monkeypatch):
+    monkeypatch.setattr(R, "_cached", lambda issue: None)
+    monkeypatch.delenv("GLOFAS_OFFLINE", raising=False)
+    old = (datetime.now(UTC) - timedelta(days=10)).date()
+    monkeypatch.setattr(R, "_STARTED", datetime.now(UTC) - timedelta(hours=4))
+    monkeypatch.setattr(
+        feeds, "download_glofas", lambda *a, **k: pytest.fail("submitted after the deadline")
+    )
+    with pytest.raises(TimeoutError):
+        R.glofas_issue(old)
+
+
+def test_chirps_reader_sees_a_file_published_after_a_404(tmp_path):
+    """GDAL caches a failed /vsicurl/ open per process; the reader must not."""
+    import threading
+    from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+
+    from rasterio.transform import from_origin
+
+    from src.constants import UGA_BOX
+    from src.datasources.chirps_gefs import read_windowed_url
+
+    class Ranged(SimpleHTTPRequestHandler):
+        def __init__(self, *a, **k):
+            super().__init__(*a, directory=str(tmp_path), **k)
+
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):
+            path = Path(self.translate_path(self.path))
+            if not path.is_file():
+                self.send_error(404)
+                return
+            data = path.read_bytes()
+            rng = self.headers.get("Range")
+            if rng:
+                a, b = rng.split("=")[1].split("-")
+                a, b = int(a), min(int(b or len(data) - 1), len(data) - 1)
+                self.send_response(206)
+                self.send_header("Content-Range", f"bytes {a}-{b}/{len(data)}")
+                chunk = data[a : b + 1]
+            else:
+                self.send_response(200)
+                chunk = data
+            self.send_header("Accept-Ranges", "bytes")
+            self.send_header("Content-Length", str(len(chunk)))
+            self.end_headers()
+            self.wfile.write(chunk)
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Ranged)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    url = f"http://127.0.0.1:{srv.server_address[1]}/c3g_test.tif"
+    try:
+        with pytest.raises(rasterio.errors.RasterioIOError):
+            read_windowed_url(url, attempts=1)
+        x0, y0, x1, y1 = UGA_BOX
+        w, h = int((x1 - x0) / 0.5) + 2, int((y1 - y0) / 0.5) + 2
+        with rasterio.open(
+            tmp_path / "c3g_test.tif",
+            "w",
+            driver="GTiff",
+            width=w,
+            height=h,
+            count=1,
+            dtype="float32",
+            crs="EPSG:4326",
+            transform=from_origin(x0 - 0.5, y1 + 0.5, 0.5, 0.5),
+        ) as ds:
+            ds.write(np.full((1, h, w), 7.0, dtype="float32"))
+        arr, _, _ = read_windowed_url(url, attempts=1)
+        assert np.nanmax(arr) == 7.0
+    finally:
+        srv.shutdown()

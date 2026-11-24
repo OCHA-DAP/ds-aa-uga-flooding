@@ -50,6 +50,10 @@ def read_windowed_url(url: str, attempts: int = 3):
         CPL_VSIL_CURL_ALLOWED_EXTENSIONS=".tif",
         GDAL_HTTP_MAX_RETRY="3",
         GDAL_HTTP_RETRY_DELAY="2",
+        # GDAL caches a failed open (404 before publication, 429, 503) for the life of the
+        # process and answers later opens of the same URL from that cache without a request,
+        # so the daily monitor would never see a file published after its first try.
+        CPL_VSIL_CURL_NON_CACHED=f"/vsicurl/{url}",
     )
     for i in range(attempts):
         try:

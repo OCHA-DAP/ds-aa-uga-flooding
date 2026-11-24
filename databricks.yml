@@ -11,8 +11,9 @@
 # Listmonk creds are resolved with --secret at run time (tolerated if missing).
 #
 # Safe by default: dry_run "true" (nothing sent, nothing written) and test_email "true"
-# (test list 103). The prod target sets dry_run "false" but keeps test_email "true" until a
-# live Uganda list exists and its id is put in live_list_id.
+# (test list 103). The prod target sets dry_run "false" and test list 5, and keeps test_email
+# "true" until the live list (Listmonk 148 "Uganda Monitoring", 12 addresses, made 20 Nov 2026)
+# is confirmed and its id is put in live_list_id.
 #
 #   databricks bundle validate -t dev -p DEFAULT
 #   databricks bundle deploy   -t dev -p DEFAULT        # schedule paused in development mode

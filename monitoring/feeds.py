@@ -236,23 +236,31 @@ def download_glofas(
     from src.datasources.glofas import _client
 
     out.parent.mkdir(parents=True, exist_ok=True)
-    remote = _client(wait_until_complete=False).retrieve(
-        "cems-glofas-forecast", glofas_request(issue, nudge)
-    )
-    while True:
-        remote.update()
-        if remote.status == "successful":
-            remote.download(str(out))
-            return out
-        if remote.status == "failed":
-            raise RuntimeError(f"EWDS request failed: {str(remote.get_receipt())[:300]}")
-        if deadline is not None and datetime.now(UTC) >= deadline:
+    # Few, short retries: the client's defaults (500 retries, up to 120 s apart) would hold one
+    # call through an EWDS outage for hours, past the deadline and the task timeout.
+    client = _client(wait_until_complete=False, retry_max=5, sleep_max=30)
+    remote = client.retrieve("cems-glofas-forecast", glofas_request(issue, nudge))
+    done = False
+    try:
+        while True:
+            remote.update()
+            if remote.status == "successful":
+                remote.download(str(out))
+                done = True
+                return out
+            if remote.status in ("failed", "rejected", "dismissed"):
+                raise RuntimeError(f"EWDS request {remote.status}")
+            if deadline is not None and datetime.now(UTC) >= deadline:
+                raise TimeoutError(
+                    f"EWDS had not delivered the {issue} issue by {deadline:%H:%M} UTC"
+                )
+            time.sleep(poll)
+    finally:
+        if not done:  # never leave a request in the account's one-at-a-time queue
             try:
                 remote.delete()
-            except Exception as err:  # noqa: BLE001 - best effort; the timeout is what matters
+            except Exception as err:  # noqa: BLE001 - best effort
                 print(f"GloFAS: could not delete the abandoned request ({type(err).__name__})")
-            raise TimeoutError(f"EWDS had not delivered the {issue} issue by {deadline:%H:%M} UTC")
-        time.sleep(poll)
 
 
 def open_glofas(path: Path) -> xr.DataArray:

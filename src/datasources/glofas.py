@@ -48,8 +48,12 @@ def _key() -> str:
     return lines["key"]
 
 
-def _client(wait_until_complete: bool = True) -> cdsapi.Client:
-    return cdsapi.Client(url=EWDS_URL, key=_key(), wait_until_complete=wait_until_complete)
+def _client(wait_until_complete: bool = True, **kwargs) -> cdsapi.Client:
+    """kwargs go to cdsapi.Client (e.g. retry_max, sleep_max: the defaults, 500 retries up to
+    120 s apart, let one call block for hours during an EWDS outage)."""
+    return cdsapi.Client(
+        url=EWDS_URL, key=_key(), wait_until_complete=wait_until_complete, **kwargs
+    )
 
 
 def _submit_and_download_all(jobs: dict, log_prefix: str = "") -> dict:

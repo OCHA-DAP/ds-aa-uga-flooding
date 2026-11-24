@@ -34,6 +34,9 @@ TESO_STEPS = 6  # 24 h .. 144 h: the IBF portal's lead days 0-5
 T2_STEPS = 5  # 24 h .. 120 h: the Elgon exposure backtest dates an exceedance 5 days early
 N_MEMBERS = 51
 LAKE_RISE_DAYS = 180
+# Passes are every 10 days and NASA publishes about a week behind, so a pass older than this
+# means the feed has stopped: the lake leg is then not evaluated rather than "not met".
+LAKE_MAX_AGE_DAYS = 30
 
 COLS = [
     "zone",
@@ -54,8 +57,9 @@ def frame(rows: list[dict]) -> pd.DataFrame:
 
 
 def members_present(q: xr.DataArray) -> int:
-    """Members with any data at the first step (the EWDS trickle serves partial issues)."""
-    return int(q.isel(lead_day=0).notnull().any(["lat", "lon"]).sum())
+    """Members with data at every step (the EWDS trickle serves partial issues; a member
+    missing at a later step would otherwise count as below the level there)."""
+    return int(q.notnull().any(["lat", "lon"]).all("lead_day").sum())
 
 
 # --- Teso --------------------------------------------------------------------------------------
@@ -96,6 +100,7 @@ def teso(q: xr.DataArray, units: pd.DataFrame, issue: pd.Timestamp) -> pd.DataFr
         close = g.sort_values("median_ratio", ascending=False).iloc[0]
         rows.append(
             dict(
+                _median=float(close.median_ratio),
                 zone="teso_kyoga",
                 trigger="IFRC/URCS EAP (GloFAS)",
                 place=d,
@@ -112,6 +117,9 @@ def teso(q: xr.DataArray, units: pd.DataFrame, issue: pd.Timestamp) -> pd.DataFr
                 source_date=issue.date().isoformat(),
             )
         )
+    # closest first: by member share, then by the member median over the level (a tie at 0 %
+    # is the usual case); notify.trigger_lines keeps this order among equal shares
+    rows.sort(key=lambda r: (r["value"], r.pop("_median")), reverse=True)
     return frame(rows)
 
 
@@ -167,7 +175,9 @@ def ordinal(x: float) -> str:
 def soil_percentile(value: float, history: pd.Series) -> float:
     """Percentile of `value` in a district's daily record (share of days at or below it)."""
     h = history.dropna().to_numpy()
-    return float((h <= value).mean() * 100) if len(h) else np.nan
+    if not np.isfinite(value) or not len(h):
+        return np.nan  # nodata must read as not evaluated, never as the 0th percentile
+    return float((h <= value).mean() * 100)
 
 
 def elgon_t3(
@@ -256,6 +266,27 @@ def adjumani_lake(passes: pd.DataFrame, thr: pd.DataFrame, issue: pd.Timestamp) 
     rise = kyoga_rise(passes, issue)
     last = rise.index[-1]
     val = float(rise.iloc[-1])
+    age = (issue - last).days
+    if age > LAKE_MAX_AGE_DAYS:
+        return frame(
+            [
+                dict(
+                    zone="adjumani",
+                    trigger="Lake Kyoga 180-day rise",
+                    place="Lake Kyoga",
+                    value=np.nan,
+                    threshold=level,
+                    unit="m",
+                    met=None,
+                    detail=(
+                        f"last satellite pass {last.date().isoformat()}, {age} days before the "
+                        f"issue day (more than {LAKE_MAX_AGE_DAYS}): the feed looks stopped"
+                    ),
+                    source="NASA Global Water Monitor (altimetry)",
+                    source_date=last.date().isoformat(),
+                )
+            ]
+        )
     return frame(
         [
             dict(
