@@ -601,3 +601,46 @@ def test_chirps_reader_sees_a_file_published_after_a_404(tmp_path):
         assert np.nanmax(arr) == 7.0
     finally:
         srv.shutdown()
+
+
+class BlipRemote(StuckRemote):
+    """Status polls fail twice, then the request completes."""
+
+    polls = 0
+    downloaded = False
+
+    def update(self):
+        BlipRemote.polls += 1
+        if BlipRemote.polls <= 2:
+            raise ConnectionError("EWDS blip")
+        self.status = "successful"
+
+    def download(self, target):
+        BlipRemote.downloaded = True
+        Path(target).write_bytes(b"x")
+
+    def delete(self):
+        BlipRemote.deleted = True
+
+
+def test_a_status_blip_keeps_the_glofas_request(monkeypatch, tmp_path):
+    import src.datasources.glofas as g
+
+    class Client:
+        def retrieve(self, name, request):
+            return BlipRemote()
+
+    monkeypatch.setattr(g, "_client", lambda **kwargs: Client())
+    BlipRemote.polls, BlipRemote.deleted, BlipRemote.downloaded = 0, False, False
+    feeds.download_glofas(ISSUE.date(), tmp_path / "x.zip", poll=0)
+    assert BlipRemote.downloaded and not BlipRemote.deleted
+
+
+def test_a_rerun_keeps_a_stored_reading_it_cannot_evaluate(monkeypatch):
+    stored = day_table({"teso_kyoga": [True], "elgon": [None, None, False]})
+    new = day_table({"teso_kyoga": [None], "elgon": [False]})
+    monkeypatch.setattr(R, "blob_exists", lambda blob: True)
+    monkeypatch.setattr(daily.stratus, "load_parquet_from_blob", lambda blob, stage: stored)
+    out = daily.keep_fuller(new, "x")
+    assert state(out[out.zone == "teso_kyoga"].met.iloc[0]) is True  # stored MET kept
+    assert [state(x) for x in out[out.zone == "elgon"].met] == [False]  # new reading wins

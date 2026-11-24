@@ -34,9 +34,9 @@ TESO_STEPS = 6  # 24 h .. 144 h: the IBF portal's lead days 0-5
 T2_STEPS = 5  # 24 h .. 120 h: the Elgon exposure backtest dates an exceedance 5 days early
 N_MEMBERS = 51
 LAKE_RISE_DAYS = 180
-# Passes are every 10 days and NASA publishes about a week behind, so a pass older than this
-# means the feed has stopped: the lake leg is then not evaluated rather than "not met".
-LAKE_MAX_AGE_DAYS = 30
+# Passes are every 10 days (gaps of 18-19 days occur) and NASA publishes one to two weeks
+# behind, so a pass older than this means the feed has stopped: the lake leg is then not evaluated rather than "not met".
+LAKE_MAX_AGE_DAYS = 40
 
 COLS = [
     "zone",

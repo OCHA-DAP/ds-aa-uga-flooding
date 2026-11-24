@@ -49,15 +49,21 @@ def past(cutoff: str) -> bool:
 
 
 def keep_fuller(day: pd.DataFrame, blob: str) -> pd.DataFrame:
-    """The stored evaluation of this issue if it has fewer gaps than the new one (a late re-run
-    must not replace a met / not-met reading with "not evaluated"), else the new one."""
+    """Per (zone, trigger): keep the stored rows of this issue where the new run could not
+    evaluate the trigger at all and the stored run could (a late re-run must not replace a
+    met / not-met reading with "not evaluated"); otherwise the new rows."""
     if not R.blob_exists(blob):
         return day
     old = stratus.load_parquet_from_blob(blob, stage="dev")
-    if old.met.isna().sum() < day.met.isna().sum():
-        print(f"the stored record for this issue has fewer gaps: keeping it ({blob})")
-        return old
-    return day
+    parts = []
+    for key, new in day.groupby(["zone", "trigger"], sort=False):
+        stored = old[(old.zone == key[0]) & (old.trigger == key[1])]
+        if new.met.isna().all() and stored.met.notna().any():
+            print(f"{key[0]} / {key[1]}: not evaluated now; keeping the stored reading")
+            parts.append(stored)
+        else:
+            parts.append(new)
+    return pd.concat(parts, ignore_index=True)
 
 
 def mark_sent(record: dict, blob: str, attempts: int = 3) -> None:
@@ -108,9 +114,13 @@ def main() -> None:
 
     # A live send is recorded as soon as Listmonk accepts it, before the delivery check, so a
     # failure after that cannot make a re-run send it twice.
-    result = notify.send(
-        day, season.sort_values("issue_date"), on_live_send=lambda r: mark_sent(r, sent_blob)
-    )
+    def first_mark(record: dict) -> None:
+        try:
+            mark_sent(record, sent_blob)
+        except Exception as err:  # noqa: BLE001 - written again below; raised only if both fail
+            print(f"WARNING: sent marker not written yet ({type(err).__name__}); retrying")
+
+    result = notify.send(day, season.sort_values("issue_date"), on_live_send=first_mark)
     if result.get("sent") and not result.get("delivered"):
         # Listmonk's sent count is not reliable either way (19 Nov 2026: 0/1 reported, email
         # received), so this is a warning in the log and the record, not a failure.

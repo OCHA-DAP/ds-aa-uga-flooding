@@ -85,6 +85,8 @@ def chirps3_gefs(issue: date, polys) -> pd.DataFrame | None:
     failure is retried with backoff and then raised, so it is reported as a failure, never as
     "not published"."""
     url = url_5day_v3(issue)
+    if _http_status(url) == 404:  # one request while the file is not out yet
+        return None
     try:
         arr, bounds, wkt = _retry(lambda: read_windowed_url(url), attempts=4, wait=10.0)
     except rasterio.errors.RasterioIOError:
@@ -243,13 +245,18 @@ def download_glofas(
     done = False
     try:
         while True:
-            remote.update()
-            if remote.status == "successful":
+            try:
+                remote.update()
+                status = remote.status
+            except Exception as err:  # noqa: BLE001 - a status blip must not cost the queue place
+                print(f"GloFAS: status check failed ({type(err).__name__}); polling on")
+                status = None
+            if status == "successful":
                 remote.download(str(out))
                 done = True
                 return out
-            if remote.status in ("failed", "rejected", "dismissed"):
-                raise RuntimeError(f"EWDS request {remote.status}")
+            if status in ("failed", "rejected", "dismissed"):
+                raise RuntimeError(f"EWDS request {status}")
             if deadline is not None and datetime.now(UTC) >= deadline:
                 raise TimeoutError(
                     f"EWDS had not delivered the {issue} issue by {deadline:%H:%M} UTC"
