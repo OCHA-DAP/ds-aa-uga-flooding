@@ -125,23 +125,37 @@ def glofas_deadline(issue: date) -> datetime:
     return datetime(issue.year, issue.month, issue.day, h, m, tzinfo=UTC)
 
 
-_V4_LEGACY: list[str] | None = None
+_V4_LEGACY: list[str] | None = None  # set once a check succeeds; a failure is retried
 
 
 def glofas_v4_retired() -> list[str]:
     """The v4 entries EWDS lists as legacy for the GloFAS forecast: empty while v4 is the
-    operational version (the one every GloFAS threshold here was fitted on). Checked once per
-    process. A failed check is a warning, not a version change."""
+    operational version (the one every GloFAS threshold here was fitted on). A successful check
+    is kept for the process; a failed one (catalogue down, or a form that no longer lists the
+    legacy versions it has listed since 2023) is retried on the next call and reported in the
+    email as "not checked", never taken as a version change."""
     global _V4_LEGACY
     if _V4_LEGACY is None:
         try:
             legacy = feeds.glofas_legacy_versions()
+            if "version_3_1" not in legacy:
+                raise ValueError(f"unexpected legacy list {legacy}")
             print(f"EWDS GloFAS legacy versions: {legacy}")
-        except Exception as err:  # noqa: BLE001 - catalogue down: carry on, say so
-            print(f"WARNING: GloFAS version check failed ({type(err).__name__}); assuming v4")
-            legacy = []
-        _V4_LEGACY = [v for v in legacy if v.startswith("version_4")]
+            _V4_LEGACY = [v for v in legacy if v.startswith("version_4")]
+        except Exception as err:  # noqa: BLE001 - reported, retried; not a version change
+            print(f"WARNING: GloFAS version check failed ({type(err).__name__}: {err})")
+            return []
     return _V4_LEGACY
+
+
+def glofas_version_status() -> str:
+    """One line for the email: what the version check found."""
+    retired = glofas_v4_retired()
+    if _V4_LEGACY is None:
+        return "GloFAS version NOT checked today (the EWDS catalogue did not answer)"
+    if retired:
+        return f"GloFAS is no longer v4 (EWDS lists {', '.join(retired)} as legacy)"
+    return "GloFAS v4 is still the operational version (checked against EWDS today)"
 
 
 _NUDGE: dict[date, int] = {}  # per issue, kept across daily.py waits: never re-ask an area
@@ -161,6 +175,8 @@ def glofas_issue(issue: date, attempts: int = 1):
         return None
     if datetime.now(UTC) >= glofas_deadline(issue):
         raise TimeoutError(f"past the GloFAS deadline ({glofas_deadline(issue):%d %b %H:%M} UTC)")
+    if retired := glofas_v4_retired():  # replays too: never fetch a non-v4 issue
+        raise RuntimeError(f"operational GloFAS is no longer v4 ({', '.join(retired)} is legacy)")
     path = GLOFAS_CACHE / f"glofas_fc_{issue:%Y-%m-%d}_{issue:%d}.zip"
     q = None
     for _ in range(attempts):

@@ -715,6 +715,35 @@ def test_a_failed_version_check_is_not_a_version_change(monkeypatch):
 
     monkeypatch.setattr(feeds, "glofas_legacy_versions", down)
     assert R.glofas_v4_retired() == []
+    assert "NOT checked" in R.glofas_version_status()
+    # not cached: the next call checks again and sees the switch
+    monkeypatch.setattr(feeds, "glofas_legacy_versions", lambda: ["version_3_1", "version_4_0"])
+    assert R.glofas_v4_retired() == ["version_4_0"]
+
+
+def test_a_form_without_the_known_legacy_versions_is_a_failed_check(monkeypatch):
+    monkeypatch.setattr(R, "_V4_LEGACY", None)
+    monkeypatch.setattr(feeds, "glofas_legacy_versions", list)
+    assert R.glofas_v4_retired() == [] and R._V4_LEGACY is None
+
+
+def test_no_glofas_download_once_v4_is_retired_replays_included(monkeypatch):
+    monkeypatch.setattr(R, "_cached", lambda issue: None)
+    monkeypatch.delenv("GLOFAS_OFFLINE", raising=False)
+    monkeypatch.setattr(R, "_V4_LEGACY", ["version_4_5"])
+    monkeypatch.setattr(R, "glofas_deadline", lambda issue: datetime.now(UTC) + timedelta(hours=1))
+    monkeypatch.setattr(feeds, "download_glofas", lambda *a, **k: pytest.fail("downloaded"))
+    with pytest.raises(RuntimeError):
+        R.glofas_issue(ISSUE.date())
+
+
+def test_email_escapes_text():
+    day = day_table(
+        {"teso_kyoga": [False], "elgon": [False], "karamoja": [False], "adjumani": [False]}
+    )
+    day.loc[0, "detail"] = "a <b> & c"
+    _, body = notify.render(day, day, "chart.png", "GloFAS v4 <ok>")
+    assert "a &lt;b&gt; &amp; c" in body and "GloFAS v4 &lt;ok&gt;" in body
 
 
 def test_email_tables_for_a_met_day_and_a_day_with_gaps():

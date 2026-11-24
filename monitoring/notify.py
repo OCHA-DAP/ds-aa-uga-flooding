@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import os
 import time
+from html import escape
 from pathlib import Path
 
 import matplotlib
@@ -276,6 +277,7 @@ def results_html(day: pd.DataFrame) -> str:
             )
             last = i == len(zr) - 1
             sep = "" if last else ";border-bottom:none"
+            r = {k: escape(str(v)) for k, v in r.items()}
             body += (
                 f"<tr>{zone_cell}"
                 f"<td style='{_TD};border-bottom:none'>{r['trigger']}</td>"
@@ -289,7 +291,9 @@ def results_html(day: pd.DataFrame) -> str:
     return _table(["Zone", "Trigger", "Result", "Where", "Reading", "Threshold"], body)
 
 
-def render(day: pd.DataFrame, season: pd.DataFrame, chart_url: str) -> tuple[str, str]:
+def render(
+    day: pd.DataFrame, season: pd.DataFrame, chart_url: str, version_note: str = ""
+) -> tuple[str, str]:
     issue = pd.Timestamp(day.issue_date.iloc[0])
     zmet = [z for z in ZONE_LABEL if day[day.zone == z].met.eq(True).any()]
     zgap = [z for z in ZONE_LABEL if z not in zmet and day[day.zone == z].met.isna().any()]
@@ -320,8 +324,8 @@ shows the first; the second is in the table below.</p>
 Teso: the IBF portal's rule reproduced on the GloFAS forecast, not the portal's own state.
 Mount Elgon: the partner's draft triggers as rebuilt by us, read on the data our backtest used.
 Karamoja and Adjumani rain: draft thresholds calibrated on the CHIRPS3-GEFS hindcast. Adjumani
-lake: draft threshold on the Lake Kyoga altimetry record. GloFAS thresholds are v4; the
-operational version is checked against EWDS on every run.</p>
+lake: draft threshold on the Lake Kyoga altimetry record. The GloFAS thresholds are v4.
+{escape(version_note)}</p>
 """
     return subject, body
 
@@ -364,7 +368,9 @@ def check_config() -> tuple[bool, bool]:
     return dry, test
 
 
-def send(day: pd.DataFrame, season: pd.DataFrame, on_live_send=None) -> dict:
+def send(
+    day: pd.DataFrame, season: pd.DataFrame, on_live_send=None, version_note: str = ""
+) -> dict:
     """on_live_send(record) is called as soon as Listmonk accepts a live send, before the
     delivery check, so the caller can record it: a failure after that point must not lead a
     re-run to send the live email again."""
@@ -374,7 +380,7 @@ def send(day: pd.DataFrame, season: pd.DataFrame, on_live_send=None) -> dict:
     print(f"email mode: DRY_RUN={dry} TEST_EMAIL={test}")
     png = chart(season, OUT_DIR / f"uga_floods_{issue:%Y-%m-%d}.png")
     if dry:
-        subject, body = render(day, season, png.name)
+        subject, body = render(day, season, png.name, version_note)
         html = OUT_DIR / f"uga_floods_{issue:%Y-%m-%d}.html"
         html.write_text(f"<h2>{subject}</h2>{body}", encoding="utf-8")
         print(f"dry run: wrote {html}")
@@ -385,7 +391,7 @@ def send(day: pd.DataFrame, season: pd.DataFrame, on_live_send=None) -> dict:
     list_id = target_list(test)
     client = ListmonkClient.from_env()
     url = client.upload_media(png.read_bytes(), png.name)
-    subject, body = render(day, season, url)
+    subject, body = render(day, season, url, version_note)
     name = f"uga-floods-{issue:%Y-%m-%d}"
     if test:
         subject, name = f"[TEST] {subject}", f"[test] {name}"

@@ -120,7 +120,12 @@ def main() -> None:
         except Exception as err:  # noqa: BLE001 - written again below; raised only if both fail
             print(f"WARNING: sent marker not written yet ({type(err).__name__}); retrying")
 
-    result = notify.send(day, season.sort_values("issue_date"), on_live_send=first_mark)
+    result = notify.send(
+        day,
+        season.sort_values("issue_date"),
+        on_live_send=first_mark,
+        version_note=R.glofas_version_status() + ".",
+    )
     if result.get("sent") and not result.get("delivered"):
         # Listmonk's sent count is not reliable either way (19 Nov 2026: 0/1 reported, email
         # received), so this is a warning in the log and the record, not a failure.
