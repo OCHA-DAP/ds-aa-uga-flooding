@@ -5,9 +5,15 @@ Daily check of the four zone triggers in the October to December window, on the 
 | zone | trigger | live product | published |
 |---|---|---|---|
 | Teso / Lake Kyoga | IFRC/URCS EAP as the IBF portal computes it: per admin area (levels 2 to 4), 60 % of 51 members over the zonal max of the official 5-year map | GloFAS operational forecast (EWDS `cems-glofas-forecast`) | daily; EWDS queue from minutes to hours |
-| Mount Elgon | the partner's draft triggers, as backtested in `analysis/elgon_exposure_trigger.py` and `analysis/existing_triggers.py` | read from the private config | |
+| Mount Elgon | the partner's draft triggers, as backtested in `analysis/elgon_exposure_trigger.py` and `analysis/existing_triggers.py` (parameters from the private config) | GloFAS operational forecast; GEFS control run, 00 UTC, 0.25 deg (NOAA, the series the rain backtest used); NOAA CPC soil moisture | GEFS about 04:30 UTC; CPC about 2 days behind |
 | Karamoja | CHIRPS3-GEFS 5-day district mean against each district's v3 threshold, any of nine | CHIRPS3-GEFS (CHC) | about 09:20 UTC |
 | Adjumani / Albert Nile | Lake Kyoga 180-day rise OR CHIRPS3-GEFS 5-day district mean, v3 thresholds | NASA Global Water Monitor; CHIRPS3-GEFS | lake passes every 10 days, about a week behind |
+
+GloFAS version: EWDS cannot pin v4 and its files carry no version, so each run reads the
+forecast dataset's request form. When a `version_4*` entry appears under Legacy Versions, the
+operational forecast is no longer v4: both GloFAS triggers are reported not evaluated, the email
+still goes out, and the job then fails so its failure mail goes out. Refit the GloFAS
+thresholds on the new version before relying on them again.
 
 Code: `feeds.py` (one reader per product), `evaluate.py` (the rules), `run.py` (one issue, or a
 replay), `notify.py` (email), `daily.py` (the job), `static.py` (fixed inputs, built once).

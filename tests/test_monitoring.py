@@ -457,8 +457,8 @@ def test_teso_tie_at_zero_names_the_district_nearest_its_level():
     rows = ev.teso(q, UNITS, ISSUE)
     assert list(rows.place) == ["B", "A"]
     day = rows.assign(issue_date=ISSUE)
-    line = notify.trigger_lines(day)["teso_kyoga"][0]
-    assert "closest B" in line
+    row = notify.trigger_rows(day)[0]
+    assert row["where"] == "B (closest)"
 
 
 def test_nodata_soil_is_not_evaluated_never_the_0th_percentile():
@@ -644,3 +644,84 @@ def test_a_rerun_keeps_a_stored_reading_it_cannot_evaluate(monkeypatch):
     out = daily.keep_fuller(new, "x")
     assert state(out[out.zone == "teso_kyoga"].met.iloc[0]) is True  # stored MET kept
     assert [state(x) for x in out[out.zone == "elgon"].met] == [False]  # new reading wins
+
+
+# --- GloFAS version guard, GEFS control rain, email tables (25 Nov 2026) -------------------------
+
+
+def test_gefs_index_picks_the_six_hour_accumulation():
+    idx = (
+        "17:9000:d=2026112400:TMP:2 m above ground:12 hour fcst:ENS=low-res ctl\n"
+        "18:9757669:d=2026112400:APCP:surface:6-12 hour acc fcst:ENS=low-res ctl\n"
+        "19:9800000:d=2026112400:TCDC:entire atmosphere:12 hour fcst:ENS=low-res ctl\n"
+    )
+    assert feeds._apcp_range(idx, 12) == (9757669, 9799999)
+    with pytest.raises(ValueError):
+        feeds._apcp_range(idx, 18)
+
+
+def test_t3_on_one_model_keeps_the_plain_label():
+    r = rain(150.0).assign(model="gefs_c00")
+    row = ev.elgon_t3(r, soil(90.0), HIST, CFG, ISSUE).iloc[0]
+    assert row.trigger == CFG.get("t3", {}).get("short", "partner T3")
+    assert row.source.startswith("GEFS control")
+
+
+def fake_inputs():
+    from types import SimpleNamespace
+
+    return SimpleNamespace(
+        cfg=CFG,
+        units=UNITS,
+        cells=CELLS,
+        elgon_adm=pd.DataFrame({"ADM2_PCODE": ["P1"], "ADM2_EN": ["D1"]}),
+        polys=None,
+        thr=THR,
+        name_of=NAMES,
+        soil_hist=HIST,
+        passes=lake_passes(0.5),
+    )
+
+
+@pytest.fixture
+def quiet_feeds(monkeypatch):
+    monkeypatch.setattr(
+        feeds, "gefs_c00_72h", lambda issue, adm: rain(10.0).assign(model="gefs_c00")
+    )
+    monkeypatch.setattr(feeds, "cpc_soil_latest", lambda issue, polys: soil(50.0))
+    monkeypatch.setattr(
+        feeds,
+        "chirps3_gefs",
+        lambda issue, polys: pd.DataFrame({"pcode": ["P_ABIM"], "mean": [1.0]}),
+    )
+
+
+def test_a_retired_v4_skips_glofas_and_is_not_waited_for(monkeypatch, quiet_feeds):
+    monkeypatch.setattr(R, "_V4_LEGACY", None)
+    monkeypatch.setattr(feeds, "glofas_legacy_versions", lambda: ["version_3_1", "version_4_5"])
+    monkeypatch.setattr(R, "glofas_issue", lambda issue: pytest.fail("GloFAS requested"))
+    day = R.evaluate_issue(ISSUE.date(), fake_inputs(), live=True)
+    g = day[day.source == "GloFAS version"]
+    assert set(g.zone) == {"teso_kyoga", "elgon"} and g.met.isna().all()
+    assert "version_4_5" in g.detail.iloc[0]
+    assert daily.waiting_for(day) == set()  # nothing to wait for: the email goes out
+
+
+def test_a_failed_version_check_is_not_a_version_change(monkeypatch):
+    monkeypatch.setattr(R, "_V4_LEGACY", None)
+
+    def down():
+        raise ConnectionError("catalogue down")
+
+    monkeypatch.setattr(feeds, "glofas_legacy_versions", down)
+    assert R.glofas_v4_retired() == []
+
+
+def test_email_tables_for_a_met_day_and_a_day_with_gaps():
+    met = day_table(
+        {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False]}
+    )
+    _, body = notify.render(met, met, "chart.png")
+    assert body.count("<table") == 2
+    assert ">MET<" in body and ">not evaluated<" in body
+    assert "Days met" in body and "Today's results" in body

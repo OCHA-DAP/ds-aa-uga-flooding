@@ -155,15 +155,26 @@ def _fmt(v: float, unit: str) -> str:
     return f"{v:.2f} {unit}"
 
 
-def trigger_lines(day: pd.DataFrame) -> dict[str, list[str]]:
-    """Per zone, one line per trigger: met or not, the closest place, its reading and threshold."""
-    out: dict[str, list[str]] = {}
+def trigger_rows(day: pd.DataFrame) -> list[dict]:
+    """One row per (zone, trigger) for the results table: the result, where it was met (or the
+    closest place), its reading and threshold, and the detail line."""
+    rows = []
     for z in ZONE_LABEL:
-        lines = []
         g = day[day.zone == z].assign(c=closeness(day[day.zone == z]))
         for trig, t in g.groupby("trigger", sort=False):
-            if t.met.isna().all():
-                lines.append(f"<b>{trig}</b>: not evaluated | {t.detail.iloc[0]}")
+            n_gap = int(t.met.isna().sum())
+            if n_gap == len(t):
+                rows.append(
+                    dict(
+                        zone=z,
+                        trigger=trig,
+                        state="not evaluated",
+                        where="",
+                        reading="",
+                        threshold="",
+                        note=t.detail.iloc[0],
+                    )
+                )
                 continue
             met = t[t.met.eq(True)]
             # stable: among equal readings, keep the order evaluate gave (Teso: closest first)
@@ -172,18 +183,24 @@ def trigger_lines(day: pd.DataFrame) -> dict[str, list[str]]:
                 .sort_values("c", ascending=False, kind="stable")
                 .iloc[0]
             )
-            n_gap = int(t.met.isna().sum())
-            state = "MET" if len(met) else "not met"
-            if n_gap and not len(met):
-                state = f"not met where evaluated ({n_gap} of {len(t)} not evaluated)"
-            where = ", ".join(met.place) if len(met) else top.place
-            lines.append(
-                f"<b>{trig}</b>: {state} | {'met in' if len(met) else 'closest'} {where}: "
-                f"{_fmt(top.value, top.unit)} against {_fmt(top.threshold, top.unit)} "
-                f"| {top.detail}"
+            if len(met):
+                state = "MET"
+            elif n_gap:
+                state = f"not met ({n_gap} of {len(t)} places not evaluated)"
+            else:
+                state = "not met"
+            rows.append(
+                dict(
+                    zone=z,
+                    trigger=trig,
+                    state=state,
+                    where=", ".join(met.place) if len(met) else f"{top.place} (closest)",
+                    reading=_fmt(top.value, top.unit),
+                    threshold=_fmt(top.threshold, top.unit),
+                    note=top.detail,
+                )
             )
-        out[z] = lines
-    return out
+    return rows
 
 
 def data_dates(day: pd.DataFrame) -> list[str]:
@@ -193,6 +210,7 @@ def data_dates(day: pd.DataFrame) -> list[str]:
     for label, mask in (
         ("GloFAS issue", ok.source.str.startswith("GloFAS")),
         ("CHIRPS3-GEFS issue", ok.source.str.startswith("CHIRPS3")),
+        ("GEFS control run (00 UTC)", ok.source.str.startswith("GEFS control")),
         ("GFS and ICON runs (Open-Meteo)", ok.source.str.contains("Open-Meteo")),
     ):
         if mask.any():
@@ -206,11 +224,75 @@ def data_dates(day: pd.DataFrame) -> list[str]:
     return out
 
 
+# Inline styles only: the email is read in Outlook, which ignores <style> blocks.
+_TABLE = "border-collapse:collapse;font-size:13px;width:100%;max-width:760px"
+_TH = (
+    "text-align:left;padding:6px 8px;background:#eef2f6;border-bottom:1px solid #c9d1da;"
+    "font-weight:bold"
+)
+_TD = "padding:6px 8px;border-bottom:1px solid #e3e6ea;vertical-align:top"
+_STATE_STYLE = {
+    "MET": "color:#b00020;font-weight:bold",
+    "not evaluated": "color:#9a6700;font-weight:bold",
+}
+
+
+def _state_style(state: str) -> str:
+    if state in _STATE_STYLE:
+        return _STATE_STYLE[state]
+    return "color:#9a6700" if "not evaluated" in state else "color:#333"
+
+
+def _table(head: list[str], body: str) -> str:
+    th = "".join(f"<th style='{_TH}'>{h}</th>" for h in head)
+    return f"<table cellpadding='0' cellspacing='0' style='{_TABLE}'><tr>{th}</tr>{body}</table>"
+
+
+def season_html(season: pd.DataFrame) -> str:
+    rows = ""
+    for r in season_table(season).itertuples():
+        state = season_state(r)
+        style = "color:#b00020;font-weight:bold" if state.startswith("first met") else ""
+        rows += (
+            f"<tr><td style='{_TD}'>{ZONE_LABEL[r.zone]}</td>"
+            f"<td style='{_TD};{style}'>{state}</td>"
+            f"<td style='{_TD}'>{r.days_met}</td>"
+            f"<td style='{_TD}'>{r.days}</td>"
+            f"<td style='{_TD}'>{r.days_with_gaps}</td></tr>"
+        )
+    return _table(["Zone", "Season so far", "Days met", "Days run", "Days with missing data"], rows)
+
+
+def results_html(day: pd.DataFrame) -> str:
+    rows = trigger_rows(day)
+    body = ""
+    for z, label in ZONE_LABEL.items():
+        zr = [r for r in rows if r["zone"] == z]
+        for i, r in enumerate(zr):
+            zone_cell = (
+                f"<td rowspan='{2 * len(zr)}' style='{_TD};font-weight:bold'>{label}</td>"
+                if i == 0
+                else ""
+            )
+            last = i == len(zr) - 1
+            sep = "" if last else ";border-bottom:none"
+            body += (
+                f"<tr>{zone_cell}"
+                f"<td style='{_TD};border-bottom:none'>{r['trigger']}</td>"
+                f"<td style='{_TD};border-bottom:none;{_state_style(r['state'])}'>{r['state']}</td>"
+                f"<td style='{_TD};border-bottom:none'>{r['where']}</td>"
+                f"<td style='{_TD};border-bottom:none;white-space:nowrap'>{r['reading']}</td>"
+                f"<td style='{_TD};border-bottom:none;white-space:nowrap'>{r['threshold']}</td></tr>"
+                f"<tr><td colspan='5' style='{_TD}{sep};padding-top:0;font-size:11px;"
+                f"color:#666'>{r['note']}</td></tr>"
+            )
+    return _table(["Zone", "Trigger", "Result", "Where", "Reading", "Threshold"], body)
+
+
 def render(day: pd.DataFrame, season: pd.DataFrame, chart_url: str) -> tuple[str, str]:
     issue = pd.Timestamp(day.issue_date.iloc[0])
     zmet = [z for z in ZONE_LABEL if day[day.zone == z].met.eq(True).any()]
     zgap = [z for z in ZONE_LABEL if z not in zmet and day[day.zone == z].met.isna().any()]
-    gaps = day[day.met.isna()]
     if zmet:
         head = "Trigger met: " + ", ".join(ZONE_LABEL[z] for z in zmet)
     elif zgap:
@@ -219,44 +301,27 @@ def render(day: pd.DataFrame, season: pd.DataFrame, chart_url: str) -> tuple[str
         head = "No zone trigger met"
     subject = f"Uganda floods | {issue:%d %b %Y} | {head}"
 
-    st = season_table(season)
     first_run, n_runs = pd.Timestamp(season.issue_date.min()), season.issue_date.nunique()
-    srows = "".join(
-        f"<tr><td style='padding:2px 10px 2px 0'>{ZONE_LABEL[r.zone]}</td>"
-        f"<td style='padding:2px 10px 2px 0'>"
-        f"{season_state(r)}"
-        f"</td><td style='padding:2px 0;color:#666'>{plural(r.days, 'issue day')}"
-        f"{f', {r.days_with_gaps} with missing data' if r.days_with_gaps else ''}</td></tr>"
-        for r in st.itertuples()
-    )
-    lines = trigger_lines(day)
-    blocks = "".join(
-        f"<h3 style='margin:16px 0 4px;font-size:15px'>{ZONE_LABEL[z]}</h3>"
-        + "".join(f"<p style='margin:2px 0;font-size:13px'>{x}</p>" for x in lines[z])
-        for z in ZONE_LABEL
-    )
     sources = data_dates(day)
-    gap_html = (
-        "<p style='font-size:13px'><b>Missing today:</b> "
-        + "; ".join(sorted({f"{r.trigger} ({r.detail})" for r in gaps.itertuples()}))
-        + "</p>"
-        if len(gaps)
-        else ""
-    )
+    h = "style='font-size:15px;margin:20px 0 6px'"
     body = f"""
-<p style='font-size:16px'><b>{head}</b> for the forecasts issued on {issue:%d %B %Y}.</p>
-{gap_html}
-<p style='font-size:13px;margin-bottom:2px'><b>Season so far</b>: {plural(n_runs, "daily run")} since {first_run:%d %B} (window 1 October to 31 December):</p>
-<table style='font-size:13px;border-collapse:collapse'>{srows}</table>
-<p><img src='{chart_url}' alt='closest reading to threshold by zone' style='max-width:100%'></p>
-<p style='font-size:12px;color:#666;margin-top:0'>Where a trigger has two conditions, the
-line shows the first only; the second is in the zone's lines below.</p>
-{blocks}
+<p style='font-size:16px'><b>{head}</b> for the forecasts issued on {issue.day} {issue:%B %Y}.</p>
+<h3 {h}>Season so far</h3>
+<p style='font-size:12px;color:#666;margin:0 0 6px'>{plural(n_runs, "daily run")} since
+{first_run.day} {first_run:%B}; the window is 1 October to 31 December.</p>
+{season_html(season)}
+<p style='margin:12px 0 0'><img src='{chart_url}' alt='closest reading to threshold by zone'
+style='max-width:100%'></p>
+<p style='font-size:12px;color:#666;margin-top:0'>For a trigger with two conditions, the chart
+shows the first; the second is in the table below.</p>
+<h3 {h}>Today's results</h3>
+{results_html(day)}
 <p style='font-size:12px;color:#666;margin-top:16px'>Data used: {" | ".join(sources)}.<br>
 Teso: the IBF portal's rule reproduced on the GloFAS forecast, not the portal's own state.
-Mount Elgon: the partner's draft triggers as rebuilt by us. Karamoja and Adjumani rain: draft
-thresholds calibrated on the CHIRPS3-GEFS hindcast. Adjumani lake: draft threshold on the
-Lake Kyoga altimetry record.</p>
+Mount Elgon: the partner's draft triggers as rebuilt by us, read on the data our backtest used.
+Karamoja and Adjumani rain: draft thresholds calibrated on the CHIRPS3-GEFS hindcast. Adjumani
+lake: draft threshold on the Lake Kyoga altimetry record. GloFAS thresholds are v4; the
+operational version is checked against EWDS on every run.</p>
 """
     return subject, body
 

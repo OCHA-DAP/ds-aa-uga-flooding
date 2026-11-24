@@ -3,8 +3,7 @@
   uv run python monitoring/run.py 2026-11-18            replay one past issue day
   uv run python monitoring/run.py 2026-10-01 2026-11-18 replay a range
 
-A replay reads the same products as the daily job, except: GFS/ICON come from the Open-Meteo
-archive of past runs instead of the current run; CPC soil moisture is the day before the issue
+A replay reads the same products as the daily job, except: CPC soil moisture is the day before the issue
 (live: the latest file, ~2 days behind); Lake Kyoga uses every pass up to the issue day, not only
 those NASA had published by then (~1 week behind). So a replay is kept apart from the operational
 record: it writes under private/monitoring/replay/, never the files daily.py reads.
@@ -126,6 +125,25 @@ def glofas_deadline(issue: date) -> datetime:
     return datetime(issue.year, issue.month, issue.day, h, m, tzinfo=UTC)
 
 
+_V4_LEGACY: list[str] | None = None
+
+
+def glofas_v4_retired() -> list[str]:
+    """The v4 entries EWDS lists as legacy for the GloFAS forecast: empty while v4 is the
+    operational version (the one every GloFAS threshold here was fitted on). Checked once per
+    process. A failed check is a warning, not a version change."""
+    global _V4_LEGACY
+    if _V4_LEGACY is None:
+        try:
+            legacy = feeds.glofas_legacy_versions()
+            print(f"EWDS GloFAS legacy versions: {legacy}")
+        except Exception as err:  # noqa: BLE001 - catalogue down: carry on, say so
+            print(f"WARNING: GloFAS version check failed ({type(err).__name__}); assuming v4")
+            legacy = []
+        _V4_LEGACY = [v for v in legacy if v.startswith("version_4")]
+    return _V4_LEGACY
+
+
 _NUDGE: dict[date, int] = {}  # per issue, kept across daily.py waits: never re-ask an area
 
 
@@ -233,8 +251,17 @@ def evaluate_issue(
     t2_label = inp.cfg["t2"].get("short", "partner T2")
     t3_label = inp.cfg.get("t3", {}).get("short", "partner T3")
 
-    q, err = _try("GloFAS", lambda: glofas_issue(issue))
-    gl_why = err or "GloFAS issue not available"
+    retired = glofas_v4_retired() if live else []
+    gl_source = "GloFAS"
+    if retired:  # nothing is requested: the thresholds do not apply to the new version
+        q, gl_source = None, "GloFAS version"
+        gl_why = (
+            f"the operational GloFAS is no longer v4 (EWDS lists {', '.join(retired)} as a "
+            "legacy version); the GloFAS thresholds are v4 and must be refitted"
+        )
+    else:
+        q, err = _try("GloFAS", lambda: glofas_issue(issue))
+        gl_why = err or "GloFAS issue not available"
     if q is not None and (n := ev.members_present(q)) < ev.N_MEMBERS:
         q, gl_why = None, f"GloFAS issue incomplete ({n} of {ev.N_MEMBERS} members)"
     steps = int(q.lead_day.max()) if q is not None else 0
@@ -243,17 +270,17 @@ def evaluate_issue(
         parts.append(ev.teso(q, inp.units, ts))
     else:
         why = gl_why if q is None else short
-        parts.append(missing("teso_kyoga", "IFRC/URCS EAP (GloFAS)", "GloFAS", issue, why))
+        parts.append(missing("teso_kyoga", "IFRC/URCS EAP (GloFAS)", gl_source, issue, why))
     if steps >= ev.T2_STEPS:
         parts.append(ev.elgon_t2(q, inp.cells, inp.cfg, ts))
     else:
-        parts.append(missing("elgon", t2_label, "GloFAS", issue, gl_why if q is None else short))
+        why = gl_why if q is None else short
+        parts.append(missing("elgon", t2_label, gl_source, issue, why))
 
+    # T3 rain: the GEFS control run, the series the backtest was calibrated on
     err = None
     if rain72 is None:
-        rain72, err = _try(
-            "GFS/ICON (Open-Meteo)", lambda: feeds.openmeteo_72h(issue, inp.elgon_adm)
-        )
+        rain72, err = _try("GEFS control", lambda: feeds.gefs_c00_72h(issue, inp.elgon_adm))
     soil, soil_err = _try(
         "CPC soil moisture",
         lambda: (
@@ -264,8 +291,8 @@ def evaluate_issue(
     )
     soil = soil[soil.pcode.isin(inp.elgon_adm.ADM2_PCODE)] if soil is not None else None
     if rain72 is None or rain72.empty:
-        why = err or "no complete 72-hour GFS/ICON forecast for this issue"
-        parts.append(missing("elgon", t3_label, "Open-Meteo", issue, why))
+        why = err or "the 00 UTC GEFS control run is not published yet"
+        parts.append(missing("elgon", t3_label, "GEFS control", issue, why))
     else:
         if soil is None:
             print(f"CPC soil moisture: {soil_err or 'no file in the last 7 days'}")
@@ -321,14 +348,12 @@ def main(start: str, end: str | None = None) -> None:
     d0 = date.fromisoformat(start)
     d1 = date.fromisoformat(end) if end else d0
     inp = Inputs()
-    rain = openmeteo_archive(d0, d1, inp.elgon_adm)
     days, summaries = [], []
     for k in range((d1 - d0).days + 1):
         issue = d0 + timedelta(days=k)
         if issue.month not in SEASON_MONTHS:
             continue
-        r72 = rain[rain.issue_date == pd.Timestamp(issue)]
-        day = evaluate_issue(issue, inp, live=False, rain72=r72)
+        day = evaluate_issue(issue, inp, live=False)  # GEFS runs stay on NOAA's archive
         write(day, REPLAY)
         s = zone_summary(day)
         print(f"{issue}: " + ", ".join(f"{r.zone} {r.status}" for r in s.itertuples()))

@@ -39,7 +39,7 @@ RETRY_MINUTES = 15
 def waiting_for(day: pd.DataFrame) -> set[str]:
     """Same-day forecasts still missing (the slow sources are reported, not waited for)."""
     gaps = day[day.met.isna()]
-    return {s for s in gaps.source if s in ("GloFAS", "CHIRPS3-GEFS")}
+    return {s for s in gaps.source if s in ("GloFAS", "CHIRPS3-GEFS", "GEFS control")}
 
 
 def past(cutoff: str) -> bool:
@@ -127,6 +127,13 @@ def main() -> None:
         print(f"WARNING: Listmonk did not confirm delivery of campaign {result.get('campaign')}")
     if result.get("sent") and not result.get("test"):
         mark_sent(result, sent_blob)  # the full record, with the delivery check
+    if retired := R.glofas_v4_retired():
+        # the email has gone out with the GloFAS triggers not evaluated; fail so the job's
+        # failure mail reaches whoever must refit the GloFAS thresholds
+        raise SystemExit(
+            f"GloFAS operational is no longer v4 (EWDS legacy: {retired}): Teso and the Elgon "
+            "GloFAS trigger were not evaluated. Refit their thresholds on the new version."
+        )
 
 
 if __name__ == "__main__":

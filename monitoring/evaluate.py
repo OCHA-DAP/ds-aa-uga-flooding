@@ -15,7 +15,8 @@ its rows is. The rules are the backtested ones, read on the live products:
               time = days between forecast and event), i.e. the steps ending 24 h to 144 h.
   elgon       The partner's two draft triggers, in the forms backtested by
               analysis/elgon_exposure_trigger.py and analysis/existing_triggers.py. Every
-              parameter and label comes from the private config at run time.
+              parameter and label comes from the private config at run time. The rain is read
+              on the GEFS control run, the series the backtest used.
   karamoja    CHIRPS3-GEFS 5-day forecast, district mean, against each district's v3 threshold;
               any of the nine core districts.
   adjumani    Lake leg: Lake Kyoga's 180-day rise (3-pass running median) at or above its
@@ -180,6 +181,9 @@ def soil_percentile(value: float, history: pd.Series) -> float:
     return float((h <= value).mean() * 100)
 
 
+MODEL_NAME = {"gfs_seamless": "GFS", "icon_global": "ICON", "gefs_c00": "GEFS control"}
+
+
 def elgon_t3(
     rain: pd.DataFrame,
     soil: pd.DataFrame | None,
@@ -197,13 +201,14 @@ def elgon_t3(
             pct[r.pcode] = soil_percentile(r["mean"], soil_hist[soil_hist.pcode == r.pcode]["mean"])
     soil_day = soil.date.iloc[0].date().isoformat() if soil is not None else "unavailable"
     rows = []
+    several = rain.model.nunique() > 1
     for _, r in rain[rain.district.isin(cfg["districts"])].iterrows():
         p = pct.get(r.pcode, np.nan)
-        model = {"gfs_seamless": "GFS", "icon_global": "ICON"}.get(r.model, r.model)
+        model = MODEL_NAME.get(r.model, r.model)
         rows.append(
             dict(
                 zone="elgon",
-                trigger=f"{label} ({model})",
+                trigger=f"{label} ({model})" if several else label,
                 place=r.district,
                 value=r.mm_72h,
                 threshold=mm,
@@ -217,7 +222,11 @@ def elgon_t3(
                     f"soil moisture {ordinal(p)} percentile (threshold {ordinal(pmin)}), "
                     f"CPC {soil_day}"
                 ),
-                source=f"{model} via Open-Meteo; NOAA CPC soil moisture",
+                source=(
+                    "GEFS control run (NOAA); NOAA CPC soil moisture"
+                    if r.model == "gefs_c00"
+                    else f"{model} via Open-Meteo; NOAA CPC soil moisture"
+                ),
                 source_date=issue.date().isoformat(),
             )
         )

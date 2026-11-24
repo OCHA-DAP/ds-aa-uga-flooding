@@ -11,11 +11,17 @@ One reader per operational source, each returning a small table for one issue da
   kyoga_levels   NASA Global Water Monitor 10-day altimetry for Lake Kyoga (lake000398), streamed
                  out of the bulk archive (the lake's file is near the start, so ~1 s). About a
                  week behind.
+  gefs_c00_72h   72-hour rainfall from the 00 UTC GEFS control run (NOAA, 0.25 deg), district
+                 mean: the series the Mount Elgon rain backtest used (the GEFS v12 reforecast
+                 control, pipeline/build_gefs_reforecast_adm2.py), read the same way. Published
+                 about 04:30 UTC.
   openmeteo_72h  GFS and ICON 72-hour rainfall from the Open-Meteo forecast API, averaged over
                  points inside each district, as in pipeline/build_openmeteo_runs_adm2.py.
+                 Not used by the triggers since 25 Nov 2026 (kept for the replay page).
   glofas         GloFAS operational forecast (EWDS cems-glofas-forecast), control + 50
-                 perturbed members, daily steps. The request does not pin a model version and the
-                 netCDF carries none: the thresholds are v4, so a switch to v5 would go unseen.
+                 perturbed members, daily steps. EWDS cannot pin a model version and the netCDF
+                 carries none, so glofas_legacy_versions() reads the dataset's request form: the
+                 day v4 appears under Legacy Versions, "operational" is no longer v4.
 """
 
 from __future__ import annotations
@@ -197,7 +203,88 @@ def openmeteo_72h(issue: date, adm) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+# --- GEFS control run -------------------------------------------------------------------------
+
+GEFS_C00 = (
+    "https://noaa-gefs-pds.s3.amazonaws.com/gefs.{day:%Y%m%d}/00/atmos/pgrb2sp25/"
+    "gec00.t00z.pgrb2s.0p25.f{hour:03d}"
+)
+
+
+def _apcp_range(idx: str, hour: int) -> tuple[int, int | None]:
+    """Byte range of the 6-hour APCP accumulation ending at `hour` in one GEFS file's index."""
+    lines = [ln.split(":") for ln in idx.strip().splitlines()]
+    for i, ln in enumerate(lines):
+        if ln[3] == "APCP" and ln[5].startswith(f"{hour - 6}-{hour} hour acc"):
+            end = int(lines[i + 1][1]) - 1 if i + 1 < len(lines) else None
+            return int(ln[1]), end
+    raise ValueError(f"no {hour - 6}-{hour} h APCP message in the index")
+
+
+def gefs_c00_72h(issue: date, adm) -> pd.DataFrame | None:
+    """72-hour rainfall from the 00 UTC GEFS control run of `issue`, per district: the 6-hour
+    accumulations ending at 6, 12, ..., 72 h summed, then the area-weighted district mean, as
+    pipeline/build_gefs_reforecast_adm2.py built the backtest series from the v12 reforecast.
+    Returns (pcode, district, model, mm_72h); None when the run is not published (404)."""
+    total = bounds = wkt = None
+    for hour in range(6, 73, 6):
+        u = GEFS_C00.format(day=issue, hour=hour)
+        try:
+            idx = _retry(lambda u=u: urllib.request.urlopen(u + ".idx", timeout=60).read())
+        except urllib.error.HTTPError as err:
+            if err.code == 404:
+                return None
+            raise
+        a, b = _apcp_range(idx.decode(), hour)
+        rng = f"bytes={a}-{'' if b is None else b}"
+        req = urllib.request.Request(u, headers={"Range": rng})
+        data = _retry(lambda req=req: urllib.request.urlopen(req, timeout=120).read())
+        with tempfile.NamedTemporaryFile(suffix=".grib2", delete=False) as f:
+            f.write(data)
+            path = f.name
+        try:
+            with rasterio.open(path) as ds:
+                w = (
+                    from_bounds(*UGA_BOX, ds.transform)
+                    .round_offsets(op="floor")
+                    .round_lengths(op="ceil")
+                )
+                arr = ds.read(1, window=w).astype("float32")
+                if total is None:
+                    total, bounds, wkt = arr, window_bounds(w, ds.transform), ds.crs.to_wkt()
+                else:
+                    total = total + arr
+        finally:
+            Path(path).unlink(missing_ok=True)
+    df = zonal_stats(total, bounds, wkt, adm[["ADM2_PCODE", "geometry"]])
+    df["district"] = df.pcode.map(dict(zip(adm.ADM2_PCODE, adm.ADM2_EN, strict=True)))
+    return df.rename(columns={"mean": "mm_72h"}).assign(model="gefs_c00")[
+        ["pcode", "district", "model", "mm_72h"]
+    ]
+
+
 # --- GloFAS forecast ---------------------------------------------------------------------------
+
+
+def glofas_legacy_versions() -> list[str]:
+    """System versions EWDS lists under "Legacy Versions" for the GloFAS forecast (2.1 and 3.1
+    in Nov 2026). When v4 is retired from the operational slot it appears here, as 3.1 did when
+    v4 went live: from then "operational" is not the version the thresholds were fitted on.
+    Same check as ds-aa-som-floods (src/monitoring/etl.check_glofas_version)."""
+    from src.datasources.glofas import _client
+
+    form = (
+        _client(wait_until_complete=False, retry_max=3, sleep_max=10)
+        .client.get_collection("cems-glofas-forecast")
+        .form
+    )
+    for w in form:
+        if w.get("name") == "system_version":
+            for grp in w.get("details", {}).get("groups", []):
+                if grp.get("label", "").lower().startswith("legacy"):
+                    return list(grp.get("values", []))
+    return []
+
 
 # N, W, S, E: Teso (every admin area at levels 2-4 of the six districts, all_touched) and the
 # Elgon zone, with a margin. monitoring/static.py checks that every cell it uses is inside.
