@@ -140,20 +140,21 @@ def chart(season: pd.DataFrame, path: Path) -> Path:
 # --- text --------------------------------------------------------------------------------------
 
 
-def _fmt(v: float, unit: str) -> str:
+def _fmt(v: float, unit: str, dp: int = 0) -> str:
+    """dp: extra decimals, for a reading that would otherwise round to its threshold."""
     if not np.isfinite(v):
         return "n/a"
     if unit == "households":
         return f"{v:,.0f} households"
     if unit == "share of members":
-        return f"{v:.0%} of members"
+        return f"{v:.{dp}%} of members"
     if unit == "m":
-        return f"{v:+.2f} m"
+        return f"{v:+.{2 + dp}f} m"
     if unit.startswith("mm in 72"):
-        return f"{v:.0f} mm in 72 h"
+        return f"{v:.{dp}f} mm in 72 h"
     if unit.startswith("mm in 5"):
-        return f"{v:.0f} mm in 5 days"
-    return f"{v:.2f} {unit}"
+        return f"{v:.{dp}f} mm in 5 days"
+    return f"{v:.{2 + dp}f} {unit}"
 
 
 def trigger_rows(day: pd.DataFrame) -> list[dict]:
@@ -171,9 +172,10 @@ def trigger_rows(day: pd.DataFrame) -> list[dict]:
                         trigger=trig,
                         state="not evaluated",
                         where="",
-                        reading="",
+                        reading="n/a",
                         threshold="",
                         note=t.detail.iloc[0],
+                        crossed=False,
                     )
                 )
                 continue
@@ -190,15 +192,21 @@ def trigger_rows(day: pd.DataFrame) -> list[dict]:
                 state = f"not met ({n_gap} of {len(t)} places not evaluated)"
             else:
                 state = "not met"
+            reading, threshold = _fmt(top.value, top.unit), _fmt(top.threshold, top.unit)
+            if reading == threshold and top.value != top.threshold:  # 39.7 vs 40.2 -> "40" twice
+                reading, threshold = _fmt(top.value, top.unit, 1), _fmt(top.threshold, top.unit, 1)
             rows.append(
                 dict(
                     zone=z,
                     trigger=trig,
                     state=state,
                     where=", ".join(met.place) if len(met) else f"{top.place} (closest)",
-                    reading=_fmt(top.value, top.unit),
-                    threshold=_fmt(top.threshold, top.unit),
+                    reading=reading,
+                    threshold=threshold,
                     note=top.detail,
+                    # reading at or over its threshold: true on a met row; on a "not met" row
+                    # only when another condition failed (Elgon T3: rain over, soil too dry)
+                    crossed=bool(top.value >= top.threshold),
                 )
             )
     return rows
@@ -284,17 +292,19 @@ def results_html(day: pd.DataFrame) -> str:
             )
             last = i == len(zr) - 1
             sep = "" if last else ";border-bottom:none"
-            r = {k: escape(str(v)) for k, v in r.items()}
             # the reading takes the result's colour; the threshold is italic and grey, so the
-            # two are told apart at a glance
+            # two are told apart at a glance. A reading over its threshold on a row that is not
+            # met (another condition failed, given in the note) is left unfilled, not green.
             st = _state_style(r["state"])
+            rst = "" if r.pop("crossed") and r["state"] != "MET" else st
+            r = {k: escape(str(v)) for k, v in r.items()}
             nw = "border-bottom:none;white-space:nowrap"
             body += (
                 f"<tr>{zone_cell}"
                 f"<td style='{_TD};border-bottom:none'>{r['trigger']}</td>"
                 f"<td style='{_TD};border-bottom:none;{st}'>{r['state']}</td>"
                 f"<td style='{_TD};border-bottom:none'>{r['where']}</td>"
-                f"<td style='{_TD};{nw};{st}'>{r['reading']}</td>"
+                f"<td style='{_TD};{nw};{rst}'>{r['reading']}</td>"
                 f"<td style='{_TD};{nw};{_THRESHOLD}'>{r['threshold']}</td></tr>"
                 f"<tr><td colspan='5' style='{_TD}{sep};padding-top:0;font-size:11px;"
                 f"color:#666'>{r['note']}</td></tr>"

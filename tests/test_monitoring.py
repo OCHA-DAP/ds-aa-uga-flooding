@@ -10,6 +10,7 @@ Run:  uv run pytest tests/test_monitoring.py -q
 from __future__ import annotations
 
 import inspect
+import re
 import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -789,11 +790,48 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
 
 def test_email_reading_takes_result_colour_threshold_italic():
     day = day_table(
-        {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False, None]}
+        {
+            "teso_kyoga": [False],
+            "elgon": [True, False],
+            "karamoja": [None],
+            "adjumani": [False, None],
+        }
     )
+    # a second trigger, not met although its reading is over the threshold (Elgon T3: rain
+    # over, soil too dry); and a reading that rounds to its threshold
+    t3 = day.zone.eq("elgon") & day.met.eq(False)
+    day.loc[t3, ["trigger", "value"]] = ["elgon t3 trigger", 3.0]
+    rain = day.zone.eq("teso_kyoga")
+    day.loc[rain, ["value", "threshold", "unit"]] = [39.7, 40.2, "mm in 5 days"]
     today = notify.render(day, day, "chart.png")[1].split("Today's results")[1]
-    reading = "white-space:nowrap;{}'>"
-    for style in (notify._MET, notify._NOT_MET, notify._GAP):
-        assert reading.format(style) in today
+
+    row = re.compile(
+        r"<td style='[^']*'>(?P<trigger>[^<]*)</td>"
+        r"<td style='[^']*border-bottom:none;(?P<st>[^']*)'>(?P<state>[^<]*)</td>"
+        r"<td style='[^']*'>[^<]*</td>"
+        r"<td style='[^']*white-space:nowrap;(?P<rst>[^']*)'>(?P<reading>[^<]*)</td>"
+        r"<td style='[^']*white-space:nowrap;(?P<tst>[^']*)'>(?P<threshold>[^<]*)</td>"
+    )
+    rows = {m["trigger"]: m.groupdict() for m in row.finditer(today)}
+    assert set(rows) == {
+        "teso_kyoga trigger",
+        "elgon trigger",
+        "elgon t3 trigger",
+        "karamoja trigger",
+        "adjumani trigger",
+    }
+    expected = {
+        "teso_kyoga trigger": ("not met", notify._NOT_MET, notify._NOT_MET),
+        "elgon trigger": ("MET", notify._MET, notify._MET),
+        "elgon t3 trigger": ("not met", notify._NOT_MET, ""),
+        "karamoja trigger": ("not evaluated", notify._GAP, notify._GAP),
+        "adjumani trigger": ("not met (1 of 2 places not evaluated)", notify._GAP, notify._GAP),
+    }
+    for trig, (state, st, rst) in expected.items():
+        r = rows[trig]
+        assert (r["state"], r["st"], r["rst"]) == (state, st, rst), trig
+        assert r["tst"] == notify._THRESHOLD, trig
     assert "font-style:italic" in notify._THRESHOLD
-    assert today.count(reading.format(notify._THRESHOLD)) == 4  # one per trigger, never coloured
+    assert rows["karamoja trigger"]["reading"] == "n/a"
+    teso = rows["teso_kyoga trigger"]
+    assert (teso["reading"], teso["threshold"]) == ("39.7 mm in 5 days", "40.2 mm in 5 days")
