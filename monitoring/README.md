@@ -47,4 +47,5 @@ when `TEST_EMAIL=false`), `MONITORING_DATE`, `WAIT_UNTIL_UTC` (default 15:45).
 ## Databricks
 
 `databricks.yml` defines `uga_flood_monitoring` (10:00 UTC, Oct to Dec, waits for GloFAS until
-15:45 UTC). Defaults are safe: `dry_run` true, `test_email` true. No live list exists yet.
+15:45 UTC). Defaults are safe: `dry_run` true, `test_email` true. Only the prod target sends
+live, to Listmonk list 148 "Uganda Monitoring" (since 25 Nov 2026); a dev deploy cannot.
