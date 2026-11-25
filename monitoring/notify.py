@@ -232,16 +232,20 @@ _TH = (
     "font-weight:bold"
 )
 _TD = "padding:6px 8px;border-bottom:1px solid #e3e6ea;vertical-align:top"
-_STATE_STYLE = {
-    "MET": "color:#b00020;font-weight:bold",
-    "not evaluated": "color:#9a6700;font-weight:bold",
-}
+# Result cells: red = met, green = not met, yellow = not (fully) evaluated.
+_MET = "background-color:#c62828;color:#ffffff;font-weight:bold"
+_NOT_MET = "background-color:#c8e6c9;color:#1b5e20"
+_GAP = "background-color:#fff3cd;color:#7a5a00"
 
 
 def _state_style(state: str) -> str:
-    if state in _STATE_STYLE:
-        return _STATE_STYLE[state]
-    return "color:#9a6700" if "not evaluated" in state else "color:#333"
+    """Background for a result cell. "not met" with some places not evaluated is a gap, not a
+    clean "not met", so it is yellow."""
+    if state == "MET" or state.startswith("first met"):
+        return _MET
+    if "not evaluated" in state:
+        return _GAP
+    return _NOT_MET if state == "not met" else ""
 
 
 def _table(head: list[str], body: str) -> str:
@@ -253,10 +257,9 @@ def season_html(season: pd.DataFrame) -> str:
     rows = ""
     for r in season_table(season).itertuples():
         state = season_state(r)
-        style = "color:#b00020;font-weight:bold" if state.startswith("first met") else ""
         rows += (
             f"<tr><td style='{_TD}'>{ZONE_LABEL[r.zone]}</td>"
-            f"<td style='{_TD};{style}'>{state}</td>"
+            f"<td style='{_TD};{_state_style(state)}'>{state}</td>"
             f"<td style='{_TD}'>{r.days_met}</td>"
             f"<td style='{_TD}'>{r.days}</td>"
             f"<td style='{_TD}'>{r.days_with_gaps}</td></tr>"

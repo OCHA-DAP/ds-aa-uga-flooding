@@ -754,3 +754,16 @@ def test_email_tables_for_a_met_day_and_a_day_with_gaps():
     assert body.count("<table") == 2
     assert ">MET<" in body and ">not evaluated<" in body
     assert "Days met" in body and "Today's results" in body
+
+
+def test_email_colours_met_red_not_met_green_gaps_yellow():
+    day = day_table(
+        {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False, None]}
+    )
+    _, body = notify.render(day, day, "chart.png")
+    assert f"{notify._MET}'>MET<" in body
+    assert f"{notify._NOT_MET}'>not met<" in body
+    assert f"{notify._GAP}'>not evaluated<" in body
+    assert f"{notify._GAP}'>not met (1 of 2 places not evaluated)<" in body
+    assert f"{notify._MET}'>first met" in body  # season table
+    assert notify._state_style("first met 26 Oct") == notify._MET
