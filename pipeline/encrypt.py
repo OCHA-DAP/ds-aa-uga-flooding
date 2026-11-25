@@ -10,6 +10,7 @@ committed .staticrypt.json so "remember me" survives rebuilds.
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -23,7 +24,7 @@ def encrypt_page(plain: Path, dest: Path, title: str, instructions: str, probes:
     enc_dir = plain.parent / f"{plain.stem}_encrypted"
     subprocess.run(
         [
-            "npx",
+            shutil.which("npx") or "npx",  # npx.cmd on Windows
             "-y",
             "staticrypt",
             str(plain),

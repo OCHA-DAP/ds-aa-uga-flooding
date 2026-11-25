@@ -1,0 +1,190 @@
+# Databricks Asset Bundle: ds-aa-uga-flooding
+#
+# One job, uga_flood_monitoring: the daily Uganda flood trigger monitor (Oct-Dec window).
+# monitoring/daily.py evaluates the four zone triggers for the day's issue (see
+# monitoring/README.md), writes the result to the dev blob (ds-aa-uga-flooding/private/monitoring/)
+# and sends a Listmonk email.
+#
+# Runs from git (source: GIT) through databricks/run_task.py, which copies src/, monitoring/
+# and pipeline/ off the workspace checkout. Blob/DB and CDSAPI_* credentials come from the Job
+# Compute policy; EWDS takes the same CDSAPI key (src/datasources/glofas.py sets the EWDS URL).
+# Listmonk creds are resolved with --secret at run time (tolerated if missing).
+#
+# Safe by default: dry_run "true" (nothing sent, nothing written) and test_email "true"
+# (test list 103). The prod target sets dry_run "false" and test list 5, and keeps test_email
+# "true" until the live list (Listmonk 148 "Uganda Monitoring", 12 addresses, made 20 Nov 2026)
+# is confirmed and its id is put in live_list_id.
+#
+#   databricks bundle validate -t dev -p DEFAULT
+#   databricks bundle deploy   -t dev -p DEFAULT        # schedule paused in development mode
+#   databricks bundle run uga_flood_monitoring -t dev -p DEFAULT --params dry_run=false
+
+bundle:
+  name: ds-aa-uga-flooding
+
+sync:
+  exclude:
+    - "data/**"
+    - "outputs/**"
+    - "pages/**"
+    - "site_private/**"
+    - "config/**"
+
+variables:
+  git_branch:
+    description: Repo branch the job pulls the code from
+    default: main
+  stage:
+    description: STAGE env for the wrapper; the monitor reads and writes the dev blob regardless
+    default: dev
+  dry_run:
+    description: '"true" = render the email to disk, send and write nothing'
+    default: "true"
+  test_email:
+    description: '"true" = send to the test list with a [TEST] subject'
+    default: "true"
+  test_list_id:
+    description: Listmonk list used when test_email is "true" (103 = Pauline only)
+    default: "103"
+  live_list_id:
+    description: Listmonk list used when test_email is "false"; empty = refuse to send
+    default: ""
+  glofas_deadline_utc:
+    description: HH:MM UTC on the issue day after which the job stops waiting for EWDS
+    default: "17:30"
+
+.git_source: &git_source
+  git_url: https://github.com/OCHA-DAP/ds-aa-uga-flooding.git
+  git_provider: gitHub
+  git_branch: ${var.git_branch}
+
+# Job Compute (single node) policy: injects DSCI_AZ_* and CDSAPI_* from the dsci scope.
+.cluster_spec: &cluster_spec
+  policy_id: "0017962FF5D1E3B9"
+  apply_policy_default_values: true
+  spark_env_vars:
+    LISTMONK_SKIP_CONFIRMATION: "true"
+
+.libs: &libs
+  - pypi: { package: "ocha-stratus==0.1.8" }
+  - pypi: { package: "ocha-relay @ git+https://github.com/OCHA-DAP/ocha-relay.git@v0.3.0" }
+  - pypi: { package: "exactextract==0.3.0" }
+  - pypi: { package: "rasterio==1.4.4" }
+  - pypi: { package: "geopandas==1.1.4" }
+  - pypi: { package: "shapely==2.1.2" }
+  - pypi: { package: "xarray==2026.7.0" }
+  - pypi: { package: "netcdf4==1.7.4" }
+  - pypi: { package: "cdsapi==0.7.7" }
+  - pypi: { package: "ecmwf-datastores-client==0.5.3" }
+  - pypi: { package: "matplotlib==3.11.1" }
+
+resources:
+  jobs:
+    uga_flood_monitoring:
+      name: UGA Flood Monitoring
+      description: Daily Uganda flood triggers, four zones, Oct-Dec; result to blob, Listmonk email.
+      git_source: *git_source
+      tags:
+        databricks: job
+        type: monitoring
+        hazard: flood
+        kb: frameworks/uga-flooding
+        output_blob: ds-aa-uga-flooding/private/monitoring
+
+      permissions:
+        - group_name: dsci
+          level: CAN_MANAGE
+
+      schedule:
+        # 10:00 UTC: CHIRPS3-GEFS publishes ~09:20 UTC; the script then waits for GloFAS on
+        # EWDS until 15:45 UTC. Oct-Dec only: the script exits outside the window.
+        quartz_cron_expression: "0 0 10 * 10-12 ?"
+        timezone_id: UTC
+        pause_status: PAUSED
+
+      max_concurrent_runs: 1
+
+      email_notifications:
+        on_failure:
+          - pauline.ndirangu@un.org
+          - tristan.downing@un.org
+
+      parameters:
+        - name: stage
+          default: ${var.stage}
+        - name: monitoring_date
+          default: "{{job.start_time.iso_date}}"
+        - name: dry_run
+          default: ${var.dry_run}
+        - name: test_email
+          default: ${var.test_email}
+        - name: test_list_id
+          default: ${var.test_list_id}
+        - name: live_list_id
+          default: ${var.live_list_id}
+        - name: glofas_deadline_utc
+          default: ${var.glofas_deadline_utc}
+
+      job_clusters:
+        - job_cluster_key: main
+          new_cluster: *cluster_spec
+
+      tasks:
+        - task_key: monitor
+          job_cluster_key: main
+          libraries: *libs
+          timeout_seconds: 28800
+          max_retries: 0
+          spark_python_task:
+            python_file: databricks/run_task.py
+            source: GIT
+            parameters:
+              - "monitoring/daily.py"
+              - "--stage"
+              - "{{job.parameters.stage}}"
+              - "--env"
+              - "MONITORING_DATE={{job.parameters.monitoring_date}}"
+              - "--env"
+              - "DRY_RUN={{job.parameters.dry_run}}"
+              - "--env"
+              - "TEST_EMAIL={{job.parameters.test_email}}"
+              - "--env"
+              - "LISTMONK_TEST_LIST_ID={{job.parameters.test_list_id}}"
+              - "--env"
+              - "LISTMONK_LIST_ID={{job.parameters.live_list_id}}"
+              - "--env"
+              - "GLOFAS_DEADLINE_UTC={{job.parameters.glofas_deadline_utc}}"
+              - "--secret"
+              - "DSCI_LISTMONK_BASE_URL"
+              - "--secret"
+              - "DSCI_LISTMONK_API_USERNAME"
+              - "--secret"
+              - "DSCI_LISTMONK_API_KEY"
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      profile: DEFAULT
+
+  prod:
+    mode: production
+    workspace:
+      profile: DEFAULT
+      root_path: /Workspace/Users/adm.tdowning@global.un.org/.bundle/${bundle.name}/${bundle.target}
+    run_as:
+      user_name: adm.tdowning@global.un.org
+    variables:
+      stage: prod
+      dry_run: "false"
+      # Until the live list is confirmed, the daily email goes [TEST]-tagged to list 5
+      # (Tristan only). Going to partners = test_email "false" + live_list_id, then redeploy.
+      test_list_id: "5"
+    resources:
+      jobs:
+        uga_flood_monitoring:
+          schedule:
+            quartz_cron_expression: "0 0 10 * 10-12 ?"
+            timezone_id: UTC
+            pause_status: UNPAUSED
