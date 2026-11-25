@@ -236,6 +236,7 @@ _TD = "padding:6px 8px;border-bottom:1px solid #e3e6ea;vertical-align:top"
 _MET = "background-color:#c62828;color:#ffffff;font-weight:bold"
 _NOT_MET = "background-color:#c8e6c9;color:#1b5e20"
 _GAP = "background-color:#ffe08a;color:#5c4300;font-weight:bold"
+_THRESHOLD = "font-style:italic;color:#555555"
 
 
 def _state_style(state: str) -> str:
@@ -284,13 +285,17 @@ def results_html(day: pd.DataFrame) -> str:
             last = i == len(zr) - 1
             sep = "" if last else ";border-bottom:none"
             r = {k: escape(str(v)) for k, v in r.items()}
+            # the reading takes the result's colour; the threshold is italic and grey, so the
+            # two are told apart at a glance
+            st = _state_style(r["state"])
+            nw = "border-bottom:none;white-space:nowrap"
             body += (
                 f"<tr>{zone_cell}"
                 f"<td style='{_TD};border-bottom:none'>{r['trigger']}</td>"
-                f"<td style='{_TD};border-bottom:none;{_state_style(r['state'])}'>{r['state']}</td>"
+                f"<td style='{_TD};border-bottom:none;{st}'>{r['state']}</td>"
                 f"<td style='{_TD};border-bottom:none'>{r['where']}</td>"
-                f"<td style='{_TD};border-bottom:none;white-space:nowrap'>{r['reading']}</td>"
-                f"<td style='{_TD};border-bottom:none;white-space:nowrap'>{r['threshold']}</td></tr>"
+                f"<td style='{_TD};{nw};{st}'>{r['reading']}</td>"
+                f"<td style='{_TD};{nw};{_THRESHOLD}'>{r['threshold']}</td></tr>"
                 f"<tr><td colspan='5' style='{_TD}{sep};padding-top:0;font-size:11px;"
                 f"color:#666'>{r['note']}</td></tr>"
             )

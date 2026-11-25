@@ -785,3 +785,15 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
     assert today_cell("elgon", notify._MET, "MET")
     assert today_cell("karamoja", notify._GAP, "not evaluated")
     assert today_cell("adjumani", notify._GAP, "not met (1 of 2 places not evaluated)")
+
+
+def test_email_reading_takes_result_colour_threshold_italic():
+    day = day_table(
+        {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False, None]}
+    )
+    today = notify.render(day, day, "chart.png")[1].split("Today's results")[1]
+    reading = "white-space:nowrap;{}'>"
+    for style in (notify._MET, notify._NOT_MET, notify._GAP):
+        assert reading.format(style) in today
+    assert "font-style:italic" in notify._THRESHOLD
+    assert today.count(reading.format(notify._THRESHOLD)) == 4  # one per trigger, never coloured
