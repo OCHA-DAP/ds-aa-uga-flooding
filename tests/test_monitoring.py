@@ -757,13 +757,31 @@ def test_email_tables_for_a_met_day_and_a_day_with_gaps():
 
 
 def test_email_colours_met_red_not_met_green_gaps_yellow():
-    day = day_table(
-        {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False, None]}
-    )
-    _, body = notify.render(day, day, "chart.png")
-    assert f"{notify._MET}'>MET<" in body
-    assert f"{notify._NOT_MET}'>not met<" in body
-    assert f"{notify._GAP}'>not evaluated<" in body
-    assert f"{notify._GAP}'>not met (1 of 2 places not evaluated)<" in body
-    assert f"{notify._MET}'>first met" in body  # season table
-    assert notify._state_style("first met 26 Oct") == notify._MET
+    assert "#c62828" in notify._MET and "#c8e6c9" in notify._NOT_MET
+    assert "#ffe08a" in notify._GAP
+    assert len({notify._MET, notify._NOT_MET, notify._GAP}) == 3
+    met = {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False, None]}
+    day = day_table(met)
+    prev = day_table(met | {"elgon": [False]})
+    prev["issue_date"] = ISSUE - pd.Timedelta(days=1)
+    _, body = notify.render(day, pd.concat([prev, day]), "chart.png")
+    season, today = body.split("Today's results")
+
+    def season_cell(zone, style, state):
+        label = notify.ZONE_LABEL[zone]
+        return f"{label}</td><td style='{notify._TD};{style}'>{state}" in season
+
+    def today_cell(zone, style, state):
+        cell = f"{zone} trigger</td><td style='{notify._TD};border-bottom:none;{style}'>{state}<"
+        return cell in today
+
+    assert season_cell("teso_kyoga", notify._NOT_MET, "not met<")
+    assert season_cell("elgon", notify._MET, "first met")
+    assert season_cell("karamoja", notify._GAP, "not evaluated<")
+    # evaluated on both days, but a place was missing each day: never green
+    assert season_cell("adjumani", notify._GAP, "not met<")
+
+    assert today_cell("teso_kyoga", notify._NOT_MET, "not met")
+    assert today_cell("elgon", notify._MET, "MET")
+    assert today_cell("karamoja", notify._GAP, "not evaluated")
+    assert today_cell("adjumani", notify._GAP, "not met (1 of 2 places not evaluated)")

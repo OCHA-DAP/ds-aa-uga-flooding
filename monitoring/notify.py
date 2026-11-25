@@ -235,7 +235,7 @@ _TD = "padding:6px 8px;border-bottom:1px solid #e3e6ea;vertical-align:top"
 # Result cells: red = met, green = not met, yellow = not (fully) evaluated.
 _MET = "background-color:#c62828;color:#ffffff;font-weight:bold"
 _NOT_MET = "background-color:#c8e6c9;color:#1b5e20"
-_GAP = "background-color:#fff3cd;color:#7a5a00"
+_GAP = "background-color:#ffe08a;color:#5c4300;font-weight:bold"
 
 
 def _state_style(state: str) -> str:
@@ -257,9 +257,12 @@ def season_html(season: pd.DataFrame) -> str:
     rows = ""
     for r in season_table(season).itertuples():
         state = season_state(r)
+        # "not met" is green only if every day was fully evaluated: a day with missing data
+        # could have been a day the trigger was met
+        style = _GAP if state == "not met" and r.days_with_gaps else _state_style(state)
         rows += (
             f"<tr><td style='{_TD}'>{ZONE_LABEL[r.zone]}</td>"
-            f"<td style='{_TD};{_state_style(state)}'>{state}</td>"
+            f"<td style='{_TD};{style}'>{state}</td>"
             f"<td style='{_TD}'>{r.days_met}</td>"
             f"<td style='{_TD}'>{r.days}</td>"
             f"<td style='{_TD}'>{r.days_with_gaps}</td></tr>"
