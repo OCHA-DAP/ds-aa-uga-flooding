@@ -266,7 +266,22 @@ def test_headline_never_says_not_met_when_a_zone_was_not_evaluated():
     met = day_table(
         {"teso_kyoga": [False], "elgon": [True], "karamoja": [False], "adjumani": [False]}
     )
-    assert "Trigger met: Mount Elgon" in notify.render(met, met, "chart.png")[0]
+    # a partner-led zone is only provisionally met; ours is met; both are named apart
+    assert "| Provisionally met: Mount Elgon" in notify.render(met, met, "chart.png")[0]
+    ours = day_table(
+        {"teso_kyoga": [False], "elgon": [False], "karamoja": [True], "adjumani": [False]}
+    )
+    assert notify.render(ours, ours, "chart.png")[0].endswith("| Trigger met: Karamoja")
+    both = day_table(
+        {"teso_kyoga": [True], "elgon": [True], "karamoja": [True], "adjumani": [False]}
+    )
+    assert notify.render(both, both, "chart.png")[0].endswith(
+        "| Trigger met: Karamoja; provisionally met: Teso / Lake Kyoga, Mount Elgon"
+    )
+    table = notify.results_html(both)
+    assert table.count(">MET<") == 1 and table.count(">provisionally met<") == 2
+    season = notify.season_html(both)
+    assert season.count(">first met ") == 1 and season.count(">first provisionally met ") == 2
 
 
 def test_env_flags_are_strict(monkeypatch):
@@ -752,8 +767,8 @@ def test_email_tables_for_a_met_day_and_a_day_with_gaps():
         {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False]}
     )
     _, body = notify.render(met, met, "chart.png")
-    assert body.count("<table") == 2
-    assert ">MET<" in body and ">not evaluated<" in body
+    assert body.count("<table") == 3  # the note on the grey zones, season, today's results
+    assert ">provisionally met<" in body and ">not evaluated<" in body
     assert "Days met" in body and "Today's results" in body
 
 
@@ -769,21 +784,27 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
     season, today = body.split("Today's results")
 
     def season_cell(zone, style, state):
-        label = notify.ZONE_LABEL[zone]
-        return f"{label}</td><td style='{notify._TD};{style}'>{state}" in season
+        label = re.escape(notify.ZONE_LABEL[zone])
+        cell = re.escape(f"</td><td style='{notify._TD};{style}'>{state}")
+        return re.search(f">{label}(<br><span[^>]*>[^<]*</span>)?{cell}", season) is not None
 
     def today_cell(zone, style, state):
         cell = f"{zone} trigger</td><td style='{notify._TD};border-bottom:none;{style}'>{state}<"
         return cell in today
 
     assert season_cell("teso_kyoga", notify._NOT_MET, "not met<")
-    assert season_cell("elgon", notify._MET, "first met")
+    assert season_cell("elgon", notify._MET, "first provisionally met")
     assert season_cell("karamoja", notify._GAP, "not evaluated<")
-    # evaluated on both days, but a place was missing each day: never green
+    # evaluated on both days, but a place was missing each day: never green, and says why
     assert season_cell("adjumani", notify._GAP, "not met<")
+    assert (
+        "not met<br><span style='font-size:11px;font-weight:normal'>data missing on 2 days<"
+        in season
+    )
+    assert season.count("data missing on") == 1  # not on the green "not met" or the "not evaluated"
 
     assert today_cell("teso_kyoga", notify._NOT_MET, "not met")
-    assert today_cell("elgon", notify._MET, "MET")
+    assert today_cell("elgon", notify._MET, "provisionally met")
     assert today_cell("karamoja", notify._GAP, "not evaluated")
     assert today_cell("adjumani", notify._GAP, "not met (1 of 2 places not evaluated)")
 
@@ -820,18 +841,98 @@ def test_email_reading_takes_result_colour_threshold_italic():
         "karamoja trigger",
         "adjumani trigger",
     }
+    # Teso and Elgon are partner-led: their unfilled cells are grey
     expected = {
         "teso_kyoga trigger": ("not met", notify._NOT_MET, notify._NOT_MET),
-        "elgon trigger": ("MET", notify._MET, notify._MET),
-        "elgon t3 trigger": ("not met", notify._NOT_MET, ""),
+        "elgon trigger": ("provisionally met", notify._MET, notify._MET),
+        "elgon t3 trigger": ("not met", notify._NOT_MET, notify._PARTNER),
         "karamoja trigger": ("not evaluated", notify._GAP, notify._GAP),
         "adjumani trigger": ("not met (1 of 2 places not evaluated)", notify._GAP, notify._GAP),
     }
     for trig, (state, st, rst) in expected.items():
         r = rows[trig]
         assert (r["state"], r["st"], r["rst"]) == (state, st, rst), trig
-        assert r["tst"] == notify._THRESHOLD, trig
+        grey = f";{notify._PARTNER}" if trig.split()[0] in notify.PARTNER_LED else ""
+        assert r["tst"] == notify._THRESHOLD + grey, trig
     assert "font-style:italic" in notify._THRESHOLD
     assert rows["karamoja trigger"]["reading"] == "n/a"
     teso = rows["teso_kyoga trigger"]
     assert (teso["reading"], teso["threshold"]) == ("39.7 mm in 5 days", "40.2 mm in 5 days")
+
+
+def test_partner_led_zones_are_grey_and_keep_their_result_colours(monkeypatch):
+    assert set(notify.PARTNER_LED) == {"teso_kyoga", "elgon"}
+    met = {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False]}
+    day = day_table(met)
+    _, body = notify.render(day, day, "chart.png")
+    note = body.split("Season so far")[0]
+    assert "Teso / Lake Kyoga and Mount Elgon are in grey" in note
+    assert (
+        "the Uganda Red Cross Society (URCS) for Teso / Lake Kyoga and FAO for Mount Elgon" in note
+    )
+    assert "for information only" in note
+    assert "should be confirmed with that zone's organisation" in note
+    assert "The paler lines are the zones shown for information" in body
+
+    results, season = notify.results_html(day), notify.season_html(day)
+
+    def at(html, zone):
+        return html.index(f">{notify.ZONE_LABEL[zone]}<")
+
+    def rows_of(html, zone):
+        """The table rows from zone's first cell up to the next zone's, whatever the order."""
+        start = html.rindex("<tr>", 0, at(html, zone))
+        after = [at(html, z) for z in notify.ZONE_LABEL if at(html, z) > start]
+        nxt = min((i for i in after if i > at(html, zone)), default=None)
+        end = len(html) - len("</table>") if nxt is None else html.rindex("<tr>", 0, nxt)
+        return html[start:end]
+
+    # the grey zones come last, in both tables
+    for html in (results, season):
+        order = sorted(notify.ZONE_LABEL, key=lambda z: at(html, z))
+        assert order == ["karamoja", "adjumani", "teso_kyoga", "elgon"]
+
+    for z in notify.ZONE_LABEL:
+        for html in (results, season):
+            grey = notify._PARTNER in rows_of(html, z)
+            assert grey == (z in notify.PARTNER_LED), z
+    # in a grey zone every cell is grey but the result and reading, which keep their colour
+    coloured = (notify._MET, notify._NOT_MET, notify._GAP)
+    for z in notify.PARTNER_LED:
+        for html in (results, season):
+            for style in re.findall(r"<td[^>]* style='([^']*)'", rows_of(html, z)):
+                assert notify._PARTNER in style or style.endswith(coloured), (z, style)
+    elgon = rows_of(results, "elgon")
+    # the result cell is not greyed, and says provisionally met
+    assert f"border-bottom:none;{notify._MET}'>provisionally met<" in elgon
+    assert f"white-space:nowrap;{notify._MET}'>" in elgon  # nor the reading
+    assert "confirm with FAO" in elgon and "confirm with URCS" in rows_of(season, "teso_kyoga")
+
+    # the other zones' rows are unchanged by the partner styling
+    monkeypatch.setattr(notify, "PARTNER_LED", {})
+    for html, before in ((results, notify.results_html(day)), (season, notify.season_html(day))):
+        assert notify._PARTNER not in before
+        for z in ("karamoja", "adjumani"):
+            assert rows_of(html, z) == rows_of(before, z), z
+    _, plain = notify.render(day, day, "chart.png")
+    assert "in grey" not in plain and "paler lines" not in plain
+
+
+def test_chart_draws_partner_led_zones_pale_but_a_reading_at_threshold_in_full(
+    monkeypatch, tmp_path
+):
+    day = day_table(
+        {"teso_kyoga": [False], "elgon": [True], "karamoja": [False], "adjumani": [False]}
+    )
+    day.loc[day.zone.eq("elgon"), "value"] = 3.0  # 150 % of its threshold
+    figs = []
+    monkeypatch.setattr(notify.plt, "close", figs.append)
+    notify.chart(day, tmp_path / "c.png")
+    lines = figs[0].axes[0].get_lines()
+    by_label = {ln.get_label(): ln for ln in lines}
+    assert by_label["Mount Elgon (FAO)"].get_alpha() == 0.4
+    assert by_label["Teso / Lake Kyoga (URCS)"].get_alpha() == 0.4
+    assert by_label["Karamoja"].get_alpha() == 1.0
+    elgon = [ln for ln in lines if ln.get_color() == notify.ZONE_COLOR["elgon"]]
+    full = [ln for ln in elgon if ln.get_alpha() is None]
+    assert [list(ln.get_ydata()) for ln in full] == [[150.0]]

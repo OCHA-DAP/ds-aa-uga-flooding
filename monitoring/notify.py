@@ -39,6 +39,21 @@ ZONE_COLOR = {
     "karamoja": "#d68910",
     "adjumani": "#16a085",
 }
+# Zones whose trigger belongs to another organisation: (short name, name in full). The email
+# shows our reading of it for information, in grey; whether it is met is for them to confirm.
+PARTNER_LED = {
+    "teso_kyoga": ("URCS", "the Uganda Red Cross Society (URCS)"),
+    "elgon": ("FAO", "FAO"),
+}
+
+
+def zones() -> list[str]:
+    """Display order: our zones first, the partner-led (grey) zones last."""
+    return [z for z in ZONE_LABEL if z not in PARTNER_LED] + [
+        z for z in ZONE_LABEL if z in PARTNER_LED
+    ]
+
+
 TRUE = {"true", "1", "yes"}
 FALSE = {"false", "0", "no"}
 
@@ -67,7 +82,7 @@ def closeness(day: pd.DataFrame) -> pd.Series:
 def season_table(season: pd.DataFrame) -> pd.DataFrame:
     """Per zone: first issue day met this season, issue days evaluated, issue days with gaps."""
     rows = []
-    for z in ZONE_LABEL:
+    for z in zones():
         g = season[season.zone == z]
         met_days = sorted(g[g.met.eq(True)].issue_date.unique())
         gap_days = sorted(g[g.met.isna()].issue_date.unique())
@@ -99,17 +114,23 @@ def chart(season: pd.DataFrame, path: Path) -> Path:
     s = season.assign(c=closeness(season))
     daily = s.groupby(["issue_date", "zone"]).c.max().unstack("zone")
     fig, ax = plt.subplots(figsize=(8, 3.6), dpi=150)
-    for z, label in ZONE_LABEL.items():
+    for z in zones():
+        label = ZONE_LABEL[z]
         if z in daily:
+            partner = z in PARTNER_LED
             ax.plot(
                 daily.index,
                 daily[z] * 100,
                 color=ZONE_COLOR[z],
-                lw=1.8,
+                alpha=0.4 if partner else 1.0,
+                lw=1.2 if partner else 1.8,
                 marker="o",
                 ms=2.5,
-                label=label,
+                label=f"{label} ({PARTNER_LED[z][0]})" if partner else label,
             )
+            over = daily[z] >= 1
+            if partner and over.any():  # a reading at its threshold is never drawn pale
+                ax.plot(daily.index[over], daily[z][over] * 100, "o", color=ZONE_COLOR[z], ms=3.5)
     year = pd.Timestamp(season.issue_date.max()).year
     lo, hi = pd.Timestamp(year, 10, 1), pd.Timestamp(year, 12, 31)
     ax.set_xlim(lo, hi)
@@ -245,6 +266,9 @@ _MET = "background-color:#c62828;color:#ffffff;font-weight:bold"
 _NOT_MET = "background-color:#c8e6c9;color:#1b5e20"
 _GAP = "background-color:#ffe08a;color:#5c4300;font-weight:bold"
 _THRESHOLD = "font-style:italic;color:#555555"
+# Rows of a partner-led zone are grey, except the result and reading cells, which keep their
+# colour so that a met trigger still shows.
+_PARTNER = "background-color:#f1f2f4;color:#5f6368;border-bottom-color:#d0d5db"
 
 
 def _state_style(state: str) -> str:
@@ -255,6 +279,53 @@ def _state_style(state: str) -> str:
     if "not evaluated" in state:
         return _GAP
     return _NOT_MET if state == "not met" else ""
+
+
+def _grey(z: str) -> str:
+    """Style to append to a cell of zone z: grey if the zone is partner-led."""
+    return f";{_PARTNER}" if z in PARTNER_LED else ""
+
+
+def _zone_cell(z: str, style: str = "", attrs: str = "") -> str:
+    """The zone's name; for a partner-led zone, in grey and with who confirms its trigger."""
+    label = ZONE_LABEL[z]
+    if z in PARTNER_LED:
+        label += (
+            "<br><span style='font-size:11px;font-weight:normal'>for information; confirm "
+            f"with {PARTNER_LED[z][0]}</span>"
+        )
+    return f"<td{attrs} style='{_TD}{style}{_grey(z)}'>{label}</td>"
+
+
+def _and(items: list[str]) -> str:
+    return ", ".join(items[:-1]) + " and " + items[-1] if len(items) > 1 else "".join(items)
+
+
+def partner_note() -> str:
+    """Which zones are in grey, and who confirms their triggers. A one-cell table: Outlook
+    ignores padding and borders on a paragraph."""
+    if not PARTNER_LED:
+        return ""
+    names = _and([ZONE_LABEL[z] for z in PARTNER_LED])
+    whose = _and([f"{full} for {ZONE_LABEL[z]}" for z, (_, full) in PARTNER_LED.items()])
+    return (
+        f"<table cellpadding='0' cellspacing='0' style='{_TABLE};margin:0 0 12px'><tr>"
+        "<td style='background-color:#f1f2f4;color:#333333;padding:8px 10px;"
+        f"border-left:4px solid #9aa0a6;font-size:14px'>{names} are in grey because other "
+        f"organisations are responsible for their triggers: {whose}. Our readings for these "
+        "zones are for information only. Whether a trigger there is met or not met should be "
+        "confirmed with that zone's organisation.</td></tr></table>"
+    )
+
+
+def _shown(z: str, state: str) -> str:
+    """A met trigger in a partner-led zone is shown as provisionally met: the partner confirms."""
+    if z in PARTNER_LED:
+        if state == "MET":
+            return "provisionally met"
+        if state.startswith("first met"):
+            return "first provisionally met" + state.removeprefix("first met")
+    return state
 
 
 def _table(head: list[str], body: str) -> str:
@@ -269,12 +340,19 @@ def season_html(season: pd.DataFrame) -> str:
         # "not met" is green only if every day was fully evaluated: a day with missing data
         # could have been a day the trigger was met
         style = _GAP if state == "not met" and r.days_with_gaps else _state_style(state)
+        why = (
+            "<br><span style='font-size:11px;font-weight:normal'>data missing on "
+            f"{plural(r.days_with_gaps, 'day')}</span>"
+            if style == _GAP and state == "not met"
+            else ""
+        )
+        g = _grey(r.zone)
         rows += (
-            f"<tr><td style='{_TD}'>{ZONE_LABEL[r.zone]}</td>"
-            f"<td style='{_TD};{style}'>{state}</td>"
-            f"<td style='{_TD}'>{r.days_met}</td>"
-            f"<td style='{_TD}'>{r.days}</td>"
-            f"<td style='{_TD}'>{r.days_with_gaps}</td></tr>"
+            f"<tr>{_zone_cell(r.zone)}"
+            f"<td style='{_TD};{style}'>{_shown(r.zone, state)}{why}</td>"
+            f"<td style='{_TD}{g}'>{r.days_met}</td>"
+            f"<td style='{_TD}{g}'>{r.days}</td>"
+            f"<td style='{_TD}{g}'>{r.days_with_gaps}</td></tr>"
         )
     return _table(["Zone", "Season so far", "Days met", "Days run", "Days with missing data"], rows)
 
@@ -282,13 +360,12 @@ def season_html(season: pd.DataFrame) -> str:
 def results_html(day: pd.DataFrame) -> str:
     rows = trigger_rows(day)
     body = ""
-    for z, label in ZONE_LABEL.items():
+    for z in zones():
         zr = [r for r in rows if r["zone"] == z]
+        g = _grey(z)
         for i, r in enumerate(zr):
             zone_cell = (
-                f"<td rowspan='{2 * len(zr)}' style='{_TD};font-weight:bold'>{label}</td>"
-                if i == 0
-                else ""
+                _zone_cell(z, ";font-weight:bold", f" rowspan='{2 * len(zr)}'") if i == 0 else ""
             )
             last = i == len(zr) - 1
             sep = "" if last else ";border-bottom:none"
@@ -296,18 +373,19 @@ def results_html(day: pd.DataFrame) -> str:
             # two are told apart at a glance. A reading over its threshold on a row that is not
             # met (another condition failed, given in the note) is left unfilled, not green.
             st = _state_style(r["state"])
-            rst = "" if r.pop("crossed") and r["state"] != "MET" else st
+            rst = g.lstrip(";") if r.pop("crossed") and r["state"] != "MET" else st
+            r["state"] = _shown(z, r["state"])
             r = {k: escape(str(v)) for k, v in r.items()}
             nw = "border-bottom:none;white-space:nowrap"
             body += (
                 f"<tr>{zone_cell}"
-                f"<td style='{_TD};border-bottom:none'>{r['trigger']}</td>"
+                f"<td style='{_TD};border-bottom:none{g}'>{r['trigger']}</td>"
                 f"<td style='{_TD};border-bottom:none;{st}'>{r['state']}</td>"
-                f"<td style='{_TD};border-bottom:none'>{r['where']}</td>"
+                f"<td style='{_TD};border-bottom:none{g}'>{r['where']}</td>"
                 f"<td style='{_TD};{nw};{rst}'>{r['reading']}</td>"
-                f"<td style='{_TD};{nw};{_THRESHOLD}'>{r['threshold']}</td></tr>"
+                f"<td style='{_TD};{nw};{_THRESHOLD}{g}'>{r['threshold']}</td></tr>"
                 f"<tr><td colspan='5' style='{_TD}{sep};padding-top:0;font-size:11px;"
-                f"color:#666'>{r['note']}</td></tr>"
+                f"color:#666{g}'>{r['note']}</td></tr>"
             )
     return _table(["Zone", "Trigger", "Result", "Where", "Reading", "Threshold"], body)
 
@@ -316,10 +394,16 @@ def render(
     day: pd.DataFrame, season: pd.DataFrame, chart_url: str, version_note: str = ""
 ) -> tuple[str, str]:
     issue = pd.Timestamp(day.issue_date.iloc[0])
-    zmet = [z for z in ZONE_LABEL if day[day.zone == z].met.eq(True).any()]
-    zgap = [z for z in ZONE_LABEL if z not in zmet and day[day.zone == z].met.isna().any()]
-    if zmet:
-        head = "Trigger met: " + ", ".join(ZONE_LABEL[z] for z in zmet)
+    zmet = [z for z in zones() if day[day.zone == z].met.eq(True).any()]
+    zgap = [z for z in zones() if z not in zmet and day[day.zone == z].met.isna().any()]
+    own = ", ".join(ZONE_LABEL[z] for z in zmet if z not in PARTNER_LED)
+    partner = ", ".join(ZONE_LABEL[z] for z in zmet if z in PARTNER_LED)
+    if own and partner:
+        head = f"Trigger met: {own}; provisionally met: {partner}"
+    elif own:
+        head = f"Trigger met: {own}"
+    elif partner:
+        head = f"Provisionally met: {partner}"
     elif zgap:
         head = "No trigger met; not fully evaluated: " + ", ".join(ZONE_LABEL[z] for z in zgap)
     else:
@@ -329,8 +413,10 @@ def render(
     first_run, n_runs = pd.Timestamp(season.issue_date.min()), season.issue_date.nunique()
     sources = data_dates(day)
     h = "style='font-size:15px;margin:20px 0 6px'"
+    paler = " The paler lines are the zones shown for information." if PARTNER_LED else ""
     body = f"""
 <p style='font-size:16px'><b>{head}</b> for the forecasts issued on {issue.day} {issue:%B %Y}.</p>
+{partner_note()}
 <h3 {h}>Season so far</h3>
 <p style='font-size:12px;color:#666;margin:0 0 6px'>{plural(n_runs, "daily run")} since
 {first_run.day} {first_run:%B}; the window is 1 October to 31 December.</p>
@@ -338,12 +424,12 @@ def render(
 <p style='margin:12px 0 0'><img src='{chart_url}' alt='closest reading to threshold by zone'
 style='max-width:100%'></p>
 <p style='font-size:12px;color:#666;margin-top:0'>For a trigger with two conditions, the chart
-shows the first; the second is in the table below.</p>
+shows the first; the second is in the table below.{paler}</p>
 <h3 {h}>Today's results</h3>
 {results_html(day)}
 <p style='font-size:12px;color:#666;margin-top:16px'>Data used: {" | ".join(sources)}.<br>
 Teso: the IBF portal's rule reproduced on the GloFAS forecast, not the portal's own state.
-Mount Elgon: the partner's draft triggers as rebuilt by us, read on the data our backtest used.
+Mount Elgon: FAO's draft triggers as rebuilt by us, read on the data our backtest used.
 Karamoja and Adjumani rain: draft thresholds calibrated on the CHIRPS3-GEFS hindcast. Adjumani
 lake: draft threshold on the Lake Kyoga altimetry record. The GloFAS thresholds are v4.
 {escape(version_note)}</p>
