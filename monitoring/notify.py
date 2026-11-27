@@ -318,6 +318,16 @@ def partner_note() -> str:
     )
 
 
+def _shown(z: str, state: str) -> str:
+    """A met trigger in a partner-led zone is shown as provisionally met: the partner confirms."""
+    if z in PARTNER_LED:
+        if state == "MET":
+            return "provisionally met"
+        if state.startswith("first met"):
+            return "first provisionally met" + state.removeprefix("first met")
+    return state
+
+
 def _table(head: list[str], body: str) -> str:
     th = "".join(f"<th style='{_TH}'>{h}</th>" for h in head)
     return f"<table cellpadding='0' cellspacing='0' style='{_TABLE}'><tr>{th}</tr>{body}</table>"
@@ -339,7 +349,7 @@ def season_html(season: pd.DataFrame) -> str:
         g = _grey(r.zone)
         rows += (
             f"<tr>{_zone_cell(r.zone)}"
-            f"<td style='{_TD};{style}'>{state}{why}</td>"
+            f"<td style='{_TD};{style}'>{_shown(r.zone, state)}{why}</td>"
             f"<td style='{_TD}{g}'>{r.days_met}</td>"
             f"<td style='{_TD}{g}'>{r.days}</td>"
             f"<td style='{_TD}{g}'>{r.days_with_gaps}</td></tr>"
@@ -364,6 +374,7 @@ def results_html(day: pd.DataFrame) -> str:
             # met (another condition failed, given in the note) is left unfilled, not green.
             st = _state_style(r["state"])
             rst = g.lstrip(";") if r.pop("crossed") and r["state"] != "MET" else st
+            r["state"] = _shown(z, r["state"])
             r = {k: escape(str(v)) for k, v in r.items()}
             nw = "border-bottom:none;white-space:nowrap"
             body += (
@@ -385,8 +396,14 @@ def render(
     issue = pd.Timestamp(day.issue_date.iloc[0])
     zmet = [z for z in zones() if day[day.zone == z].met.eq(True).any()]
     zgap = [z for z in zones() if z not in zmet and day[day.zone == z].met.isna().any()]
-    if zmet:
-        head = "Trigger met: " + ", ".join(ZONE_LABEL[z] for z in zmet)
+    own = ", ".join(ZONE_LABEL[z] for z in zmet if z not in PARTNER_LED)
+    partner = ", ".join(ZONE_LABEL[z] for z in zmet if z in PARTNER_LED)
+    if own and partner:
+        head = f"Trigger met: {own}; provisionally met: {partner}"
+    elif own:
+        head = f"Trigger met: {own}"
+    elif partner:
+        head = f"Provisionally met: {partner}"
     elif zgap:
         head = "No trigger met; not fully evaluated: " + ", ".join(ZONE_LABEL[z] for z in zgap)
     else:

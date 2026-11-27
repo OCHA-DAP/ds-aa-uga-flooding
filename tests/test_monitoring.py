@@ -266,7 +266,22 @@ def test_headline_never_says_not_met_when_a_zone_was_not_evaluated():
     met = day_table(
         {"teso_kyoga": [False], "elgon": [True], "karamoja": [False], "adjumani": [False]}
     )
-    assert "Trigger met: Mount Elgon" in notify.render(met, met, "chart.png")[0]
+    # a partner-led zone is only provisionally met; ours is met; both are named apart
+    assert "| Provisionally met: Mount Elgon" in notify.render(met, met, "chart.png")[0]
+    ours = day_table(
+        {"teso_kyoga": [False], "elgon": [False], "karamoja": [True], "adjumani": [False]}
+    )
+    assert notify.render(ours, ours, "chart.png")[0].endswith("| Trigger met: Karamoja")
+    both = day_table(
+        {"teso_kyoga": [True], "elgon": [True], "karamoja": [True], "adjumani": [False]}
+    )
+    assert notify.render(both, both, "chart.png")[0].endswith(
+        "| Trigger met: Karamoja; provisionally met: Teso / Lake Kyoga, Mount Elgon"
+    )
+    table = notify.results_html(both)
+    assert table.count(">MET<") == 1 and table.count(">provisionally met<") == 2
+    season = notify.season_html(both)
+    assert season.count(">first met ") == 1 and season.count(">first provisionally met ") == 2
 
 
 def test_env_flags_are_strict(monkeypatch):
@@ -753,7 +768,7 @@ def test_email_tables_for_a_met_day_and_a_day_with_gaps():
     )
     _, body = notify.render(met, met, "chart.png")
     assert body.count("<table") == 3  # the note on the grey zones, season, today's results
-    assert ">MET<" in body and ">not evaluated<" in body
+    assert ">provisionally met<" in body and ">not evaluated<" in body
     assert "Days met" in body and "Today's results" in body
 
 
@@ -778,7 +793,7 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
         return cell in today
 
     assert season_cell("teso_kyoga", notify._NOT_MET, "not met<")
-    assert season_cell("elgon", notify._MET, "first met")
+    assert season_cell("elgon", notify._MET, "first provisionally met")
     assert season_cell("karamoja", notify._GAP, "not evaluated<")
     # evaluated on both days, but a place was missing each day: never green, and says why
     assert season_cell("adjumani", notify._GAP, "not met<")
@@ -789,7 +804,7 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
     assert season.count("data missing on") == 1  # not on the green "not met" or the "not evaluated"
 
     assert today_cell("teso_kyoga", notify._NOT_MET, "not met")
-    assert today_cell("elgon", notify._MET, "MET")
+    assert today_cell("elgon", notify._MET, "provisionally met")
     assert today_cell("karamoja", notify._GAP, "not evaluated")
     assert today_cell("adjumani", notify._GAP, "not met (1 of 2 places not evaluated)")
 
@@ -829,7 +844,7 @@ def test_email_reading_takes_result_colour_threshold_italic():
     # Teso and Elgon are partner-led: their unfilled cells are grey
     expected = {
         "teso_kyoga trigger": ("not met", notify._NOT_MET, notify._NOT_MET),
-        "elgon trigger": ("MET", notify._MET, notify._MET),
+        "elgon trigger": ("provisionally met", notify._MET, notify._MET),
         "elgon t3 trigger": ("not met", notify._NOT_MET, notify._PARTNER),
         "karamoja trigger": ("not evaluated", notify._GAP, notify._GAP),
         "adjumani trigger": ("not met (1 of 2 places not evaluated)", notify._GAP, notify._GAP),
@@ -888,7 +903,8 @@ def test_partner_led_zones_are_grey_and_keep_their_result_colours(monkeypatch):
             for style in re.findall(r"<td[^>]* style='([^']*)'", rows_of(html, z)):
                 assert notify._PARTNER in style or style.endswith(coloured), (z, style)
     elgon = rows_of(results, "elgon")
-    assert f"border-bottom:none;{notify._MET}'>MET<" in elgon  # the result cell is not greyed
+    # the result cell is not greyed, and says provisionally met
+    assert f"border-bottom:none;{notify._MET}'>provisionally met<" in elgon
     assert f"white-space:nowrap;{notify._MET}'>" in elgon  # nor the reading
     assert "confirm with FAO" in elgon and "confirm with URCS" in rows_of(season, "teso_kyoga")
 
