@@ -118,6 +118,9 @@ def chart(season: pd.DataFrame, path: Path) -> Path:
                 ms=2.5,
                 label=f"{label} ({PARTNER_LED[z][0]})" if partner else label,
             )
+            over = daily[z] >= 1
+            if partner and over.any():  # a reading at its threshold is never drawn pale
+                ax.plot(daily.index[over], daily[z][over] * 100, "o", color=ZONE_COLOR[z], ms=3.5)
     year = pd.Timestamp(season.issue_date.max()).year
     lo, hi = pd.Timestamp(year, 10, 1), pd.Timestamp(year, 12, 31)
     ax.set_xlim(lo, hi)
@@ -255,7 +258,7 @@ _GAP = "background-color:#ffe08a;color:#5c4300;font-weight:bold"
 _THRESHOLD = "font-style:italic;color:#555555"
 # Rows of a partner-led zone are grey, except the result and reading cells, which keep their
 # colour so that a met trigger still shows.
-_PARTNER = "background-color:#f1f2f4;color:#80868e"
+_PARTNER = "background-color:#f1f2f4;color:#5f6368;border-bottom-color:#d0d5db"
 
 
 def _state_style(state: str) -> str:
@@ -284,18 +287,24 @@ def _zone_cell(z: str, style: str = "", attrs: str = "") -> str:
     return f"<td{attrs} style='{_TD}{style}{_grey(z)}'>{label}</td>"
 
 
+def _and(items: list[str]) -> str:
+    return ", ".join(items[:-1]) + " and " + items[-1] if len(items) > 1 else "".join(items)
+
+
 def partner_note() -> str:
-    """Which zones are in grey, and who confirms their triggers."""
+    """Which zones are in grey, and who confirms their triggers. A one-cell table: Outlook
+    ignores padding and borders on a paragraph."""
     if not PARTNER_LED:
         return ""
-    zones = " and ".join(ZONE_LABEL[z] for z in PARTNER_LED)
-    whose = " and ".join(f"{full} for {ZONE_LABEL[z]}" for z, (_, full) in PARTNER_LED.items())
-    orgs = " or ".join(short for short, _ in PARTNER_LED.values())
+    zones = _and([ZONE_LABEL[z] for z in PARTNER_LED])
+    whose = _and([f"{full} for {ZONE_LABEL[z]}" for z, (_, full) in PARTNER_LED.items()])
     return (
-        "<p style='background-color:#f1f2f4;color:#333333;padding:8px 10px;"
-        f"border-left:4px solid #9aa0a6;margin:0 0 12px'>{zones} are in grey because their "
-        f"triggers belong to other organisations: {whose}. Our readings for these zones are "
-        f"for information only. Confirm with {orgs} whether their trigger is met or not met.</p>"
+        f"<table cellpadding='0' cellspacing='0' style='{_TABLE};margin:0 0 12px'><tr>"
+        "<td style='background-color:#f1f2f4;color:#333333;padding:8px 10px;"
+        f"border-left:4px solid #9aa0a6;font-size:14px'>{zones} are in grey because other "
+        f"organisations are responsible for their triggers: {whose}. Our readings for these "
+        "zones are for information only. Whether a trigger there is met or not met should be "
+        "confirmed with that zone's organisation.</td></tr></table>"
     )
 
 
@@ -387,7 +396,7 @@ shows the first; the second is in the table below.{paler}</p>
 {results_html(day)}
 <p style='font-size:12px;color:#666;margin-top:16px'>Data used: {" | ".join(sources)}.<br>
 Teso: the IBF portal's rule reproduced on the GloFAS forecast, not the portal's own state.
-Mount Elgon: the partner's draft triggers as rebuilt by us, read on the data our backtest used.
+Mount Elgon: FAO's draft triggers as rebuilt by us, read on the data our backtest used.
 Karamoja and Adjumani rain: draft thresholds calibrated on the CHIRPS3-GEFS hindcast. Adjumani
 lake: draft threshold on the Lake Kyoga altimetry record. The GloFAS thresholds are v4.
 {escape(version_note)}</p>

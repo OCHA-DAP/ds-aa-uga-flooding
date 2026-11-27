@@ -752,7 +752,7 @@ def test_email_tables_for_a_met_day_and_a_day_with_gaps():
         {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False]}
     )
     _, body = notify.render(met, met, "chart.png")
-    assert body.count("<table") == 2
+    assert body.count("<table") == 3  # the note on the grey zones, season, today's results
     assert ">MET<" in body and ">not evaluated<" in body
     assert "Days met" in body and "Today's results" in body
 
@@ -846,8 +846,13 @@ def test_partner_led_zones_are_grey_and_keep_their_result_colours(monkeypatch):
     day = day_table(met)
     _, body = notify.render(day, day, "chart.png")
     note = body.split("Season so far")[0]
-    assert "Uganda Red Cross Society (URCS)" in note and "FAO for Mount Elgon" in note
     assert "Teso / Lake Kyoga and Mount Elgon are in grey" in note
+    assert (
+        "the Uganda Red Cross Society (URCS) for Teso / Lake Kyoga and FAO for Mount Elgon" in note
+    )
+    assert "for information only" in note
+    assert "should be confirmed with that zone's organisation" in note
+    assert "The paler lines are the zones shown for information" in body
 
     results, season = notify.results_html(day), notify.season_html(day)
 
@@ -884,3 +889,23 @@ def test_partner_led_zones_are_grey_and_keep_their_result_colours(monkeypatch):
             assert rows_of(html, z) == rows_of(before, z), z
     _, plain = notify.render(day, day, "chart.png")
     assert "in grey" not in plain and "paler lines" not in plain
+
+
+def test_chart_draws_partner_led_zones_pale_but_a_reading_at_threshold_in_full(
+    monkeypatch, tmp_path
+):
+    day = day_table(
+        {"teso_kyoga": [False], "elgon": [True], "karamoja": [False], "adjumani": [False]}
+    )
+    day.loc[day.zone.eq("elgon"), "value"] = 3.0  # 150 % of its threshold
+    figs = []
+    monkeypatch.setattr(notify.plt, "close", figs.append)
+    notify.chart(day, tmp_path / "c.png")
+    lines = figs[0].axes[0].get_lines()
+    by_label = {ln.get_label(): ln for ln in lines}
+    assert by_label["Mount Elgon (FAO)"].get_alpha() == 0.4
+    assert by_label["Teso / Lake Kyoga (URCS)"].get_alpha() == 0.4
+    assert by_label["Karamoja"].get_alpha() == 1.0
+    elgon = [ln for ln in lines if ln.get_color() == notify.ZONE_COLOR["elgon"]]
+    full = [ln for ln in elgon if ln.get_alpha() is None]
+    assert [list(ln.get_ydata()) for ln in full] == [[150.0]]
