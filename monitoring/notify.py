@@ -45,6 +45,15 @@ PARTNER_LED = {
     "teso_kyoga": ("URCS", "the Uganda Red Cross Society (URCS)"),
     "elgon": ("FAO", "FAO"),
 }
+
+
+def zones() -> list[str]:
+    """Display order: our zones first, the partner-led (grey) zones last."""
+    return [z for z in ZONE_LABEL if z not in PARTNER_LED] + [
+        z for z in ZONE_LABEL if z in PARTNER_LED
+    ]
+
+
 TRUE = {"true", "1", "yes"}
 FALSE = {"false", "0", "no"}
 
@@ -73,7 +82,7 @@ def closeness(day: pd.DataFrame) -> pd.Series:
 def season_table(season: pd.DataFrame) -> pd.DataFrame:
     """Per zone: first issue day met this season, issue days evaluated, issue days with gaps."""
     rows = []
-    for z in ZONE_LABEL:
+    for z in zones():
         g = season[season.zone == z]
         met_days = sorted(g[g.met.eq(True)].issue_date.unique())
         gap_days = sorted(g[g.met.isna()].issue_date.unique())
@@ -105,7 +114,8 @@ def chart(season: pd.DataFrame, path: Path) -> Path:
     s = season.assign(c=closeness(season))
     daily = s.groupby(["issue_date", "zone"]).c.max().unstack("zone")
     fig, ax = plt.subplots(figsize=(8, 3.6), dpi=150)
-    for z, label in ZONE_LABEL.items():
+    for z in zones():
+        label = ZONE_LABEL[z]
         if z in daily:
             partner = z in PARTNER_LED
             ax.plot(
@@ -296,12 +306,12 @@ def partner_note() -> str:
     ignores padding and borders on a paragraph."""
     if not PARTNER_LED:
         return ""
-    zones = _and([ZONE_LABEL[z] for z in PARTNER_LED])
+    names = _and([ZONE_LABEL[z] for z in PARTNER_LED])
     whose = _and([f"{full} for {ZONE_LABEL[z]}" for z, (_, full) in PARTNER_LED.items()])
     return (
         f"<table cellpadding='0' cellspacing='0' style='{_TABLE};margin:0 0 12px'><tr>"
         "<td style='background-color:#f1f2f4;color:#333333;padding:8px 10px;"
-        f"border-left:4px solid #9aa0a6;font-size:14px'>{zones} are in grey because other "
+        f"border-left:4px solid #9aa0a6;font-size:14px'>{names} are in grey because other "
         f"organisations are responsible for their triggers: {whose}. Our readings for these "
         "zones are for information only. Whether a trigger there is met or not met should be "
         "confirmed with that zone's organisation.</td></tr></table>"
@@ -320,10 +330,16 @@ def season_html(season: pd.DataFrame) -> str:
         # "not met" is green only if every day was fully evaluated: a day with missing data
         # could have been a day the trigger was met
         style = _GAP if state == "not met" and r.days_with_gaps else _state_style(state)
+        why = (
+            "<br><span style='font-size:11px;font-weight:normal'>data missing on "
+            f"{plural(r.days_with_gaps, 'day')}</span>"
+            if style == _GAP and state == "not met"
+            else ""
+        )
         g = _grey(r.zone)
         rows += (
             f"<tr>{_zone_cell(r.zone)}"
-            f"<td style='{_TD};{style}'>{state}</td>"
+            f"<td style='{_TD};{style}'>{state}{why}</td>"
             f"<td style='{_TD}{g}'>{r.days_met}</td>"
             f"<td style='{_TD}{g}'>{r.days}</td>"
             f"<td style='{_TD}{g}'>{r.days_with_gaps}</td></tr>"
@@ -334,7 +350,7 @@ def season_html(season: pd.DataFrame) -> str:
 def results_html(day: pd.DataFrame) -> str:
     rows = trigger_rows(day)
     body = ""
-    for z in ZONE_LABEL:
+    for z in zones():
         zr = [r for r in rows if r["zone"] == z]
         g = _grey(z)
         for i, r in enumerate(zr):
@@ -367,8 +383,8 @@ def render(
     day: pd.DataFrame, season: pd.DataFrame, chart_url: str, version_note: str = ""
 ) -> tuple[str, str]:
     issue = pd.Timestamp(day.issue_date.iloc[0])
-    zmet = [z for z in ZONE_LABEL if day[day.zone == z].met.eq(True).any()]
-    zgap = [z for z in ZONE_LABEL if z not in zmet and day[day.zone == z].met.isna().any()]
+    zmet = [z for z in zones() if day[day.zone == z].met.eq(True).any()]
+    zgap = [z for z in zones() if z not in zmet and day[day.zone == z].met.isna().any()]
     if zmet:
         head = "Trigger met: " + ", ".join(ZONE_LABEL[z] for z in zmet)
     elif zgap:

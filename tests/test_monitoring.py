@@ -780,8 +780,13 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
     assert season_cell("teso_kyoga", notify._NOT_MET, "not met<")
     assert season_cell("elgon", notify._MET, "first met")
     assert season_cell("karamoja", notify._GAP, "not evaluated<")
-    # evaluated on both days, but a place was missing each day: never green
+    # evaluated on both days, but a place was missing each day: never green, and says why
     assert season_cell("adjumani", notify._GAP, "not met<")
+    assert (
+        "not met<br><span style='font-size:11px;font-weight:normal'>data missing on 2 days<"
+        in season
+    )
+    assert season.count("data missing on") == 1  # not on the green "not met" or the "not evaluated"
 
     assert today_cell("teso_kyoga", notify._NOT_MET, "not met")
     assert today_cell("elgon", notify._MET, "MET")
@@ -856,15 +861,21 @@ def test_partner_led_zones_are_grey_and_keep_their_result_colours(monkeypatch):
 
     results, season = notify.results_html(day), notify.season_html(day)
 
+    def at(html, zone):
+        return html.index(f">{notify.ZONE_LABEL[zone]}<")
+
     def rows_of(html, zone):
-        """The table rows from zone's first cell up to the next zone's (zones keep their order)."""
-        zones = list(notify.ZONE_LABEL)
-        start = html.rindex("<tr>", 0, html.index(f">{notify.ZONE_LABEL[zone]}<"))
-        nxt = zones.index(zone) + 1
-        if nxt == len(zones):
-            return html[start:]
-        end = html.rindex("<tr>", 0, html.index(f">{notify.ZONE_LABEL[zones[nxt]]}<"))
+        """The table rows from zone's first cell up to the next zone's, whatever the order."""
+        start = html.rindex("<tr>", 0, at(html, zone))
+        after = [at(html, z) for z in notify.ZONE_LABEL if at(html, z) > start]
+        nxt = min((i for i in after if i > at(html, zone)), default=None)
+        end = len(html) - len("</table>") if nxt is None else html.rindex("<tr>", 0, nxt)
         return html[start:end]
+
+    # the grey zones come last, in both tables
+    for html in (results, season):
+        order = sorted(notify.ZONE_LABEL, key=lambda z: at(html, z))
+        assert order == ["karamoja", "adjumani", "teso_kyoga", "elgon"]
 
     for z in notify.ZONE_LABEL:
         for html in (results, season):
