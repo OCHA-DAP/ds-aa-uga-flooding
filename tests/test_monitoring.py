@@ -769,8 +769,9 @@ def test_email_colours_met_red_not_met_green_gaps_yellow():
     season, today = body.split("Today's results")
 
     def season_cell(zone, style, state):
-        label = notify.ZONE_LABEL[zone]
-        return f"{label}</td><td style='{notify._TD};{style}'>{state}" in season
+        label = re.escape(notify.ZONE_LABEL[zone])
+        cell = re.escape(f"</td><td style='{notify._TD};{style}'>{state}")
+        return re.search(f">{label}(<br><span[^>]*>[^<]*</span>)?{cell}", season) is not None
 
     def today_cell(zone, style, state):
         cell = f"{zone} trigger</td><td style='{notify._TD};border-bottom:none;{style}'>{state}<"
@@ -820,18 +821,66 @@ def test_email_reading_takes_result_colour_threshold_italic():
         "karamoja trigger",
         "adjumani trigger",
     }
+    # Teso and Elgon are partner-led: their unfilled cells are grey
     expected = {
         "teso_kyoga trigger": ("not met", notify._NOT_MET, notify._NOT_MET),
         "elgon trigger": ("MET", notify._MET, notify._MET),
-        "elgon t3 trigger": ("not met", notify._NOT_MET, ""),
+        "elgon t3 trigger": ("not met", notify._NOT_MET, notify._PARTNER),
         "karamoja trigger": ("not evaluated", notify._GAP, notify._GAP),
         "adjumani trigger": ("not met (1 of 2 places not evaluated)", notify._GAP, notify._GAP),
     }
     for trig, (state, st, rst) in expected.items():
         r = rows[trig]
         assert (r["state"], r["st"], r["rst"]) == (state, st, rst), trig
-        assert r["tst"] == notify._THRESHOLD, trig
+        grey = f";{notify._PARTNER}" if trig.split()[0] in notify.PARTNER_LED else ""
+        assert r["tst"] == notify._THRESHOLD + grey, trig
     assert "font-style:italic" in notify._THRESHOLD
     assert rows["karamoja trigger"]["reading"] == "n/a"
     teso = rows["teso_kyoga trigger"]
     assert (teso["reading"], teso["threshold"]) == ("39.7 mm in 5 days", "40.2 mm in 5 days")
+
+
+def test_partner_led_zones_are_grey_and_keep_their_result_colours(monkeypatch):
+    assert set(notify.PARTNER_LED) == {"teso_kyoga", "elgon"}
+    met = {"teso_kyoga": [False], "elgon": [True], "karamoja": [None], "adjumani": [False]}
+    day = day_table(met)
+    _, body = notify.render(day, day, "chart.png")
+    note = body.split("Season so far")[0]
+    assert "Uganda Red Cross Society (URCS)" in note and "FAO for Mount Elgon" in note
+    assert "Teso / Lake Kyoga and Mount Elgon are in grey" in note
+
+    results, season = notify.results_html(day), notify.season_html(day)
+
+    def rows_of(html, zone):
+        """The table rows from zone's first cell up to the next zone's (zones keep their order)."""
+        zones = list(notify.ZONE_LABEL)
+        start = html.rindex("<tr>", 0, html.index(f">{notify.ZONE_LABEL[zone]}<"))
+        nxt = zones.index(zone) + 1
+        if nxt == len(zones):
+            return html[start:]
+        end = html.rindex("<tr>", 0, html.index(f">{notify.ZONE_LABEL[zones[nxt]]}<"))
+        return html[start:end]
+
+    for z in notify.ZONE_LABEL:
+        for html in (results, season):
+            grey = notify._PARTNER in rows_of(html, z)
+            assert grey == (z in notify.PARTNER_LED), z
+    # in a grey zone every cell is grey but the result and reading, which keep their colour
+    coloured = (notify._MET, notify._NOT_MET, notify._GAP)
+    for z in notify.PARTNER_LED:
+        for html in (results, season):
+            for style in re.findall(r"<td[^>]* style='([^']*)'", rows_of(html, z)):
+                assert notify._PARTNER in style or style.endswith(coloured), (z, style)
+    elgon = rows_of(results, "elgon")
+    assert f"border-bottom:none;{notify._MET}'>MET<" in elgon  # the result cell is not greyed
+    assert f"white-space:nowrap;{notify._MET}'>" in elgon  # nor the reading
+    assert "confirm with FAO" in elgon and "confirm with URCS" in rows_of(season, "teso_kyoga")
+
+    # the other zones' rows are unchanged by the partner styling
+    monkeypatch.setattr(notify, "PARTNER_LED", {})
+    for html, before in ((results, notify.results_html(day)), (season, notify.season_html(day))):
+        assert notify._PARTNER not in before
+        for z in ("karamoja", "adjumani"):
+            assert rows_of(html, z) == rows_of(before, z), z
+    _, plain = notify.render(day, day, "chart.png")
+    assert "in grey" not in plain and "paler lines" not in plain
